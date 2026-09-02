@@ -1,0 +1,63 @@
+
+
+
+i'd like help designing a prompt and other prompt parameters for a claude code instance to create a federal court webpage dashboard. below is what i have in mind as the concept:
+<concept>
+##### court appointment tracking
+tracker to see who appointed which judges on which court in which year, and other information about them.
+- see each federal circuit and district court across the whole US
+	- on a map, but also a selector bar on the side listing circuit or district courts (depending on the view), particularly needed for geographic jurisdictions which are too small or do not appear geographically (e.g., USCIT)
+		- clicking something in the selector bar for display in the court/judge info pane should cause it to be highlighted on the map, and vice versa if a map shape is selected and thus highlighted (and highlight on the selector bar as though it was selected)
+	- the circuit court shapes should be the primary layer shown, with district court borders appearing to cut up the uniformly-shaded district courts within its given circuit court
+	- each court jurisdiction shape should show its name (if geometrically feasible; circuit court names take priority on the full-US view, and district court names take priority on the particular-circuit court view), and also have an on-hover box which shows its name only while the cursor is over the shape
+- clicking on a circuit court shape should show details in a pane that appears above the map panel, showing the name of the circuit court, and clicking somewhere else (but not the info pane) should cause it to close and show the map again
+	- details show icons of each judge's face (if available), with a ring of red or blue color representing the party of the president appointing them, all ordered by date of appointment (oldest to newest)
+		- also shows the circuit justice from SCOTUS which is applicable to that circuit and marks the chief judge of the circuit
+	- hovering over the icon will also highlight the other judges appointed by that president, but only show an on-hover appearance box for the one judge selected, which will show in more detail: the date of confirmation (and current term length next to it), the president who appointed them and their party, the judge's name, the law school they received their jd from, a link to their courtlistener profile, and perhaps also an indicator telling if they're associated with a parallel legal organization like the federalist society
+	- also a toggle-able option to sort the judges by party of the president appointing them (a sort on top of the appointment date sort, so they're still date-ordered within the partisanship sorting), which shows a dotted "majority" line and a count x/y for the "majority" size, and the sorting action would be animated, perhaps the icons tracking from their points on a line onto their points on a semicircle
+- double clicking a circuit (or some other button) zooms to the district court breakdown of the circuit, and morphs the relevant-to-be-shown shapes in the national projection to equivalent shapes specified to match a circuit court-local map projection (the selector bar for circuit courts gets re-populated with selector options for the district courts, with a list of every district court in the circuit), but doesn't show the above-map-panel info pane yet until a district court is selected, which should have the same feature details as clicking on a circuit court as-described as when a district court is selected (except no circuit justice), and a back button should revert to the circuit court view
+- not every court has a specific territorial jurisdiction, but for the majority that do, shapefiles of the geographic jurisdictions should be acquired and exported in a somewhat geometry-simplified (to save on loading slowly) svg format from qgis, for integration into the webpage
+</concept>
+as a matter of data collection for this display (about various judges), we should agree on a standard format/codebook which the .csv containing the data to-be-used will be made according to. collecting that data from wikipedia and cross-referencing it with one other source (or a web search) should be fine. as it pertains to shapefiles for federal court jurisdictions, this may require some creativity to find, and if it doesn't exist, we'll have to make it ourselves from county or precinct maps, whichever is the least laborious, in qgis.
+
+also, i would like the demo webpage within some margins so it sits in the middle of the page, but also so that it can be integrated into a typical website that hosts articles by inserting the html/css/js/(and whatever other code is required to make it work, but ideally minimal) in a modular way, expected to minimally interfere with the code-structure of the existing site (contained inside a div block, perhaps).
+
+previously, in a separate session, we created something similar to this using svg files to create a map interactive. i've attached the html of that webpage (which is entirely self-contained) as a reference for what we used then.
+
+please ask any questions you think might be necessary to fully specify what we'll need to create this.
+
+
+
+------------------------------------------------
+
+
+
+1. i'd like to account for all judges which can contribute deciding votes on case decisions, and have equally legally binding power in them (i'm not interested in the full historical roster). i believe that would include active and senior judges. but we should mark which judges are senior, perhaps by placing a gray tint over their icon and colors and indicating it in the description which includes their name &c, appearing in the info/detail pane and when you hover over their icon. that is important to account for the number of vacancies in each court, which we want to be able to display with empty gray-outline circle icons (or, you can make another suggestion as to how to display it) and make it visibly obvious to the user. -- moreover, i'm only interested in article iii courts.
+
+2. i like your suggestion, so let's use courtlistener/free law project as the primary data source, and then get profile image and other law org affiliations from wikipedia or elsewhere. i would like claude code to actually do the data collection itself so that a human doesn't need to do it, or only needs to verify that it's accurate. -- what i'd like to see out of the codebook is a table of, variable name, variable type, and variable description (which should be descriptive enough that reading it will explain all of the values you can see for that variable; sometimes that's simple/obvious, in the case of true/false boolean variables). for now and temporarily, also provide a reason for the variable name, just so we can review it, confirm it, and then not have to consider it again. -- i'll take your suggestion on the federalist society reported affiliation thing. if there are other major conservative activist legal organizations that are worth documenting membership of, we should also take account of those. we can keep track of left-wing ones too, but only if they are conceivably comparably major as the federalist society.
+
+3. i intend to create the geometries manually (probably with instructional assistance from web claude, maybe a different or the same instance, providing the lists of counties to merge), and then web claude will write a python script to paste into the qgis python console to export the shapes with the appropriately simplified geometry. doing it that way, perhaps we can ensure that the number of vertices remains the same, so that morphing will work? morphing is not a hard requirement, but i would really like to try to make it work. if it doesn't work after several attempts, we can eventually abandon it. -- i had yet to address alaska/hawaii/territories: i would like to have them as composite insets, otherwise it wouldn't make sense for the web arrangement. we'll use an albers equal area projection if available and then fall back to the nad83(2011) projection, local projections which make those geographies look the best, and then place them however we want on the web feature map. as a result, i don't expect we will need to worry about morphing for these particular regions. -- non-geographic courts are intended to be in the selector bar only, that is correct.
+
+4. reserving single click for the info pane is fine. your suggestion would be that something akin to a "view districts within circuit" button appears when you select a circuit court, which then focuses down onto the district court shapes, which get morphed? then a back button can bring you back once you're in it. that sounds okay, if this is like what you have in mind -- when i say "above," i actually intended it to push the page content down, but there's a reasonable argument that's bad design. my problem with it covering the map or shrinking the map within its box so that all the circuits are still visible, is that it makes it harder to see the shapes in any case. however, if the info pane pops/slides down from the top of the map and covers it partially, but it has the ability to be "stowed," as in, there is an arrow button on the side you can click to hide the info pane, then this seems fine. i'm interested in your feedback -- yes, that is what i intended "majority" to mean, and the semicircle layout being like the way seat visualizations are laid out in legislative chambers is intentional. it should be okay to include senior judges here, because they have equal decision power, but they should still be visually distinct from non-senior judges (perhaps we can arrange the vacant seats in a rectangle below the semicircle? taking suggestions). -- i understand it will probably make things a little more difficult, but i would like it to work on mobile in vertical orientation as well. -- as to the target container, we may need to experiment with it, but we can try your suggestion for now. as long as it can be flexible if needed.
+
+5. your objection is fair. it would probably be too much data to expect one file containment. let's do option (b), to have external assets and to lazy-load all of our information to save on resources as much as possible. with this intention, it seems to naturally lend itself to being easy to update with a new set of districts (suppose new legislation is passed defining new court boundaries) and/or judge data (this occurring more often), which i consider an important requirement (not hard coded). additionally, i would the page to be functional if someone decided to download it, or if it ends up on archive.org, which is also an important requirement.
+
+6. that's right, and is what i meant by prompt parameters, i'd like the full package suite to start, pause, and resume work (working around the token limit and structuring the work to be done in portions at a time). it should absolutely get web access for data collection. with what we have discussed now, does it still make sense to break the work into vertical slices?
+
+let's confirm our understanding and any additional details before you draft anything.
+
+
+
+------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+

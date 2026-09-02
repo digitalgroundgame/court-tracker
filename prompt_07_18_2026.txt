@@ -1,0 +1,20 @@
+
+some more changes:
+
+1. the timeline and majority buttons to switch between views in the info pane, instead of being spaced like separate buttons, should be next to each other like the < None | FedSoc | ACS > selector, so like < Timeline | Majority >.
+
+2. i think it looks awkward to have an arbitrary amount of whitespace between the top of the majority semicircles (because they're variable in how many) and the always-present information and buttons at the top horizontal section 1of the info pane, so i'd like to try having the semicircles be "the bottom half of the circle" rather than the top half (in effect, the arrangement of the icons flipped across a horizontal line, but not literally that), and positioned below the "R/D-appointed ..." text with an appropriate buffer so the text doesn't clip with any of the icons.
+
+3. the positioning of the docked tooltip shifts down and the size increases slightly when switching from timeline to majority view in the info pane. it should be in the same spot so it does not appear to move when switching.
+
+4. the data for supreme court justices is currently incomplete. if only a small modification to our existing pipelines can fetch this data, that would be ideal, because my preference is still systematic/algorithmic collection, but in case that is not possible, since there are only nine of them, they can be collected individually as a fallback.
+
+5. when you click "view feeders" for the federal circuit, i'd like two new box arrays representing "CIT" and "CFC" and their judges (with those text labels) to appear on the map spaced next to each other below "Fed," and then disappear when returning to national (i'll probably tweak the positions myself).
+
+6. after #4 is complete, i'd like to have a new option in the selector bar for SCOTUS and a new info pane for it, in the same manner as the other ones (except their outlines won't be purple, like when they are shown as circuit judges; and senior judges won't be relevant; in SCOTUS's info pane specifically, remove the note about majority over active judgeships and senior judges).
+
+larger changes:
+
+7. in preparation for a different sort of feature, which might be its own separate widget or could find a way to be added on to the current one, i'd like to collect data on past appointments, so that it can be displayed in a beeswarm chart of "appointments through presidential terms," a way of visualizing all recent appointments. and it would allow scrolling over equally-spaced time to see when and in what volume presidents made judicial appointments (with background coloring a pastel red or blue for the periods during which the respective party has a president and can appoint, with labeled tick marks for year and smaller tick marks for months). because there would be such a large volume, the dots in the beeswarm chart would not have pictures in their icons (except for a larger SCOTUS judge icon because they're more notable), be medium sized for appelate courts, be smaller sized for district courts, and marked with hatching of a different shade matching the color of their appointing president's party if they belong to fedsoc or acs. those now seniors could get their coloring grayed, no longer serving judges could get black, and former SCOTUS judges could get a black outline and graying of picture. a docked tooltip could show info on judges when highlighted, and a drag-to-scroll (and scalable based on an integer number of years to show within the horizontal span at once, perhaps choosable in a slider next to the mark selector, lets say as few as two and as many as the maximum for which we have data, and a default of eight for desktop orientation) background could allow a variable number of years of appointment timeline to be shown at a time. anyway, the data to be collected for it only need to be since (and including) nixon, since that is the earliest presidential term for which we have any judges remaining. unlike before, we also now want the date they left the bench (when applicable) to inform that coloring, otherwise the data we want is essentially the same.
+
+

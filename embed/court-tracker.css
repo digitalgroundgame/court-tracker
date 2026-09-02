@@ -1,0 +1,413 @@
+/* court-tracker.css — all selectors prefixed `ctt-` so nothing bleeds in/out of the
+   host page. The widget lives entirely inside #court-tracker-root. Fixed outer height
+   so the host article never reflows when the info pane slides. */
+
+.ctt-root {
+  --ctt-bg: #f7f8fa;
+  --ctt-panel: #ffffff;
+  --ctt-ink: #1b1f24;
+  --ctt-muted: #5b6470;
+  --ctt-line: #d8dde4;
+  --ctt-accent: #2f6feb;
+  --ctt-rep: #d1343f;
+  --ctt-dem: #2f6feb;
+  --ctt-other: #9aa3ad;
+  --ctt-senior: #9aa3ad;
+  --ctt-map: #e9edf2;
+  --ctt-circuit: #cdd6e0;
+  --ctt-band-rep: #f9e9e9;
+  --ctt-band-dem: #e8eef9;
+
+  box-sizing: border-box;
+  position: relative;
+  width: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
+  height: 640px;
+  display: flex;
+  flex-direction: column;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  color: var(--ctt-ink);
+  background: var(--ctt-bg);
+  border: 1px solid var(--ctt-line);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.ctt-root *, .ctt-root *::before, .ctt-root *::after { box-sizing: border-box; }
+
+.ctt-header {
+  flex: 0 0 auto; display: flex; flex-direction: column; gap: 2px;
+  padding: 10px 14px; border-bottom: 1px solid var(--ctt-line); background: var(--ctt-panel);
+}
+.ctt-tracked {
+  font-size: 11px; font-weight: 600; color: var(--ctt-accent);
+}
+.ctt-tracked:empty { display: none; }
+.ctt-title-row { display: flex; align-items: baseline; gap: 10px; }
+.ctt-title { font-size: 15px; font-weight: 650; }
+.ctt-subtitle { font-size: 12px; color: var(--ctt-muted); }
+
+.ctt-body { flex: 1 1 auto; display: flex; min-height: 0; }
+
+/* selector bar */
+.ctt-selector {
+  flex: 0 0 220px; border-right: 1px solid var(--ctt-line); background: var(--ctt-panel);
+  overflow-y: auto; padding: 8px;
+}
+.ctt-selector-group-label {
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.6px;
+  color: var(--ctt-muted); padding: 8px 8px 4px;
+}
+.ctt-selector-item, .ctt-selector-back {
+  display: block; width: 100%; text-align: left; padding: 7px 10px; border: 0;
+  border-radius: 6px; background: transparent; color: inherit; font: inherit; cursor: pointer;
+}
+.ctt-selector-item:hover { background: var(--ctt-map); }
+.ctt-selector-item.ctt-is-selected { background: var(--ctt-accent); color: #fff; }
+.ctt-selector-back { margin-bottom: 6px; color: var(--ctt-accent); font-weight: 600; }
+.ctt-selector-back:hover { background: var(--ctt-map); }
+
+/* map viewport + stacked SVG layers */
+.ctt-map-viewport { position: relative; flex: 1 1 auto; min-width: 0; overflow: hidden; background: var(--ctt-map); }
+.ctt-svg-stack { position: absolute; inset: 0; }
+.ctt-svg-layer {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  padding: 12px; transition: opacity 420ms ease, transform 420ms ease;
+}
+.ctt-svg-layer svg { max-width: 100%; max-height: 100%; }
+/* An idle circuit-local layer must be display:none, NOT merely opacity:0. An opacity:0 element
+   is still laid out, painted and RASTERISED — so every circuit ever visited kept a full-map
+   layer's worth of raster tiles alive in the renderer's native memory (invisible to the JS heap,
+   which is why this hid for so long). Only the layer in play should be paintable. */
+.ctt-local-layer { display: none; opacity: 0; }
+.ctt-local-layer.ctt-hidden { display: none; pointer-events: none; }
+/* Paintable only while it is the active layer (or mid-crossfade into being one). */
+.ctt-local-layer.ctt-fade-in, .ctt-local-layer.ctt-fading { display: flex; }
+.ctt-local-layer.ctt-fade-in { opacity: 1; }
+.ctt-fade-out { opacity: 0; transform: scale(1.25); pointer-events: none; }
+
+/* Vertex-morph layer: shown only while interpolating between the national and circuit-local
+   projections, so it must not transition anything itself — JS sets `d`/viewBox per frame. */
+.ctt-morph-layer { transition: none; pointer-events: none; }
+/* Seat-block LABELS must not render inside the morph layer. The labels are <text> inside a
+   scaled <g>; while the morph interpolates the viewBox, their net device scale sweeps through
+   values where Chrome's compositor text rasterization locks up — the renderer's Compositor
+   thread spins at 100% inside one LayerTreeHostImpl::CalculateRenderPasses, indefinitely.
+   Reproduced DETERMINISTICALLY with a single no-input drill at viewport widths 680-700px
+   (band shifts per circuit viewBox), and it is the core of the "mobile" freeze at 380px under
+   pointer input. Bisected: hiding ONLY these labels cures every known freeze config (squares,
+   hit-rects, district paths, non-scaling strokes all exonerated). The static layers keep their
+   labels; they vanish only for the ~620ms morph. See tests/freeze-hunt.mjs / PROGRESS (y). */
+.ctt-morph-layer .ctt-block-label { display: none; }
+/* The fade groups' opacity is written straight from JS each frame (see runMorph) and NOT via a
+   CSS custom property + calc(). A custom property invalidates style for the whole subtree, and a
+   var-driven opacity cannot be handed to the compositor — so the previous version restyled and
+   REPAINTED all ~106 paths every frame, which is what churned raster memory. will-change gives
+   NO will-change here: promoting each group to its own compositor texture changed stroke
+   antialiasing enough to break the pixel-identical handoff (measured ~9k px of hairline colour
+   shift). Writing opacity on 4 group nodes already restyles 4 elements instead of ~106.
+   Shapes with no circuit-local twin fade out; a circuit's own insets/blocks fade in. */
+/* Hard-hidden (not just transparent) so the outgoing layer can't ghost under the morph. */
+.ctt-hidden-hard { display: none; }
+/* The morph ends exactly on the local geometry, so the swap must be instant — a fade here
+   would blink the map to blank and back at the end of every drill-in. */
+.ctt-no-transition { transition: none !important; }
+
+/* Circuit territory = uniform fill; district territory = thin borders on top (paint order
+   set in JS). Circuit boundaries are then re-drawn as stroke-only clones ON TOP of the
+   district lines (.ctt-circuit-outline) so they stay clearly visible (#12). */
+.ctt-svg-layer [data-layer="circuit"] { fill: var(--ctt-circuit); stroke: none; }
+/* Districts: transparent (NOT none) fill so the whole area is hittable in circuit-local view
+   while the circuit shading shows through; thin white cut-lines (#17). */
+.ctt-svg-layer [data-layer="district"] { fill: transparent; stroke: #ffffff; stroke-width: 0.9; vector-effect: non-scaling-stroke; }
+.ctt-circuit-outline { fill: none; stroke: #5c6775; stroke-width: 2; vector-effect: non-scaling-stroke; pointer-events: none; }
+/* Insets are a circuit's sole map presence, so they take the circuit fill + outline colour/weight (#11/#18). */
+.ctt-svg-layer [data-inset="true"][data-layer="district"] { fill: var(--ctt-circuit); stroke: #5c6775; stroke-width: 2; }
+.ctt-shape { cursor: pointer; }
+.ctt-shape-selected { fill: #b9c8e6 !important; }
+/* National view: mainland districts are visual-only (hover/click fall through to the
+   circuit beneath); insets stay interactive so they can be selected (#11). */
+.ctt-national-layer [data-layer="district"] { pointer-events: none; }
+.ctt-national-layer [data-inset="true"][data-layer="district"] { pointer-events: auto; }
+/* District (circuit-local) view: the circuit outline is NOT map-selectable (#13) — use the
+   selector-bar circuit repeat; only districts are clickable on the map. */
+.ctt-local-layer [data-layer="circuit"] { pointer-events: none; }
+.ctt-hover-overlay { fill: none; stroke: var(--ctt-accent); stroke-width: 2.5; vector-effect: non-scaling-stroke; pointer-events: none; visibility: hidden; }
+
+/* Seat blocks: one square per authorized judgeship. POSITION is in map units (glued to the
+   court); SIZE is a constant screen px, converted in JS — see BLOCK_PX.
+   Annotation only — never eat a click meant for the shape underneath. */
+.ctt-blocks { pointer-events: none; }
+.ctt-sq { stroke: rgba(255,255,255,0.85); stroke-width: 0.6; vector-effect: non-scaling-stroke; }
+.ctt-sq-rep { fill: var(--ctt-rep); }
+.ctt-sq-dem { fill: var(--ctt-dem); }
+.ctt-sq-other { fill: var(--ctt-other); }
+/* Vacancy: an empty seat — pale fill, solid dark outline. Its rect is inset (VACANCY_INSET_PX) so
+   this stroke's OUTER edge lands on the party squares' colour edge rather than bulging past it. */
+.ctt-sq-vacant { fill: #f0f2f5; stroke: #39414d; stroke-width: 0.8; }
+
+/* Invisible but hittable: `transparent` catches the pointer, `none` would not. Buffered so the
+   mouse never slips between squares onto the map and flickers the hover. */
+.ctt-block-hit { fill: transparent; pointer-events: all; cursor: pointer; }
+/* Ties a block to its shape: rather than a plate behind it (which fought the label), the squares
+   and the label take an accent outline — the label's existing white halo becomes accent, so the
+   text pops instead of being crossed by a rectangle. Selection outranks hover. */
+/* Black, and specific enough to beat .ctt-sq-vacant's own (already dark) stroke — otherwise a
+   vacancy square looks unchanged on hover.
+   The dash MUST be cleared here: a rect has one stroke, so the vacancy's dasharray simply chops
+   the black outline into dots instead of drawing it. An empty seat is still obvious from its pale
+   fill, and its dash returns the moment the block is no longer hovered/selected. */
+/* Highlight = the squares themselves grow a little, about their own centres. No colour is
+   touched, so red/blue and the vacancy's dash survive intact in every state, and it reads on any
+   background (grey map or the near-white water under Fed/DC/1st/2nd) because it is motion/size,
+   not contrast. transform-box:fill-box makes the origin each rect's own box.
+   Cap: pitch/edge = 1.3, at which neighbours' edges TOUCH — stay under it.
+   The scale VALUES and the 90ms ease live in JS (BLOCK_SCALE_* in court-tracker.js), applied
+   as per-frame inline transforms — NOT a CSS transition. A CSS transform transition here
+   cannot composite (SVG rect), and Chrome's promotion attempt at its start/end re-rendered
+   hairline strokes MAP-WIDE for the animation window: the operator-reported border
+   "flicker/tremble" on every hover. Measured: with the transition, ~14,000 px changed across
+   the whole map per hover toggle; JS-driven (plain style writes, no Animation object), ~3,600
+   px confined to the hovered court. Do not reintroduce a transition on .ctt-sq transform. */
+.ctt-sq { transform-box: fill-box; transform-origin: center; }
+/* Sits inside a scaled <g>, so these lengths are in LABEL_EM units, not screen px. */
+.ctt-block-label {
+  fill: var(--ctt-ink); text-anchor: start; font-weight: 700;
+  paint-order: stroke; stroke: rgba(255,255,255,0.92); stroke-width: 0.9; stroke-linejoin: round;
+}
+
+/* map tooltip (cursor-following) */
+.ctt-tooltip {
+  position: fixed; z-index: 2147483000; pointer-events: none; background: #1b1f24; color: #fff;
+  font-size: 12px; padding: 4px 8px; border-radius: 5px; visibility: hidden; white-space: nowrap;
+}
+
+/* info pane */
+.ctt-pane {
+  position: absolute; left: 0; right: 0; top: 0; height: 100%;
+  background: var(--ctt-panel); border-bottom: 1px solid var(--ctt-line);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12); transform: translateY(-100%);
+  transition: transform 260ms ease; display: flex; flex-direction: column;
+}
+/* .ctt-pane--tall is INERT since the pane went full-height (operator call, 2026-07-17:
+   the pane covered most of the map anyway, and the docked-detail layout needed the room).
+   The class is still applied per drill-in context by JS and asserted in browser-checks;
+   it simply no longer needs extra height. */
+.ctt-pane.ctt-pane--tall { height: 100%; }
+.ctt-pane.ctt-is-open { transform: translateY(0); }
+.ctt-pane-body { flex: 1 1 auto; overflow-y: auto; padding: 12px 16px 12px; display: flex; flex-direction: column; }
+.ctt-pane-body > * { flex: 0 0 auto; }
+/* The stage row absorbs the pane's leftover height, so the docked detail panel's top AND
+   bottom are identical in timeline and majority modes (it must not appear to move). */
+.ctt-pane-body > .ctt-stage-row { flex: 1 0 auto; }
+.ctt-pane-stow {
+  position: absolute; bottom: -1px; left: 50%; transform: translate(-50%, 100%);
+  border: 1px solid var(--ctt-line); border-top: 0; border-radius: 0 0 8px 8px;
+  background: var(--ctt-panel); cursor: pointer; padding: 3px 16px; font-size: 13px; line-height: 1;
+}
+.ctt-pane-close {
+  position: absolute; top: 8px; right: 10px; z-index: 6;
+  border: 1px solid #b9c1cc; background: var(--ctt-panel); color: var(--ctt-ink);
+  cursor: pointer; width: 32px; height: 32px; border-radius: 50%; font-size: 20px; line-height: 1;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.10);
+}
+.ctt-pane-close:hover { background: var(--ctt-map); border-color: var(--ctt-accent); color: var(--ctt-accent); }
+/* Stow-only (▲): sits left of the ×; same round style, slightly smaller glyph. */
+.ctt-pane-stowtop { right: 50px; font-size: 14px; }
+
+.ctt-pane-head { margin-bottom: 8px; display: flex; align-items: flex-start; gap: 10px; padding-right: 84px; }
+.ctt-pane-headtext { flex: 1 1 auto; min-width: 0; }
+.ctt-pane-title { font-size: 16px; font-weight: 650; }
+.ctt-pane-meta { font-size: 12px; color: var(--ctt-muted); margin-top: 2px; }
+/* Circuit Justice chip slot in the header (timeline view) */
+.ctt-justice-slot { flex: 0 0 auto; }
+.ctt-judge.ctt-justice-inhead { position: static; width: auto; display: flex; align-items: center; gap: 6px; }
+.ctt-judge.ctt-justice-inhead .ctt-avatar { width: 34px; height: 34px; margin: 0; font-size: 12px; }
+.ctt-judge.ctt-justice-inhead .ctt-judge-label { margin: 0; text-align: left; max-width: 120px; }
+
+.ctt-pane-controls { display: flex; gap: 8px; align-items: center; margin: 6px 0; flex-wrap: wrap; }
+.ctt-toggle, .ctt-drill {
+  border: 1px solid var(--ctt-line); background: var(--ctt-panel); color: inherit; font: inherit;
+  font-size: 13px; padding: 5px 12px; border-radius: 6px; cursor: pointer;
+}
+.ctt-toggle.ctt-is-active { background: var(--ctt-accent); color: #fff; border-color: var(--ctt-accent); }
+.ctt-drill { margin-left: auto; color: var(--ctt-accent); font-weight: 600; }
+.ctt-foldrow { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ctt-muted); margin: 2px 0; }
+.ctt-note { font-size: 11px; color: var(--ctt-muted); margin-top: 6px; }
+.ctt-majority-note, .ctt-always-note { font-style: italic; }
+
+/* judge stage + icons */
+.ctt-judge-stage { position: relative; width: 100%; height: 220px; margin-top: 4px; }
+.ctt-judge {
+  position: absolute; top: 0; left: 0; width: 52px; text-align: center;
+  transition: transform 480ms cubic-bezier(.4,.1,.2,1), opacity 300ms ease;
+}
+.ctt-avatar {
+  position: relative; z-index: 1;
+  width: 44px; height: 44px; margin: 0 auto; border-radius: 50%; border: 3px solid var(--ctt-other);
+  display: flex; align-items: center; justify-content: center; overflow: hidden;
+  font-size: 14px; font-weight: 600; background: #eef1f5; color: #333;
+}
+.ctt-avatar.ctt-rep { border-color: var(--ctt-rep); }
+.ctt-avatar.ctt-dem { border-color: var(--ctt-dem); }
+.ctt-avatar.ctt-other { border-color: var(--ctt-other); }
+.ctt-photo { width: 100%; height: 100%; object-fit: cover; }
+/* Reported-affiliation marker: the party band goes RIDGED, keeping its red/blue reading while
+   the same-president yellow highlight (.ctt-hl, a sibling underneath) still shows through.
+   Border width must NOT change: the avatar is border-box, so a thicker border eats the content
+   box and visibly shrinks the photo inside. Style only. */
+.ctt-affil-marked .ctt-avatar { border-style: dashed; }
+.ctt-affil-switch { display: inline-flex; align-items: center; gap: 4px; margin-left: 4px; }
+.ctt-affil-switch-label { font-size: 11px; color: var(--ctt-muted); margin-right: 2px; }
+/* Segmented: the options read as one control rather than separate buttons. Shared by the
+   None|FedSoc|ACS switch and the Timeline|Majority mode switch. */
+.ctt-mode-switch { display: inline-flex; }
+.ctt-affil-opt, .ctt-mode-opt { border-radius: 0; margin-left: -1px; }
+.ctt-affil-opt:first-of-type, .ctt-mode-opt:first-of-type { border-radius: 6px 0 0 6px; margin-left: 0; }
+.ctt-affil-opt:last-of-type, .ctt-mode-opt:last-of-type { border-radius: 0 6px 6px 0; }
+/* Seniors are only PARTIALLY desaturated so the appointing party is still readable (#5). */
+.ctt-senior .ctt-avatar { filter: saturate(0.4); opacity: 0.82; }
+.ctt-vacant .ctt-avatar-vacant {
+  border: 2px dashed var(--ctt-other); background: repeating-linear-gradient(45deg,#f0f2f5,#f0f2f5 4px,#e6e9ee 4px,#e6e9ee 8px);
+  color: transparent;
+}
+.ctt-judge-label { font-size: 10px; line-height: 1.15; margin-top: 3px; color: var(--ctt-ink); max-width: 60px; margin-left: auto; margin-right: auto; }
+.ctt-senior .ctt-judge-label { color: var(--ctt-muted); }
+.ctt-chief-badge {
+  position: absolute; top: -2px; right: 4px; z-index: 2; color: #e0a400; font-size: 14px;
+  /* Yellow star -> thin BLACK outline -> WHITE outline wrapping it (operator ask), so the
+     star separates from both light and dark backgrounds. Stroke draws the crisp black ring;
+     the shadow stack layers a black ring (listed first = on top) inside a white one. */
+  -webkit-text-stroke: 0.6px rgba(0, 0, 0, 0.9);
+  text-shadow:
+    -1px 0 0 rgba(0,0,0,0.7), 1px 0 0 rgba(0,0,0,0.7),
+    0 -1px 0 rgba(0,0,0,0.7), 0 1px 0 rgba(0,0,0,0.7),
+    -2px 0 0 #fff, 2px 0 0 #fff, 0 -2px 0 #fff, 0 2px 0 #fff,
+    -1.5px -1.5px 0 #fff, 1.5px -1.5px 0 #fff, -1.5px 1.5px 0 #fff, 1.5px 1.5px 0 #fff;
+}
+/* Same-president highlight ring: a sibling of the avatar so the senior grayscale filter
+   never touches its yellow (#5). Sits directly over the 44px avatar. */
+.ctt-hl {
+  position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+  width: 44px; height: 44px; border-radius: 50%; z-index: 2; pointer-events: none;
+  box-shadow: 0 0 0 3px #ffcf33; opacity: 0; transition: opacity 120ms ease;
+}
+.ctt-copresident .ctt-hl { opacity: 1; }
+.ctt-justice .ctt-avatar { border-color: #7a52c9; }
+.ctt-justice .ctt-judge-label { color: #7a52c9; font-weight: 600; }
+
+/* majority overlay */
+.ctt-majority-overlay { position: absolute; inset: 0; pointer-events: none; width: 100%; height: 100%; overflow: visible; }
+.ctt-majority-line { stroke: #444; stroke-width: 1.5; stroke-dasharray: 4 4; }
+.ctt-majority-count { fill: var(--ctt-ink); font-size: 13px; font-weight: 600; font-family: inherit; }
+/* Reads a step darker than the panel rules, but stays clearly subordinate to the #444
+   majority line so the two dotted strokes don't compete. */
+.ctt-arc-guide { fill: none; stroke: #a9b2bd; stroke-width: 1; stroke-dasharray: 2 5; }
+
+/* "Change" streamgraph: party-stacked, per-president appointment-headcount-over-time view. */
+.ctt-stream-stage { position: relative; width: 100%; margin-top: 4px; }
+.ctt-stream-loading { padding: 40px 0; text-align: center; color: var(--ctt-muted); font-style: italic; }
+.ctt-stream-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 4px; }
+.ctt-stream-hint { font-size: 11px; color: var(--ctt-muted); font-style: italic; }
+.ctt-stream-scheme { flex: 0 0 auto; }
+.ctt-stream-svg { display: block; width: 100%; height: 360px; cursor: pointer; }
+/* Presidency background bands — same idea as the beeswarm's (pastel fill, dashed transition
+   line, plain surname label), just without counts or year ticks (not needed here yet). */
+.ctt-stream-band-rep { fill: var(--ctt-band-rep); }
+.ctt-stream-band-dem { fill: var(--ctt-band-dem); }
+.ctt-stream-band-line { stroke: #b9c1cc; stroke-width: 1; stroke-dasharray: 3 3; }
+.ctt-stream-band-label { font-size: 11px; fill: var(--ctt-muted); }
+.ctt-stream-zeroline { stroke: var(--ctt-line); stroke-width: 1; }
+/* Stepped (not smoothed) stacked areas — the reveal animation drives transform/opacity from
+   JS, so the transition lives here rather than as an inline style per element. */
+.ctt-stream-poly { stroke: #fff; stroke-width: 1; transition: transform 420ms ease, opacity 420ms ease; cursor: pointer; }
+.ctt-stream-poly.ctt-stream-hl { stroke: var(--ctt-ink); stroke-width: 2; }
+.ctt-stream-bar-rect { fill: #1b1f24; }
+.ctt-stream-bar-arrow { fill: #1b1f24; }
+.ctt-stream-bar-hit { fill: transparent; cursor: ew-resize; touch-action: none; }
+/* Icons float in an HTML layer over the SVG (so avatar photos / initials fallback reuse the
+   same DOM pattern as the judge icons) — the icon layer shares the SVG's coordinate box 1:1. */
+.ctt-stream-icons { position: absolute; inset: 0; pointer-events: none; }
+.ctt-stream-pres-icon {
+  position: absolute; transform: translate(-100%, -50%); display: flex; align-items: center;
+  gap: 5px; pointer-events: auto; cursor: pointer; white-space: nowrap;
+}
+.ctt-stream-pres-avatar {
+  width: 38px; height: 38px; border-radius: 50%; border: 2px solid var(--ctt-other);
+  overflow: hidden; display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 600; background: #eef1f5; color: #333; flex: 0 0 auto;
+}
+.ctt-stream-pres-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.ctt-stream-pres-avatar.ctt-rep { border-color: var(--ctt-rep); }
+.ctt-stream-pres-avatar.ctt-dem { border-color: var(--ctt-dem); }
+.ctt-stream-pres-num { font-size: 14px; color: var(--ctt-ink); }
+/* Only one icon (and its matching stream) highlighted at a time (operator spec). */
+.ctt-stream-pres-icon.ctt-stream-hl .ctt-stream-pres-avatar { outline: 3px solid #e8b400; outline-offset: 1px; }
+.ctt-stream-pres-icon.ctt-stream-hl .ctt-stream-pres-num { font-weight: 700; }
+
+/* judge-detail panel. On HOVER it is pointer-events:none so it never blocks hovering the
+   icons beneath it (kills the flicker in #8). On CLICK it becomes "pinned" (.ctt-pinned):
+   fully interactable so text can be selected and the CourtListener link clicked (#20). */
+/* Stage row: the judge stage (+ its notes) on the left, the DOCKED detail panel on the
+   right. Replaces the old floating corner-snapping tooltip, which (a) hopped corners
+   whenever the cursor crossed the pane's midlines and (b) always covered some judges or
+   their same-president outlines wherever it sat. The detail panel now has its own
+   dedicated, uninterrupted column; hover updates it in place, click pins it. On mobile the
+   row stacks (see the media query): stage, then notes, then detail below them. */
+.ctt-stage-row { display: flex; align-items: flex-start; gap: 14px; }
+.ctt-stage-main { flex: 1 1 auto; min-width: 0; }
+.ctt-detail {
+  flex: 0 0 232px; width: 232px; align-self: stretch; position: relative;
+  background: var(--ctt-panel); border: 1px solid var(--ctt-line); border-radius: 8px;
+  padding: 10px 12px; font-size: 12px; line-height: 1.45;
+}
+.ctt-detail.ctt-pinned { border-color: var(--ctt-accent); box-shadow: 0 2px 10px rgba(0,0,0,0.10); }
+.ctt-detail-close { display: none; position: absolute; top: 4px; right: 6px; border: 0; background: transparent; color: var(--ctt-muted); font-size: 16px; line-height: 1; cursor: pointer; }
+.ctt-detail.ctt-pinned .ctt-detail-close { display: block; }
+.ctt-detail > div, .ctt-detail-content > div { margin: 2px 0; }
+/* Large avatar at the top of the docked panel — same party ring / senior tint / initials
+   fallback semantics as the stage icons, just bigger. */
+.ctt-detail-photo {
+  width: 84px; height: 84px; border-radius: 50%; margin: 2px auto 8px; overflow: hidden;
+  border: 3px solid var(--ctt-other); background: #e8ebf0; display: flex;
+  align-items: center; justify-content: center; font-size: 24px; font-weight: 650; color: #5c6775;
+}
+.ctt-detail-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ctt-detail-photo.ctt-rep { border-color: var(--ctt-rep); }
+.ctt-detail-photo.ctt-dem { border-color: var(--ctt-dem); }
+.ctt-detail-photo.ctt-detail-senior { filter: saturate(0.4); opacity: 0.82; }
+.ctt-detail-hint { color: var(--ctt-muted); font-style: italic; text-align: center; padding: 18px 4px; }
+.ctt-detail-name { font-size: 14px; font-weight: 650; margin-bottom: 4px; }
+.ctt-detail a { color: var(--ctt-accent); }
+.ctt-affil { font-style: italic; color: var(--ctt-muted); }
+/* Required attribution for CC-licensed portraits — present but visually subordinate. */
+.ctt-photo-credit { margin-top: 4px; font-size: 10px; color: var(--ctt-muted); }
+.ctt-tag { font-size: 10px; font-weight: 600; background: #eef1f5; color: var(--ctt-muted); border-radius: 4px; padding: 1px 5px; vertical-align: middle; }
+.ctt-tag-senior { background: #e6e9ee; }
+.ctt-tag-holdover { background: #fbe8c8; color: #6b4a08; }
+.ctt-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 5px; background: var(--ctt-other); }
+.ctt-dot.ctt-rep { background: var(--ctt-rep); }
+.ctt-dot.ctt-dem { background: var(--ctt-dem); }
+
+.ctt-status { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center; color: var(--ctt-muted); font-size: 13px; padding: 16px; }
+
+/* mobile: selector stacks above map; pane becomes a full-width sheet */
+@media (max-width: 640px) {
+  .ctt-root { height: auto; min-height: 560px; }
+  .ctt-body { flex-direction: column; }
+  /* Selector expands to show every option — no tiny inner scrollbar (#10a). */
+  .ctt-selector {
+    flex: 0 0 auto; overflow: visible; border-right: 0; border-bottom: 1px solid var(--ctt-line);
+    display: flex; flex-wrap: wrap; gap: 4px;
+  }
+  .ctt-selector-group-label { flex-basis: 100%; }
+  .ctt-selector-item { width: auto; }
+  .ctt-selector-back { flex-basis: 100%; }
+  .ctt-map-viewport { min-height: 475px; }   /* ~25% taller so the info pane has more room (#23) */
+  .ctt-pane { height: 100%; }
+  /* The docked detail panel stacks BELOW the stage and its notes (DOM order does this for
+     free once the row stops being a row) — no more bottom-sheet overlay, no reserved
+     padding: the panel is in normal flow and can never cover the bench. */
+  .ctt-stage-row { display: block; }
+  .ctt-detail { width: auto; margin-top: 10px; }
+}

@@ -1,0 +1,50 @@
+
+
+thank you for the excellent progress, i'm quite happy with how it looks and behaves when testing the site myself. some smaller bugs/feature changes to report as necessary:
+1. when selecting a circuit court which has insets belonging to it, and which become highlighed with the rest of the circuit, the insets fail to gain the blue tint that the rest of the circuit does when selected.
+2. in both timeline and majority views of the info pane, i would like a tri-clickable slider option of < None | FedSoc | ACS > which causes highlights to appear for judges which have reported affiliations with those organizations. if you have a suggestion you like more as to how to display that highlight, i'm open to suggestions, but my first thought is for the shape of the partisan red/blue color band around the icon to become ridged, and then the yellow highlight for same-president judges works the same underneath.
+3. the semicircle dotted line should be slightly darker in color, but not as strong of a color as the majority dotted line.
+
+then, I have a fairly elaborate new feature to add to the map interactive:
+on the national view and in each circuit court view, i would like to add a small visual which associates with each circuit and district court, appearing in each of those views only, respectively. that visual would be a series of colored squares, which you might imagine as building like this as you add one more (showing example layouts over five lines with 1 to 11 squares, two spaces padding between each, and additional spaces within a rectangular block of "."s for arrangement purposes):
+
+.  .  .  .  .  ..  ..  ..  ..  ..  ...
+   .  .  .  .  .   ..  ..  ..  ..  ..
+      .  .  .  .   .   ..  ..  ..  ..
+         .  .  .   .   .   ..  ..  ..
+            .  .   .   .   .   ..  ..
+
+and the pattern would continue for higher numbers, as new squares are considered ordered in that top->bottom (to a max of 5) then left->right manner. for each court to which the square assembly visual corresponds, the number of squares should be the number of authorized judgeships. at first, we could default the placement of the visual to the center of the shape to which it corresponds, but this will often be incorrect for district courts (in a circuit view) and almost always be incorrect for circuit courts (in the national view), so i will need to be able to tune the positioning and the global size of the boxes manually. do you think it's a good idea to have a temporary interactive so i can tune it, which outputs a dataset which tells you how to position them with respect to the geometry? (so that the positioning is flexible across desktop and mobile, the size and position of the squares should move with the scale of the map geometry, and should be positioned relative to it so that it appears to not move with respect to the map.)
+
+above the sets of boxes for circuit courts only (not for district court view because the names are too long), there should be little text labels like "1st", "2nd", and so on, and "DC" and "Fed" for those courts respectively, so you can tell which court it belongs to easily. the federal circuit is naturally not a geographic court, but i still want to show it on the national view, and it can be positioned off the east coast of the 11th circuit, in that empty space.
+
+like the majority view in the info pane, the count of president's party appointments will be obvious by the color of the squares, which should be grouped by color, with vacancy squares visible (we won't include senior judges, circuit justices, nor chief judge markings in this) (i like the vacancy pattern we currently use in the info pane, so a version of that for a smaller square). this time however, vacancy squares should be "at the end," that is to say they should appear to be added last in the order of boxes.
+
+
+---------------------------------------------
+
+
+before i can start tuning, there's a revision i need to request to the size of the squares, because it was actually a mistake to say that "the size... of the squares should move with the scale of the map geometry"-- in fact, they should stay at a constant size with respect to the still (animation-complete) position of map view window. the size of the squares in the national view is currently fine, but they are far too large in the circuit court views, and obscure the districts and each other. let's also make the 1st, 2nd, etc, DC, and Fed labels left-aligned instead of center-aligned over the boxes.
+
+there seems to be a bug where, after some time or using the interactive too much (unclear which), attempting to open the district view causes the app to freeze towards the end of the animation, and the cpu thread running it spikes to 100% and stays there, then chrome recognizes the page as unresponsive.
+
+another bug worth noting, the segmented fedsoc association controller causes the picture icons (of judges which have that red/blue circle ridge change) to shrink, instead of just changing the color band.
+
+
+----------------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

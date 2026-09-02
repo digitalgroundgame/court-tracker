@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Federal Court Appointment Tracker — demo</title>
+  <!-- Relative paths only, so this runs from file:// and when archived. -->
+  <link rel="stylesheet" href="embed/court-tracker.css">
+  <link rel="stylesheet" href="embed/appointments-chart.css">
+  <style>
+    /* Demo-host chrome only (NOT part of the widget). Keeps the page centered and
+       flexible up to ~1100px; tune freely — the widget itself is self-contained. */
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      background: #eef1f5;
+      color: #1b1f24;
+    }
+    .demo-wrap { max-width: 1100px; margin: 0 auto; padding: 24px 16px 48px; }
+    .demo-lede { color: #5b6470; font-size: 14px; margin: 4px 0 20px; }
+    h1 { font-size: 20px; margin: 0; }
+  </style>
+</head>
+<body>
+  <div class="demo-wrap">
+    <h1>Federal Court Appointment Tracker</h1>
+    <p class="demo-lede">
+      Standalone demo host. The widget below is a self-contained module that a host
+      article embeds inside a single <code>&lt;div id="court-tracker-root"&gt;</code>.
+    </p>
+
+    <!-- The one div a host page drops in. -->
+    <div id="court-tracker-root"></div>
+
+    <p class="demo-lede" style="margin-top: 28px;">
+      Below: the appointments-timeline beeswarm — a second self-contained widget, embedded
+      the same way inside <code>&lt;div id="appointments-chart-root"&gt;</code>.
+    </p>
+    <div id="appointments-chart-root"></div>
+  </div>
+
+  <script type="module" src="embed/court-tracker.js"></script>
+  <script type="module" src="embed/appointments-chart.js"></script>
+</body>
+</html>

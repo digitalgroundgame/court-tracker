@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Seat-block placement tuner</title>
+<link rel="stylesheet" href="../embed/court-tracker.css">
+<style>
+  body { margin: 0; font-family: system-ui, sans-serif; background: #eef1f5; color: #1b1f24; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 14px; }
+  h1 { font-size: 17px; margin: 0 0 2px; }
+  .lede { color: #5b6470; font-size: 13px; margin: 0 0 12px; }
+  .bar { display: flex; gap: 14px; align-items: center; flex-wrap: wrap;
+         background: #fff; border: 1px solid #d8dde4; border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; }
+  .bar label { font-size: 12px; color: #5b6470; display: flex; align-items: center; gap: 6px; }
+  select, button { font: inherit; font-size: 13px; padding: 4px 8px; border: 1px solid #d8dde4;
+                   border-radius: 6px; background: #fff; cursor: pointer; }
+  button.primary { background: #2f6feb; color: #fff; border-color: #2f6feb; }
+  input[type=range] { width: 160px; }
+  .hint { font-size: 12px; color: #5b6470; margin: 8px 0; }
+  textarea { width: 100%; height: 190px; font-family: ui-monospace, monospace; font-size: 11px;
+             border: 1px solid #d8dde4; border-radius: 8px; padding: 8px; }
+  /* Blocks are pointer-events:none in the widget (they must never eat a map click). Re-enable
+     them here only, and only while tuning. */
+  .ctt-blocks { pointer-events: none; }
+  .tuning .ctt-block { pointer-events: all; cursor: grab; }
+  .tuning .ctt-block:hover { outline: none; filter: drop-shadow(0 0 2px #2f6feb); }
+  .tuning .ctt-block.dragging { cursor: grabbing; filter: drop-shadow(0 0 3px #2f6feb); }
+  .count { font-size: 12px; color: #2f6feb; font-weight: 600; }
+  #err { background: #fdecec; border: 1px solid #f0b4b4; color: #8a1f1f; border-radius: 8px;
+         padding: 12px 14px; margin-bottom: 10px; font-size: 13px; line-height: 1.5; }
+  #err code { background: #fff; padding: 1px 5px; border-radius: 4px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Seat-block placement tuner</h1>
+  <p class="lede">
+    Drag a block to place it. <b>Position</b> is stored in projected map units (a circuit's block
+    lives in <code>national.svg</code>'s space, a district's in its circuit-local file) so it stays
+    glued to its court; <b>size</b> is in CSS px, so squares stay the same on-screen size in every
+    view. Export writes
+    <code>data/seat_blocks.csv</code> — placement is a <b>data-only</b> change: drop the CSV in,
+    re-run <code>build_assets.py</code>, done. No code edits.
+  </p>
+
+  <div class="bar">
+    <label>View
+      <select id="view"></select>
+    </label>
+    <label>Square size
+      <input type="range" id="size" min="2" max="16" step="0.5" value="6.5">
+      <span id="sizeval">6.5 px</span>
+    </label>
+    <button id="reset">Reset view to defaults</button>
+    <button id="export" class="primary">Export CSV ↓</button>
+    <span class="count" id="count"></span>
+  </div>
+
+  <div id="err" hidden></div>
+  <div id="court-tracker-root"></div>
+
+  <p class="hint">
+    Untouched courts are <b>omitted</b> from the CSV on purpose — they fall back to the centre of
+    their largest shape part, which keeps re-tuning after a geometry re-export cheap. The Federal
+    Circuit has no geometry at all, so it is always exported.
+  </p>
+  <textarea id="out" spellcheck="false" placeholder="Export CSV ↓ writes here — paste into data/seat_blocks.csv"></textarea>
+</div>
+
+<script type="module">
+// Fail LOUDLY. This page is useless if it dies quietly: the symptom is just an empty View
+// dropdown, which says nothing about the cause.
+const $ = (id) => document.getElementById(id);
+// First message wins: the specific diagnosis runs before the generic error handler,
+// and being told "serve the repo root" beats being told "Failed to fetch module".
+const fail = (html) => { const e = $("err"); if (!e.hidden) return; e.hidden = false; e.innerHTML = html; };
+window.addEventListener("error", (e) => fail(`<b>Script error:</b> ${e.message}`));
+if (location.protocol === "file:") {
+  fail(`<b>This page must be served over HTTP.</b> Chrome blocks ES-module imports and
+        <code>fetch</code> on <code>file://</code>, so the widget can never load here.<br>
+        Run <code>python3 -m http.server 8777</code> in the repo root, then open
+        <code>http://localhost:8777/tools/tune-seat-blocks.html</code>.`);
+}
+
+const { mount, _dev } = await import("../embed/court-tracker.js").catch((e) => {
+  fail(`<b>Could not load the widget module.</b> ${e.message}<br>
+        Serve the repo root over HTTP and open this page as
+        <code>/tools/tune-seat-blocks.html</code> (it imports <code>../embed/court-tracker.js</code>).`);
+  throw e;
+});
+const { S } = _dev;
+const root = document.getElementById("court-tracker-root");
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+await mount(root);
+await wait(700);
+if (!S.courts || S.courts.size === 0) {
+  fail(`<b>The widget mounted but loaded no data.</b> <code>data/manifest.json</code> and friends
+        did not fetch — serve the <i>repo root</i> (not <code>tools/</code>) over HTTP.`);
+}
+if (!S.seatBlocks) {
+  fail(`<b>No seat-block data.</b> <code>data/seat_blocks.json</code> is missing from the manifest —
+        run <code>python3 scripts/build_assets.py</code>.`);
+}
+root.classList.add("tuning");
+
+// court_id -> true once the operator has actually moved it (only these get exported)
+const touched = new Set(Object.entries(S.seatBlocks || {})
+  .filter(([, b]) => b.anchor).map(([cid]) => cid));      // pre-existing CSV rows count as tuned
+// square edge in CSS px — constant on screen, so one number reads the same in every view
+const sizeOverride = { circuit: _dev.BLOCK_PX, district: _dev.BLOCK_PX, feeder: _dev.BLOCK_PX };
+
+const CIRCUITS = [...S.courts.values()].filter((c) => c.court_level === "circuit")
+  .sort((a, b) => a.court_id.replace(/^ca/, "").padStart(3, "0").localeCompare(b.court_id.replace(/^ca/, "").padStart(3, "0")));
+$("view").innerHTML = `<option value="">National (circuits)</option>` +
+  `<option value="cafc">Federal Circuit feeders (CIT/CFC)</option>` +
+  CIRCUITS.filter((c) => c.court_id !== "cafc")
+    .map((c) => `<option value="${c.court_id}">${c.short_name} districts</option>`).join("");
+
+// Follow the WIDGET's state, never this page's dropdown. The widget's own selector bar and
+// "View districts" button are right there and are the natural way to navigate — but they don't
+// touch the dropdown, so a dropdown-derived view silently pointed at the national layer (which is
+// display:none while drilled in) and nothing could be dragged. The dropdown is now just a
+// shortcut that drives the widget; the widget is the source of truth.
+const activeCircuit = () =>
+  (S.view === "circuit" && S.activeCircuit && S.activeCircuit !== "cafc" ? S.activeCircuit : null);
+// The cafc feeder view: CIT/CFC blocks (level "feeder") live on the NATIONAL svg alongside
+// the circuit blocks, exactly as the widget shows them.
+const feederMode = () => S.view === "circuit" && S.activeCircuit === "cafc";
+const level = () => (feederMode() ? "feeder" : activeCircuit() ? "district" : "circuit");
+const activeSVG = () => (activeCircuit() ? S.localSVGCache.get(activeCircuit()) : S.ui.nationalSVG);
+const rerender = () => {
+  const svg = activeSVG();
+  if (svg) {
+    if (feederMode()) {                 // both levels are on screen in this view
+      _dev.renderSeatBlocks(svg, "circuit");
+      _dev.renderSeatBlocks(svg, "feeder");
+    } else {
+      _dev.renderSeatBlocks(svg, level(), activeCircuit() || undefined);
+    }
+  }
+  $("count").textContent = `${touched.size} tuned`;
+};
+
+// Re-sync whenever the view changes by ANY route (dropdown, selector bar, drill button, back).
+let lastView = "";
+setInterval(() => {
+  const key = `${S.view}:${S.activeCircuit || ""}`;
+  if (key === lastView) return;
+  lastView = key;
+  $("view").value = feederMode() ? "cafc" : (activeCircuit() || "");
+  $("size").value = sizeOverride[level()];
+  $("sizeval").textContent = `${(+$("size").value).toFixed(1)} px`;
+  rerender();
+}, 250);
+
+// --- drag ---------------------------------------------------------------------
+// Screen px -> SVG user units via the live CTM, so this works at any zoom/viewport. Anchors are
+// stored PRE-flip (geographic Y up, same space as the path data and QGIS), so undo the flip.
+function toUser(svg, ev) {
+  const pt = new DOMPoint(ev.clientX, ev.clientY).matrixTransform(svg.getScreenCTM().inverse());
+  return pt;
+}
+let drag = null;
+
+// Drag with WINDOW listeners and a live transform — deliberately NOT setPointerCapture + a full
+// re-render per move. rerender() rebuilds the .ctt-blocks group, which DESTROYS the very node
+// holding the capture: real pointers then lose capture mid-drag and the block stops tracking.
+// (Synthetic PointerEvents never reproduce this — setPointerCapture throws on an inactive
+// pointerId — which is why it tested clean and still failed for a human.)
+// Moving one group by transform is also ~85x less work per mousemove than rebuilding them all.
+function onDown(ev) {
+  const blk = ev.target.closest && ev.target.closest(".ctt-block");
+  if (!blk) return;
+  const svg = activeSVG();
+  if (!svg) return;
+  const cid = blk.getAttribute("data-court-id");
+  const b = S.seatBlocks[cid];
+  // Fall back to the block node's EFFECTIVE anchor (stashed by renderSeatBlocks): CIT/CFC
+  // start on computed offsets from the Fed block, so they have no stored anchor and no
+  // geometry to derive one from — without this the drag silently no-opped (operator report).
+  const cur = b.anchor || _dev.shapeAnchor(svg, cid, b.level) || blk._anchor;
+  if (!cur) return;
+  drag = { cid, b, blk, svg, k: _dev.flipConst(svg), cur, p0: toUser(svg, ev), next: null };
+  blk.classList.add("dragging");
+  window.addEventListener("pointermove", onMove);
+  window.addEventListener("pointerup", onUp, { once: true });
+  ev.preventDefault();
+}
+function onMove(ev) {
+  if (!drag) return;
+  const p = toUser(drag.svg, ev);
+  const dx = p.x - drag.p0.x, dy = p.y - drag.p0.y;      // SVG user units
+  drag.blk.setAttribute("transform", `translate(${dx} ${dy})`);   // live, no rebuild
+  // anchors are stored PRE-flip (geographic Y up), so screen-down is anchor-down-negative
+  drag.next = [Math.round(drag.cur[0] + dx), Math.round(drag.cur[1] - dy)];
+}
+function onUp() {
+  window.removeEventListener("pointermove", onMove);
+  if (!drag) return;
+  if (drag.next) { drag.b.anchor = drag.next; touched.add(drag.cid); }
+  drag.blk.removeAttribute("transform");
+  drag.blk.classList.remove("dragging");
+  drag = null;
+  rerender();                                            // commit once, at the end
+}
+root.addEventListener("pointerdown", onDown);
+// Blocks select their court on click in the real widget. While tuning, a drag must not also open
+// the info pane — swallow block clicks in the capture phase, before the widget's handler runs.
+root.addEventListener("click", (e) => {
+  if (e.target.closest && e.target.closest(".ctt-block")) { e.stopPropagation(); e.preventDefault(); }
+}, true);
+
+// --- controls -----------------------------------------------------------------
+$("view").addEventListener("change", async () => {
+  const cid = $("view").value;
+  if (cid) { await _dev.drillIn(cid); await wait(900); }
+  else { await _dev.drillOut(); await wait(900); }
+  $("size").value = sizeOverride[level()];
+  $("sizeval").textContent = `${(+$("size").value).toFixed(1)} px`;
+  rerender();
+});
+$("size").addEventListener("input", () => {
+  const px = +$("size").value;
+  const lvl = level();
+  sizeOverride[lvl] = px;
+  $("sizeval").textContent = `${px.toFixed(1)} px`;
+  for (const [cid, b] of Object.entries(S.seatBlocks)) {
+    if (b.level !== lvl) continue;
+    if (lvl === "district" && b.parent_id !== activeCircuit()) continue;
+    b.size = px;
+    touched.add(cid);
+  }
+  rerender();
+});
+$("reset").addEventListener("click", () => {
+  const lvl = level();
+  for (const [cid, b] of Object.entries(S.seatBlocks)) {
+    if (b.level !== lvl) continue;
+    if (lvl === "district" && b.parent_id !== activeCircuit()) continue;
+    if (cid === "cafc") continue;                 // no geometry -> cannot default
+    // (cit/uscfc CAN reset: null falls back to the computed offsets from the Fed block)
+    b.anchor = null; b.size = null; touched.delete(cid);
+  }
+  sizeOverride[lvl] = _dev.BLOCK_PX; $("size").value = _dev.BLOCK_PX;
+  $("sizeval").textContent = `${_dev.BLOCK_PX.toFixed(1)} px`;
+  rerender();
+});
+$("export").addEventListener("click", () => {
+  const q = (s) => (/[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s);
+  const rows = [["court_id", "anchor_x", "anchor_y", "size", "notes"].join(",")];
+  for (const cid of [...touched].sort()) {
+    const b = S.seatBlocks[cid];
+    if (!b || !b.anchor) continue;
+    rows.push([cid, Math.round(b.anchor[0]), Math.round(b.anchor[1]),
+               b.size ? b.size.toFixed(2) : "",
+               q(["cafc", "cit", "uscfc"].includes(cid) ? "No geography; placed by hand." : "")].join(","));
+  }
+  const csv = rows.join("\n") + "\n";
+  $("out").value = csv;
+  $("out").select();
+  navigator.clipboard?.writeText(csv).catch(() => {});
+});
+
+rerender();
+</script>
+</body>
+</html>

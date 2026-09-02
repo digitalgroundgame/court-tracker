@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "defaultMode": "acceptEdits",
+    "allow": [
+      "Read(./**)",
+      "Write(./**)",
+      "Edit(./**)",
+      "WebSearch",
+      "WebFetch",
+      "Bash(python3:*)",
+      "Bash(python:*)",
+      "Bash(pip3:*)",
+      "Bash(pip:*)",
+      "Bash(node:*)",
+      "Bash(npm:*)",
+      "Bash(npx:*)",
+      "Bash(curl:*)",
+      "Bash(ls:*)",
+      "Bash(cat:*)",
+      "Bash(find:*)",
+      "Bash(grep:*)",
+      "Bash(rg:*)",
+      "Bash(mkdir:*)",
+      "Bash(cp:*)",
+      "Bash(mv:*)",
+      "Bash(echo:*)",
+      "Bash(head:*)",
+      "Bash(tail:*)",
+      "Bash(wc:*)",
+      "Bash(sort:*)",
+      "Bash(jq:*)",
+      "Bash(zip:*)",
+      "Bash(unzip:*)"
+    ],
+    "ask": [
+      "Bash(rm:*)"
+    ],
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(./**/*secret*)",
+      "Read(./**/*token*)",
+      "Bash(rm -rf:*)",
+      "Bash(sudo:*)",
+      "Bash(npm publish:*)",
+      "Write(assets/geo/**)",
+      "Edit(assets/geo/**)"
+    ]
+  },
+  "env": {
+    "PYTHONUNBUFFERED": "1"
+  }
+}

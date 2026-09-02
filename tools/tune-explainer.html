@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>tune-explainer — "Explain this graphic" editor</title>
+<link rel="stylesheet" href="../embed/appointments-chart.css">
+<style>
+  body { margin: 0; font-family: system-ui, sans-serif; background: #eef1f5; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 12px 16px 40px; }
+  .bar, .panel { background: #fff; border: 1px solid #d8dde4; border-radius: 8px;
+                 padding: 10px 14px; margin-bottom: 10px; font-size: 13px; }
+  .bar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .panel { display: none; }
+  .panel.on { display: block; }
+  .panel .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin: 6px 0; }
+  .panel textarea { width: 100%; height: 56px; font: 12px ui-monospace, monospace; }
+  .panel label { display: inline-flex; align-items: center; gap: 4px; }
+  .panel input[type="number"] { width: 58px; }
+  #out { width: 100%; height: 120px; font: 11px ui-monospace, monospace; }
+  .note { color: #5b6470; font-size: 12px; margin: 6px 2px 12px; }
+  .arrow-chip { border: 1px solid #d8dde4; border-radius: 6px; padding: 3px 6px; margin: 0 6px 6px 0;
+                display: inline-flex; gap: 5px; align-items: center; flex-wrap: wrap; }
+  /* edit mode: boxes become draggable/selectable; arrow handles (drawn INSIDE the explainer's
+     own SVG, which is otherwise pointer-events:none) opt back in individually. */
+  .editing .cta-explainer { pointer-events: none; }
+  .editing .cta-explainer-box { pointer-events: auto; cursor: grab; }
+  .editing .cta-explainer-box.sel { outline: 2px solid #2f6feb; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="bar">
+    <button id="open" type="button">Open explainer (edit mode)</button>
+    <button id="addbox" type="button">Add text box</button>
+    <span class="note" style="margin:0">Drag boxes to move (continuous — no snapping). Click a
+      box to edit it below; its arrows get a <b style="color:#2f6feb">blue tail handle</b> and a
+      <b style="color:#ad8a00">yellow bend handle</b>, both draggable right on the chart. An
+      arrowhead always targets a real dot — use <b>🎯 pick</b> then click any dot to choose
+      exactly which one.</span>
+    <span class="note" id="pickhint" style="display:none;color:#b23a3a;font-weight:600">
+      Click a dot in the chart to target this arrow (click the pick button again to cancel)…</span>
+  </div>
+  <div class="bar">
+    <label>span (yr) <input id="expSpan" type="number" min="2" max="58" step="1" style="width:56px"></label>
+    <label>end date <input id="expEnd" type="date"></label>
+    <button id="captureView" type="button">Use current chart view</button>
+    <span class="note" style="margin:0">These are the explainer's PRESET view — where it jumps
+      to on open (also this config's "zoom": narrower span = fewer years = bigger dots). Typing
+      here moves the live chart below to match. Prefer eyeballing it? Drag/pan and use the
+      chart's own <i>Years shown</i> control instead — note this DISMISSES the boxes (same
+      "any pan hides the explainer" behavior as production) but the view itself isn't lost —
+      then hit <b>Use current chart view</b> to snapshot wherever you ended up and re-open.</span>
+  </div>
+  <div class="panel" id="panel">
+    <div class="row"><b id="selname">—</b>
+      <button id="delbox" type="button">Delete box</button></div>
+    <textarea id="txt" spellcheck="false"></textarea>
+    <div class="row">
+      <label>bg <input id="bg" type="checkbox" checked></label>
+      <label>bold <input id="bold" type="checkbox"></label>
+      <label>italic <input id="italic" type="checkbox"></label>
+      <label>underline <input id="und" type="checkbox"></label>
+      <label>size <input id="fs" type="number" min="8" max="24" value="11"></label>
+      <label>color <input id="col" type="color" value="#1b1f24"></label>
+      <label>width <input id="bw" type="number" min="80" max="420" step="10" value="210"></label>
+    </div>
+    <div class="row" id="arrowrow">
+      <b>Arrows from this box:</b>
+      <span id="arrows"></span>
+      <label>add → <select id="addtarget">
+        <option value="scotus">scotus</option><option value="district">district</option>
+        <option value="appellate">appellate</option><option value="marked">marked</option>
+        <option value="senior">senior</option><option value="departed">departed</option>
+      </select></label>
+      <button id="addarrow" type="button">Add arrow</button>
+    </div>
+  </div>
+  <div id="appointments-chart-root"></div>
+  <p class="note">Copy this config back for implementation:</p>
+  <textarea id="out" readonly spellcheck="false"></textarea>
+</div>
+<script type="module">
+const root = document.getElementById("appointments-chart-root");
+root.dataset.ctaMounted = "1";
+const { mount, _dev } = await import("../embed/appointments-chart.js");
+await mount(root);
+const A = _dev.A;
+const $ = (id) => document.getElementById(id);
+const cfg = JSON.parse(JSON.stringify(_dev.EXPLAINER_DEFAULT));   // working copy
+A.explainerConfig = cfg;
+let selId = null;
+let pickingArrow = null;   // arrow index currently waiting for a "click a dot" target pick
+
+function chartBox() { return root.querySelector(".cta-chart-wrap").getBoundingClientRect(); }
+
+// Full rebuild: only called at drag-END (pointerup) and on real config edits (text/style/
+// add/delete/target changes) — NEVER mid-drag. Calling this while a drag is in flight is
+// what caused the old "sticky/snapping" bug: it replaces the box/arrow DOM nodes out from
+// under the in-progress pointermove, so nothing visibly moves until release, which then
+// jumps straight to the final spot. Mid-drag, handlers patch the live DOM directly instead.
+function rerender() {
+  if (A.explainer) { A.explainer.node?.remove(); _dev.buildExplainerOverlay(); wireBoxes(); }
+  $("out").value = JSON.stringify(cfg, null, 1);
+  markSelected();
+  renderHandles();
+}
+function markSelected() {
+  root.querySelectorAll(".cta-explainer-box").forEach((n) => n.classList.toggle("sel", n.dataset.boxId === selId));
+}
+
+// Selecting a box (including the pointerdown that starts a potential drag) must NOT rebuild
+// the DOM — it only updates the side panel and the .sel outline on the box already on screen.
+function select(id) {
+  selId = id;
+  const b = cfg.boxes.find((x) => x.id === id);
+  $("panel").classList.toggle("on", !!b);
+  if (!b) { markSelected(); renderHandles(); return; }
+  $("selname").textContent = b.id;
+  $("txt").value = b.text;
+  $("bg").checked = b.bg !== false;
+  $("bold").checked = !!b.bold; $("italic").checked = !!b.italic; $("und").checked = !!b.underline;
+  $("fs").value = b.size || 11; $("col").value = b.color || "#1b1f24"; $("bw").value = b.w || 210;
+  renderArrowEditors(b);
+  markSelected();
+  renderHandles();
+}
+
+function renderArrowEditors(b) {
+  const holder = $("arrows");
+  holder.innerHTML = "";
+  cfg.arrows.forEach((a, i) => {
+    if (a.from !== b.id) return;
+    const s = document.createElement("span");
+    s.className = "arrow-chip";
+    const pinned = a.targetPerson ? `pinned: ${a.targetPerson}${a.targetDate ? " (" + a.targetDate + ")" : ""}`
+      : `auto-pick nearest ${a.target}`;
+    const catOpts = ["scotus", "district", "appellate", "marked", "senior", "departed"]
+      .map((c) => `<option${a.target === c ? " selected" : ""}>${c}</option>`).join("");
+    s.innerHTML = `→<select data-i="${i}" data-k="target">${catOpts}</select>
+      <i style="color:#5b6470" title="${pinned}">${a.targetPerson ? "📌" : "(auto-pick nearest)"}</i>
+      <button data-i="${i}" data-k="pick" type="button">🎯 ${a.targetPerson ? "re-pick" : "pick"}</button>
+      ${a.targetPerson ? `<button data-i="${i}" data-k="unpick" type="button">clear pin</button>` : ""}
+      edge <select data-i="${i}" data-k="edge"><option${a.edge==="top"?" selected":""}>top</option><option${a.edge==="bottom"?" selected":""}>bottom</option></select>
+      bend <input data-i="${i}" data-k="bend" type="number" step="4" value="${a.bend||0}" style="width:52px">
+      dx <input data-i="${i}" data-k="dx" type="number" step="2" value="${a.dx||0}" style="width:48px">
+      dy <input data-i="${i}" data-k="dy" type="number" step="2" value="${a.dy||0}" style="width:48px">
+      color <input data-i="${i}" data-k="color" type="color" value="${a.color||cfg.arrowColor}">
+      w <input data-i="${i}" data-k="width" type="number" step="0.2" value="${a.width||cfg.arrowWidth}" style="width:48px">
+      ${a.tailXf != null ? `<button data-i="${i}" data-k="resettail" type="button">reset tail</button>` : ""}
+      <button data-i="${i}" data-k="del" type="button">✕</button>`;
+    holder.append(s);
+  });
+  holder.querySelectorAll("select,input,button").forEach((n) => {
+    n.addEventListener(n.tagName === "BUTTON" ? "click" : "input", () => {
+      const i = +n.dataset.i, k = n.dataset.k;
+      if (k === "del") { cfg.arrows.splice(i, 1); renderArrowEditors(b); rerender(); return; }
+      if (k === "pick") { armPicker(i); return; }
+      if (k === "unpick") {
+        delete cfg.arrows[i].targetPerson; delete cfg.arrows[i].targetDate;
+        renderArrowEditors(b); rerender(); return;
+      }
+      if (k === "resettail") {
+        delete cfg.arrows[i].tailXf; delete cfg.arrows[i].tailYf;
+        renderArrowEditors(b); rerender(); return;
+      }
+      if (k === "target") { cfg.arrows[i].target = n.value; renderArrowEditors(b); rerender(); return; }
+      cfg.arrows[i][k] = n.type === "number" ? +n.value : n.value;
+      rerender();
+    });
+  });
+}
+
+// "Pick target dot" mode: arm it, then the next click on any chart dot assigns that EXACT
+// judge (by name + commission date, stable across pan/zoom/relayout) as the arrowhead's
+// target, overriding the default "nearest dot of this category" auto-pick.
+function armPicker(i) {
+  if (pickingArrow === i) { pickingArrow = null; $("pickhint").style.display = "none"; root.style.cursor = ""; return; }
+  pickingArrow = i;
+  $("pickhint").style.display = "inline";
+  root.style.cursor = "crosshair";
+}
+root.addEventListener("click", (e) => {
+  if (pickingArrow == null) return;
+  const t = e.target.closest && e.target.closest(".cta-dot-target");
+  if (!t) return;
+  const d = A.dots[+t.getAttribute("data-i")];
+  if (!d) return;
+  e.preventDefault(); e.stopPropagation();
+  cfg.arrows[pickingArrow].targetPerson = d.row.full_name;
+  cfg.arrows[pickingArrow].targetDate = d.row.commission_date;
+  pickingArrow = null;
+  $("pickhint").style.display = "none";
+  root.style.cursor = "";
+  const b = cfg.boxes.find((x) => x.id === selId);
+  if (b) renderArrowEditors(b);
+  rerender();
+}, true);   // capture: resolve the pick before the widget's own click-to-pin handler runs
+
+for (const [id, key, kind] of [["txt","text","s"],["bg","bg","b"],["bold","bold","b"],
+    ["italic","italic","b"],["und","underline","b"],["fs","size","n"],["col","color","s"],["bw","w","n"]]) {
+  $(id).addEventListener("input", () => {
+    const b = cfg.boxes.find((x) => x.id === selId);
+    if (!b) return;
+    b[key] = kind === "b" ? $(id).checked : kind === "n" ? +$(id).value : $(id).value;
+    rerender();
+  });
+}
+$("delbox").addEventListener("click", () => {
+  cfg.boxes = cfg.boxes.filter((x) => x.id !== selId);
+  cfg.arrows = cfg.arrows.filter((a) => a.from !== selId);
+  selId = null; $("panel").classList.remove("on"); rerender();
+});
+$("addbox").addEventListener("click", () => {
+  const id = "box" + Date.now().toString(36);
+  cfg.boxes.push({ id, xf: 0.4, yf: 0.45, w: 210, bg: true, size: 11, color: "#1b1f24",
+    text: "New text — edit me." });
+  rerender(); select(id);
+});
+$("addarrow").addEventListener("click", () => {
+  if (!selId) return;
+  cfg.arrows.push({ from: selId, edge: "top", target: $("addtarget").value, bend: 24, dx: 0, dy: 0 });
+  select(selId); rerender();
+});
+
+// The explainer's preset view (span years + end date — its "zoom" and pan position). Typing
+// either moves the LIVE chart to match immediately, whether or not edit mode is currently
+// open (setSpan is always safe to call — it's the same thing the widget's own Years-shown
+// control and drag-to-scroll do); rerender() then refreshes the boxes/handles/JSON if the
+// explainer happens to be open (a no-op otherwise, since there's nothing to rebuild yet).
+$("expSpan").value = cfg.span;
+$("expEnd").value = cfg.end;
+function applyView() {
+  cfg.span = +$("expSpan").value;
+  cfg.end = $("expEnd").value;
+  _dev.setSpan(cfg.span, _dev.days(cfg.end));
+  rerender();
+}
+$("expSpan").addEventListener("input", applyView);
+$("expEnd").addEventListener("input", applyView);
+$("captureView").addEventListener("click", () => {
+  // Snapshot wherever the operator has actually panned/zoomed the live chart to — the
+  // alternative to typing exact numbers above.
+  cfg.span = A.spanYears;
+  cfg.end = _dev.isoOfDay(A.viewStart + _dev.ivDays());
+  $("expSpan").value = cfg.span;
+  $("expEnd").value = cfg.end;
+  rerender();
+});
+$("open").addEventListener("click", () => {
+  if (A.explainer) {
+    _dev.dismissExplainer(true);
+    document.body.classList.remove("editing");
+    pickingArrow = null; $("pickhint").style.display = "none"; root.style.cursor = "";
+  } else {
+    _dev.toggleExplainer(); document.body.classList.add("editing"); wireBoxes(); rerender();
+  }
+});
+
+// drag-to-move boxes (window listeners, no capture). Continuous: the pointermove handler
+// patches the SAME live node's inline style every frame; select() (called on pointerdown)
+// no longer forces a DOM rebuild, so this node is never swapped out mid-drag.
+function wireBoxes() {
+  root.querySelectorAll(".cta-explainer-box").forEach((n) => {
+    n.onpointerdown = (e) => {
+      const id = n.dataset.boxId;
+      select(id);
+      const b = cfg.boxes.find((x) => x.id === id);
+      const start = { x: e.clientX, y: e.clientY, left: n.offsetLeft, top: n.offsetTop };
+      const cb = chartBox();
+      const move = (ev) => {
+        const nx = start.left + ev.clientX - start.x, ny = start.top + ev.clientY - start.y;
+        n.style.left = `${nx}px`; n.style.top = `${ny}px`;
+        b.xf = +(nx / cb.width).toFixed(4); b.yf = +(ny / cb.height).toFixed(4);
+      };
+      const up = () => { window.removeEventListener("pointermove", move); rerender(); };
+      window.addEventListener("pointermove", move);
+      window.addEventListener("pointerup", up, { once: true });
+      e.preventDefault(); e.stopPropagation();
+    };
+  });
+}
+
+// Draggable tail + bend handles for the selected box's arrows. Geometry is read straight off
+// the just-rendered <path>'s "M x0 y0 Q cx cy x1 y1" — no need to duplicate the production
+// layout math here, and it guarantees the handles sit exactly on the real arrow. Only the
+// tail and bend control point are draggable (continuous, same live-patch pattern as the box
+// drag above); the head stays pinned to whichever dot resolveArrowTarget() picked — see the
+// 🎯 pick button for changing THAT.
+function addHandle(svg, cx0, cy0, color, onMove) {
+  const h = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+  h.setAttribute("class", "cta-handle");
+  h.setAttribute("cx", cx0); h.setAttribute("cy", cy0); h.setAttribute("r", 5);
+  h.setAttribute("fill", color); h.setAttribute("stroke", "#fff"); h.setAttribute("stroke-width", 1.5);
+  h.setAttribute("pointer-events", "auto"); h.setAttribute("cursor", "grab");
+  h.addEventListener("pointerdown", (e) => {
+    e.preventDefault(); e.stopPropagation();
+    const cb = chartBox();
+    const move = (ev) => onMove(ev.clientX - cb.left, ev.clientY - cb.top);
+    const up = () => { window.removeEventListener("pointermove", move); rerender(); };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up, { once: true });
+  });
+  svg.append(h);
+  return h;
+}
+function renderHandles() {
+  const svg = root.querySelector(".cta-explainer-svg");
+  if (!svg) return;
+  svg.querySelectorAll(".cta-handle").forEach((n) => n.remove());
+  if (!selId) return;
+  cfg.arrows.forEach((a, i) => {
+    if (a.from !== selId) return;
+    const path = svg.querySelector(`path.cta-explainer-arrow[data-arrow-i="${i}"]`);
+    if (!path) return;
+    const m = /M ([\d.-]+) ([\d.-]+) Q ([\d.-]+) ([\d.-]+) ([\d.-]+) ([\d.-]+)/.exec(path.getAttribute("d"));
+    if (!m) return;
+    const nums = m.slice(1).map(Number);
+    // x1/y1 (the head) is fixed while dragging the tail/bend handles of THIS arrow.
+    const state = { x0: nums[0], y0: nums[1], x1: nums[4], y1: nums[5], bend: a.bend || 0 };
+    let tailHandle, bendHandle;
+    const curve = () => {
+      const midx = (state.x0 + state.x1) / 2, midy = (state.y0 + state.y1) / 2;
+      const ddx = state.x1 - state.x0, ddy = state.y1 - state.y0, len = Math.hypot(ddx, ddy) || 1;
+      return { midx, midy, ddx, ddy, len,
+        cx: midx - (ddy / len) * state.bend, cy: midy + (ddx / len) * state.bend };
+    };
+    const redraw = () => {
+      const c = curve();
+      path.setAttribute("d", `M ${state.x0} ${state.y0} Q ${c.cx} ${c.cy} ${state.x1} ${state.y1}`);
+      tailHandle.setAttribute("cx", state.x0); tailHandle.setAttribute("cy", state.y0);
+      bendHandle.setAttribute("cx", c.cx); bendHandle.setAttribute("cy", c.cy);
+    };
+    tailHandle = addHandle(svg, state.x0, state.y0, "#2f6feb", (nx, ny) => {
+      state.x0 = nx; state.y0 = ny;
+      a.tailXf = +(nx / chartBox().width).toFixed(4);
+      a.tailYf = +(ny / chartBox().height).toFixed(4);
+      redraw();
+    });
+    const c0 = curve();
+    bendHandle = addHandle(svg, c0.cx, c0.cy, "#e8b400", (nx, ny) => {
+      const { midx, midy, ddx, ddy, len } = curve();
+      const ux = -ddy / len, uy = ddx / len;
+      state.bend = Math.round((nx - midx) * ux + (ny - midy) * uy);
+      a.bend = state.bend;
+      redraw();
+    });
+  });
+}
+
+$("out").value = JSON.stringify(cfg, null, 1);
+</script>
+</body>
+</html>

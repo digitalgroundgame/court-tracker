@@ -1,0 +1,62 @@
+{
+  "Richard M. Nixon": {
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a6/Richard_Nixon_presidential_portrait_%282%29.jpg/330px-Richard_Nixon_presidential_portrait_%282%29.jpg",
+    "photo_thumb": "assets/photos/3783dfe879dd7117.jpg",
+    "photo_source": "https://commons.wikimedia.org/wiki/File:Richard_Nixon_presidential_portrait_(2).jpg",
+    "photo_license": "Public domain"
+  },
+  "Gerald Ford": {
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/36/Gerald_Ford_presidential_portrait_%28cropped%29.jpg/330px-Gerald_Ford_presidential_portrait_%28cropped%29.jpg",
+    "photo_thumb": "assets/photos/ee5478dd3ff8265d.jpg",
+    "photo_source": "https://commons.wikimedia.org/wiki/File:Gerald_Ford_presidential_portrait_(cropped).jpg",
+    "photo_license": "Public domain"
+  },
+  "Jimmy Carter": {
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6a/Jimmy_Carter_Official_Portrait2_%283x4_cropped%29.jpg/330px-Jimmy_Carter_Official_Portrait2_%283x4_cropped%29.jpg",
+    "photo_thumb": "assets/photos/4dfb18ee37edb574.jpg",
+    "photo_source": "https://commons.wikimedia.org/wiki/File:Jimmy_Carter_Official_Portrait2_(3x4_cropped).jpg",
+    "photo_license": "Public domain"
+  },
+  "Ronald Reagan": {
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/1/16/Official_Portrait_of_President_Reagan_1981.jpg/330px-Official_Portrait_of_President_Reagan_1981.jpg",
+    "photo_thumb": "assets/photos/1370f1c8560afbd9.jpg",
+    "photo_source": "https://commons.wikimedia.org/wiki/File:Official_Portrait_of_President_Reagan_1981.jpg",
+    "photo_license": "Public domain"
+  },
+  "George H.W. Bush": {
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dc/George_H._W._Bush_presidential_portrait_%28cropped%29_%282%29.jpg/330px-George_H._W._Bush_presidential_portrait_%28cropped%29_%282%29.jpg",
+    "photo_thumb": "assets/photos/9eccb7f4dc79b847.jpg",
+    "photo_source": "https://commons.wikimedia.org/wiki/File:George_H._W._Bush_presidential_portrait_(cropped)_(2).jpg",
+    "photo_license": "Public domain"
+  },
+  "William J. Clinton": {
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/50/Bill_Clinton_%28cropped_4%29.jpg/330px-Bill_Clinton_%28cropped_4%29.jpg",
+    "photo_thumb": "assets/photos/63b8cb28904b1a9d.jpg",
+    "photo_source": "https://commons.wikimedia.org/wiki/File:Bill_Clinton_(cropped_4).jpg",
+    "photo_license": "Public domain"
+  },
+  "George W. Bush": {
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d4/George-W-Bush.jpeg/330px-George-W-Bush.jpeg",
+    "photo_thumb": "assets/photos/42310bc30879c8f2.jpg",
+    "photo_source": "https://commons.wikimedia.org/wiki/File:George-W-Bush.jpeg",
+    "photo_license": "Public domain"
+  },
+  "Barack Obama": {
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8d/President_Barack_Obama.jpg/330px-President_Barack_Obama.jpg",
+    "photo_thumb": "assets/photos/d1746f0307b9aeef.jpg",
+    "photo_source": "https://commons.wikimedia.org/wiki/File:President_Barack_Obama.jpg",
+    "photo_license": "Public domain"
+  },
+  "Donald J. Trump": {
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/1/16/Official_Presidential_Portrait_of_President_Donald_J._Trump_%282025%29.jpg/330px-Official_Presidential_Portrait_of_President_Donald_J._Trump_%282025%29.jpg",
+    "photo_thumb": "assets/photos/ceb8550a61cf0397.jpg",
+    "photo_source": "https://commons.wikimedia.org/wiki/File:Official_Presidential_Portrait_of_President_Donald_J._Trump_(2025).jpg",
+    "photo_license": "Public domain"
+  },
+  "Joseph R. Biden": {
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/68/Joe_Biden_presidential_portrait.jpg/330px-Joe_Biden_presidential_portrait.jpg",
+    "photo_thumb": "assets/photos/d2c4ba660fbfe18f.jpg",
+    "photo_source": "https://commons.wikimedia.org/wiki/File:Joe_Biden_presidential_portrait.jpg",
+    "photo_license": "Public domain"
+  }
+}
