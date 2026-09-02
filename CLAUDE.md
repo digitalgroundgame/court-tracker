@@ -156,6 +156,16 @@ archived (e.g. archive.org). No build step at runtime; plain ES modules + fetch.
 4. Do not advance a phase until its Definition of Done in `docs/BUILD_SEQUENCE.md` is met.
 5. If blocked by a missing external input (geometry SVGs, an API token), record the blocker, build
    against the documented placeholder/stub, and continue with unblocked work.
+6. **Commit and push after every `PROGRESS.md` update** (added 2026-09-01, session (br)). This repo
+   is linked to `origin` = `github.com/digitalgroundgame/court-tracker` (private). Once step 3's
+   `PROGRESS.md` entry is written: `git add -A` (check `git status` first — verify nothing under
+   `data/cache/`, `traces/`, or `node_modules/` snuck past `.gitignore`, and that no unexpected file
+   is staged), commit, and `git push`. The commit message's summary line should echo the session-log
+   entry's heading (e.g. `(br) — GitHub linking + auto-commit protocol`) so GitHub's commit history
+   reads as the same log as `PROGRESS.md`'s session log, browsable either place. This makes "push to
+   GitHub" part of finishing a session, not a separate manual step — do it without being asked,
+   the same way updating `PROGRESS.md` itself isn't asked for each time. Skip it only if there is
+   truly nothing to commit (pure investigation, no file changes).
 
 ## Repo map
 ```
@@ -167,8 +177,14 @@ court-tracker/
 ├── index.html            ← standalone demo host (you build this)
 ├── embed/                ← the shippable widget: court-tracker.{js,css} + embed snippet
 ├── data/                 ← judges/courts/circuit_justices .csv (truth) + derived .json + manifest
+│   └── cache/            ← GITIGNORED — raw API/web response + pre-crop photo cache, not in GitHub.
+│                            Rebuilds itself (slowly, hitting live APIs) as collect_*.py/enrich_*.py
+│                            re-run; absence after a fresh clone is expected, not a bug.
 ├── assets/geo/           ← EXTERNAL geometry: national.svg, circuits/<id>.svg, insets/ (you consume)
-├── assets/photos/        ← optional cached judge images
+├── assets/photos/        ← cached judge images (tracked in git — this is what the widget serves)
 ├── scripts/              ← collect_courtlistener.py, enrich_wikipedia.py, build_assets.py, qgis_export_template.py
 └── docs/                 ← CODEBOOK, DATA_SOURCES, GEOMETRY_CONTRACT, BUILD_SEQUENCE, REFERENCE_NOTES
 ```
+Also gitignored (see `.gitignore`): `node_modules/` (restore via `npm install`), `traces/`
+(DevTools performance captures), `data/out/` (a `qgis_export.py` staging copy that duplicates
+`assets/geo/`), `.claude/scheduled_tasks.lock` (ephemeral runtime state).

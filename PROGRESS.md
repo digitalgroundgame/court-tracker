@@ -1059,6 +1059,55 @@ Prove the whole app shell and asset schema on one circuit with hand-authored sam
 - Blockers: ...
 -->
 
+### 2026-09-01 (br) — linked the repo to GitHub (`digitalgroundgame/court-tracker`, private) +
+### auto-commit/push protocol
+- Infra, not a Phase-4 task. Operator asked to (1) link this project to a GitHub org repo,
+  (2) do the first upload, (3) update the core docs so future sessions push progress to GitHub
+  as a matter of course, with progress notes visible there too.
+- **`git init`d the repo** (it had never been version-controlled) and pushed the initial commit
+  to `origin/main` = `https://github.com/digitalgroundgame/court-tracker` (operator-created,
+  private, empty before this session). `gh` wasn't installed and the sandbox has no sudo — installed
+  it as a **user-local binary** (`~/.local/bin/gh`, no package manager / root needed); operator ran
+  `gh auth login` themselves (device-code browser flow, out of agent reach) as `EmilyCapper`,
+  matching the pre-existing global git identity (Emily Capper / 47438924+EmilyCapper@users.noreply.github.com) — no
+  identity mismatch to reconcile. Push needed `gh auth setup-git` first (no HTTPS credential
+  helper was registered yet even though `gh auth status` showed logged-in).
+- **What's tracked vs. gitignored** — of ~821MB working-tree size, 87.3MB is tracked. Excluded via
+  new `.gitignore`: `data/cache/` (665MB — raw CourtListener/Wikipedia API+HTML cache AND
+  `photos_orig/` pre-crop full-res photo downloads; this is pipeline resumability state per
+  CLAUDE.md's caching directive, not the served asset — **`assets/photos/` (27MB, the actual
+  cropped files the widget fetches) is tracked**, this distinction was double-checked with the
+  operator before excluding anything, since their first instinct was that photos = most of the
+  size and shouldn't be dropped), `traces/` (32MB DevTools freeze-hunt captures), `node_modules/`
+  (26MB, `npm install`-restorable), `data/out/` (1.4MB `qgis_export.py` staging dir, byte-identical
+  duplicate of `assets/geo/`), `scripts/__pycache__/`, and `.claude/scheduled_tasks.lock` (ephemeral
+  runtime lock, caught only because `git add -A` staged it — `.claude/settings.json`, the actual
+  project permission config, IS tracked; `settings.local.json` was already excluded by the
+  operator's pre-existing global gitignore). Largest tracked files are legitimate external source
+  data, not an oversight: `data/nps/nps_boundary.shp` (40MB) and `data/census/cb_2024_us_county_500k.shp`
+  (16MB) — both well under GitHub's 50MB warn / 100MB hard-block thresholds.
+- **Fixed a mojibake bug in my own first commit message** before it ever left the machine: a
+  heredoc-embedded em dash round-tripped through UTF-8 twice (`—` → `Ã¢â‚¬â€`), caught by hexdumping
+  the committed message rather than trusting the terminal's rendering. Amended in place (safe —
+  nothing had been pushed yet) using `git commit -F` from a `Write`-created file instead of an
+  inline heredoc, which sidesteps shell re-encoding entirely.
+- **`CLAUDE.md` updated**: §7 (Working protocol) gained step 6 — commit + push is now part of
+  finishing a session, same footing as updating `PROGRESS.md` itself, done without being asked;
+  commit summary lines should echo the session-log heading so GitHub's commit history and
+  `PROGRESS.md`'s session log read as the same log in two places. The repo map gained inline
+  notes on which directories are gitignored (so a fresh clone's missing `data/cache/` doesn't
+  read as data loss) and confirmed `assets/photos/` is tracked, not "optional."
+- **Interpretation flagged for the operator**: "progress notes also logged on github" is being
+  satisfied by GitHub's own commit history (each session's commit message mirrors its
+  `PROGRESS.md` entry) rather than a separate GitHub Issues/Discussions log — simpler, and
+  avoids a second place these two logs could drift apart. Revisit if the operator wants an
+  Issues-based log instead (e.g. for @-mentions, labels, or a per-bug thread GitHub search can
+  find independent of `PROGRESS.md`'s prose).
+- Next: unchanged substantively — Phase 4's first open checklist item is still the mobile
+  ~380px + accessibility pass (line ~1041). One live thing to verify next session: that step 6's
+  push-every-session habit is actually being followed (check `git log` vs. session-log entries
+  for drift) rather than just documented and then forgotten under token pressure.
+
 ### 2026-09-01 (bq) — root-caused the snap float-noise bug, repaired data + fixed the tool
 - Phase: 4, same thread. Operator reported ugly near-integer offset values
   (`-16.900000000000002`) in their exported arrangement data and asked for a copy-only repair
