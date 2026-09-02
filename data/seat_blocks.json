@@ -1,0 +1,1631 @@
+{
+  "ca1": {
+    "level": "circuit",
+    "parent_id": null,
+    "authorized": 6,
+    "total": 6,
+    "r": 1,
+    "d": 5,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      2050017.0,
+      2637128.0
+    ],
+    "size": null
+  },
+  "ca2": {
+    "level": "circuit",
+    "parent_id": null,
+    "authorized": 13,
+    "total": 13,
+    "r": 5,
+    "d": 7,
+    "o": 0,
+    "vacancies": 1,
+    "anchor": [
+      1689442.0,
+      2524049.0
+    ],
+    "size": null
+  },
+  "ca3": {
+    "level": "circuit",
+    "parent_id": null,
+    "authorized": 14,
+    "total": 14,
+    "r": 8,
+    "d": 6,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      1549384.0,
+      2136046.0
+    ],
+    "size": null
+  },
+  "ca4": {
+    "level": "circuit",
+    "parent_id": null,
+    "authorized": 15,
+    "total": 15,
+    "r": 6,
+    "d": 9,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      1468431.0,
+      1611706.0
+    ],
+    "size": null
+  },
+  "ca5": {
+    "level": "circuit",
+    "parent_id": null,
+    "authorized": 17,
+    "total": 17,
+    "r": 12,
+    "d": 5,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      -1946.0,
+      901833.0
+    ],
+    "size": null
+  },
+  "ca6": {
+    "level": "circuit",
+    "parent_id": null,
+    "authorized": 16,
+    "total": 16,
+    "r": 10,
+    "d": 6,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      1081954.0,
+      1887146.0
+    ],
+    "size": null
+  },
+  "ca7": {
+    "level": "circuit",
+    "parent_id": null,
+    "authorized": 11,
+    "total": 11,
+    "r": 6,
+    "d": 5,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      672111.0,
+      1854357.0
+    ],
+    "size": null
+  },
+  "ca8": {
+    "level": "circuit",
+    "parent_id": null,
+    "authorized": 11,
+    "total": 11,
+    "r": 10,
+    "d": 1,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      -101504.0,
+      2330798.0
+    ],
+    "size": null
+  },
+  "ca9": {
+    "level": "circuit",
+    "parent_id": null,
+    "authorized": 29,
+    "total": 29,
+    "r": 13,
+    "d": 16,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      -1908559.0,
+      1969465.0
+    ],
+    "size": null
+  },
+  "ca10": {
+    "level": "circuit",
+    "parent_id": null,
+    "authorized": 12,
+    "total": 12,
+    "r": 5,
+    "d": 7,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      -847502.0,
+      1670095.0
+    ],
+    "size": null
+  },
+  "ca11": {
+    "level": "circuit",
+    "parent_id": null,
+    "authorized": 12,
+    "total": 12,
+    "r": 7,
+    "d": 5,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      980746.0,
+      1060527.0
+    ],
+    "size": null
+  },
+  "cadc": {
+    "level": "circuit",
+    "parent_id": null,
+    "authorized": 11,
+    "total": 11,
+    "r": 4,
+    "d": 7,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      2341048.0,
+      1553529.0
+    ],
+    "size": null
+  },
+  "cafc": {
+    "level": "circuit",
+    "parent_id": null,
+    "authorized": 12,
+    "total": 12,
+    "r": 4,
+    "d": 8,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      2029097.0,
+      935444.0
+    ],
+    "size": null
+  },
+  "med": {
+    "level": "district",
+    "parent_id": "ca1",
+    "authorized": 3,
+    "total": 3,
+    "r": 1,
+    "d": 1,
+    "o": 0,
+    "vacancies": 1,
+    "anchor": [
+      65960.0,
+      87935.0
+    ],
+    "size": null
+  },
+  "mad": {
+    "level": "district",
+    "parent_id": "ca1",
+    "authorized": 13,
+    "total": 13,
+    "r": 0,
+    "d": 11,
+    "o": 0,
+    "vacancies": 2,
+    "anchor": [
+      -157989.0,
+      -236143.0
+    ],
+    "size": null
+  },
+  "nhd": {
+    "level": "district",
+    "parent_id": "ca1",
+    "authorized": 3,
+    "total": 3,
+    "r": 1,
+    "d": 2,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      -124467.0,
+      -104770.0
+    ],
+    "size": null
+  },
+  "rid": {
+    "level": "district",
+    "parent_id": "ca1",
+    "authorized": 3,
+    "total": 3,
+    "r": 1,
+    "d": 2,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      -126575.0,
+      -313482.0
+    ],
+    "size": null
+  },
+  "prd": {
+    "level": "district",
+    "parent_id": "ca1",
+    "authorized": 7,
+    "total": 7,
+    "r": 3,
+    "d": 4,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      209200.0,
+      -203111.0
+    ],
+    "size": null
+  },
+  "ctd": {
+    "level": "district",
+    "parent_id": "ca2",
+    "authorized": 8,
+    "total": 8,
+    "r": 1,
+    "d": 6,
+    "o": 0,
+    "vacancies": 1,
+    "anchor": [
+      182639.0,
+      -151492.0
+    ],
+    "size": null
+  },
+  "nynd": {
+    "level": "district",
+    "parent_id": "ca2",
+    "authorized": 5,
+    "total": 5,
+    "r": 0,
+    "d": 5,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      1245.0,
+      26286.0
+    ],
+    "size": null
+  },
+  "nyed": {
+    "level": "district",
+    "parent_id": "ca2",
+    "authorized": 15,
+    "total": 15,
+    "r": 4,
+    "d": 11,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      161242.0,
+      -250650.0
+    ],
+    "size": null
+  },
+  "nysd": {
+    "level": "district",
+    "parent_id": "ca2",
+    "authorized": 28,
+    "total": 28,
+    "r": 5,
+    "d": 20,
+    "o": 0,
+    "vacancies": 3,
+    "anchor": [
+      78841.0,
+      -184785.0
+    ],
+    "size": null
+  },
+  "nywd": {
+    "level": "district",
+    "parent_id": "ca2",
+    "authorized": 4,
+    "total": 4,
+    "r": 1,
+    "d": 3,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      -242024.0,
+      -35256.0
+    ],
+    "size": null
+  },
+  "vtd": {
+    "level": "district",
+    "parent_id": "ca2",
+    "authorized": 2,
+    "total": 2,
+    "r": 0,
+    "d": 2,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      166442.0,
+      106870.0
+    ],
+    "size": null
+  },
+  "ded": {
+    "level": "district",
+    "parent_id": "ca3",
+    "authorized": 4,
+    "total": 4,
+    "r": 2,
+    "d": 2,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      149067.0,
+      -192966.0
+    ],
+    "size": null
+  },
+  "njd": {
+    "level": "district",
+    "parent_id": "ca3",
+    "authorized": 17,
+    "total": 17,
+    "r": 2,
+    "d": 15,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      247328.0,
+      -59944.0
+    ],
+    "size": null
+  },
+  "paed": {
+    "level": "district",
+    "parent_id": "ca3",
+    "authorized": 22,
+    "total": 22,
+    "r": 7,
+    "d": 14,
+    "o": 0,
+    "vacancies": 1,
+    "anchor": [
+      143894.0,
+      -50453.0
+    ],
+    "size": null
+  },
+  "pamd": {
+    "level": "district",
+    "parent_id": "ca3",
+    "authorized": 6,
+    "total": 6,
+    "r": 1,
+    "d": 5,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      12778.0,
+      22712.0
+    ],
+    "size": null
+  },
+  "pawd": {
+    "level": "district",
+    "parent_id": "ca3",
+    "authorized": 10,
+    "total": 10,
+    "r": 8,
+    "d": 2,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      -175063.0,
+      17892.0
+    ],
+    "size": null
+  },
+  "vid": {
+    "level": "district",
+    "parent_id": "ca3",
+    "authorized": 2,
+    "total": 2,
+    "r": 2,
+    "d": 0,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      375481.0,
+      -38026.0
+    ],
+    "size": null
+  },
+  "mdd": {
+    "level": "district",
+    "parent_id": "ca4",
+    "authorized": 10,
+    "total": 10,
+    "r": 1,
+    "d": 9,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      235342.0,
+      320501.0
+    ],
+    "size": null
+  },
+  "nced": {
+    "level": "district",
+    "parent_id": "ca4",
+    "authorized": 4,
+    "total": 4,
+    "r": 4,
+    "d": 0,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      138550.0,
+      -122862.0
+    ],
+    "size": null
+  },
+  "ncmd": {
+    "level": "district",
+    "parent_id": "ca4",
+    "authorized": 4,
+    "total": 4,
+    "r": 4,
+    "d": 0,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      -29731.0,
+      -67714.0
+    ],
+    "size": null
+  },
+  "ncwd": {
+    "level": "district",
+    "parent_id": "ca4",
+    "authorized": 5,
+    "total": 5,
+    "r": 4,
+    "d": 1,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      -182551.0,
+      -80518.0
+    ],
+    "size": null
+  },
+  "scd": {
+    "level": "district",
+    "parent_id": "ca4",
+    "authorized": 10,
+    "total": 10,
+    "r": 5,
+    "d": 5,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      -121304.0,
+      -287814.0
+    ],
+    "size": null
+  },
+  "vaed": {
+    "level": "district",
+    "parent_id": "ca4",
+    "authorized": 11,
+    "total": 11,
+    "r": 4,
+    "d": 6,
+    "o": 0,
+    "vacancies": 1,
+    "anchor": [
+      201936.0,
+      105880.0
+    ],
+    "size": null
+  },
+  "vawd": {
+    "level": "district",
+    "parent_id": "ca4",
+    "authorized": 4,
+    "total": 4,
+    "r": 1,
+    "d": 3,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      17590.0,
+      121905.0
+    ],
+    "size": null
+  },
+  "wvnd": {
+    "level": "district",
+    "parent_id": "ca4",
+    "authorized": 3,
+    "total": 3,
+    "r": 2,
+    "d": 1,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      -60314.0,
+      291191.0
+    ],
+    "size": null
+  },
+  "wvsd": {
+    "level": "district",
+    "parent_id": "ca4",
+    "authorized": 5,
+    "total": 5,
+    "r": 2,
+    "d": 3,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      -173332.0,
+      176424.0
+    ],
+    "size": null
+  },
+  "laed": {
+    "level": "district",
+    "parent_id": "ca5",
+    "authorized": 12,
+    "total": 12,
+    "r": 6,
+    "d": 5,
+    "o": 0,
+    "vacancies": 1,
+    "anchor": [
+      671905.0,
+      -149889.0
+    ],
+    "size": null
+  },
+  "lamd": {
+    "level": "district",
+    "parent_id": "ca5",
+    "authorized": 3,
+    "total": 3,
+    "r": 0,
+    "d": 3,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      575955.0,
+      -101776.0
+    ],
+    "size": null
+  },
+  "lawd": {
+    "level": "district",
+    "parent_id": "ca5",
+    "authorized": 7,
+    "total": 7,
+    "r": 6,
+    "d": 1,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      425469.0,
+      -20342.0
+    ],
+    "size": null
+  },
+  "msnd": {
+    "level": "district",
+    "parent_id": "ca5",
+    "authorized": 3,
+    "total": 3,
+    "r": 2,
+    "d": 1,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      700714.0,
+      300286.0
+    ],
+    "size": null
+  },
+  "mssd": {
+    "level": "district",
+    "parent_id": "ca5",
+    "authorized": 6,
+    "total": 6,
+    "r": 5,
+    "d": 1,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      689422.0,
+      57109.0
+    ],
+    "size": null
+  },
+  "txnd": {
+    "level": "district",
+    "parent_id": "ca5",
+    "authorized": 12,
+    "total": 12,
+    "r": 8,
+    "d": 1,
+    "o": 0,
+    "vacancies": 3,
+    "anchor": [
+      -262988.0,
+      149328.0
+    ],
+    "size": null
+  },
+  "txed": {
+    "level": "district",
+    "parent_id": "ca5",
+    "authorized": 8,
+    "total": 8,
+    "r": 5,
+    "d": 3,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      211877.0,
+      36394.0
+    ],
+    "size": null
+  },
+  "txsd": {
+    "level": "district",
+    "parent_id": "ca5",
+    "authorized": 19,
+    "total": 19,
+    "r": 7,
+    "d": 8,
+    "o": 0,
+    "vacancies": 4,
+    "anchor": [
+      75250.0,
+      -258440.0
+    ],
+    "size": null
+  },
+  "txwd": {
+    "level": "district",
+    "parent_id": "ca5",
+    "authorized": 13,
+    "total": 13,
+    "r": 8,
+    "d": 5,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      -138909.0,
+      -180687.0
+    ],
+    "size": null
+  },
+  "kyed": {
+    "level": "district",
+    "parent_id": "ca6",
+    "authorized": 5,
+    "total": 6,
+    "r": 6,
+    "d": 0,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      105576.0,
+      -279796.0
+    ],
+    "size": null
+  },
+  "kywd": {
+    "level": "district",
+    "parent_id": "ca6",
+    "authorized": 4,
+    "total": 5,
+    "r": 3,
+    "d": 2,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      -113785.0,
+      -308947.0
+    ],
+    "size": null
+  },
+  "mied": {
+    "level": "district",
+    "parent_id": "ca6",
+    "authorized": 15,
+    "total": 15,
+    "r": 2,
+    "d": 12,
+    "o": 0,
+    "vacancies": 1,
+    "anchor": [
+      123711.0,
+      317263.0
+    ],
+    "size": null
+  },
+  "miwd": {
+    "level": "district",
+    "parent_id": "ca6",
+    "authorized": 4,
+    "total": 4,
+    "r": 3,
+    "d": 1,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      -61144.0,
+      420585.0
+    ],
+    "size": null
+  },
+  "ohnd": {
+    "level": "district",
+    "parent_id": "ca6",
+    "authorized": 11,
+    "total": 11,
+    "r": 5,
+    "d": 5,
+    "o": 0,
+    "vacancies": 1,
+    "anchor": [
+      243593.0,
+      147063.0
+    ],
+    "size": null
+  },
+  "ohsd": {
+    "level": "district",
+    "parent_id": "ca6",
+    "authorized": 8,
+    "total": 8,
+    "r": 4,
+    "d": 3,
+    "o": 0,
+    "vacancies": 1,
+    "anchor": [
+      153611.0,
+      -59273.0
+    ],
+    "size": null
+  },
+  "tned": {
+    "level": "district",
+    "parent_id": "ca6",
+    "authorized": 5,
+    "total": 5,
+    "r": 4,
+    "d": 1,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      60833.0,
+      -465769.0
+    ],
+    "size": null
+  },
+  "tnmd": {
+    "level": "district",
+    "parent_id": "ca6",
+    "authorized": 4,
+    "total": 4,
+    "r": 2,
+    "d": 2,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      -198449.0,
+      -458521.0
+    ],
+    "size": null
+  },
+  "tnwd": {
+    "level": "district",
+    "parent_id": "ca6",
+    "authorized": 5,
+    "total": 5,
+    "r": 4,
+    "d": 1,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      -349294.0,
+      -477210.0
+    ],
+    "size": null
+  },
+  "ilnd": {
+    "level": "district",
+    "parent_id": "ca7",
+    "authorized": 22,
+    "total": 23,
+    "r": 8,
+    "d": 15,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      27343.0,
+      2540.0
+    ],
+    "size": null
+  },
+  "ilcd": {
+    "level": "district",
+    "parent_id": "ca7",
+    "authorized": 4,
+    "total": 4,
+    "r": 0,
+    "d": 4,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      -64643.0,
+      -188714.0
+    ],
+    "size": null
+  },
+  "ilsd": {
+    "level": "district",
+    "parent_id": "ca7",
+    "authorized": 4,
+    "total": 4,
+    "r": 2,
+    "d": 2,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      -7855.0,
+      -395872.0
+    ],
+    "size": null
+  },
+  "innd": {
+    "level": "district",
+    "parent_id": "ca7",
+    "authorized": 5,
+    "total": 5,
+    "r": 3,
+    "d": 2,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      222906.0,
+      -69513.0
+    ],
+    "size": null
+  },
+  "insd": {
+    "level": "district",
+    "parent_id": "ca7",
+    "authorized": 5,
+    "total": 5,
+    "r": 3,
+    "d": 2,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      219869.0,
+      -278938.0
+    ],
+    "size": null
+  },
+  "wied": {
+    "level": "district",
+    "parent_id": "ca7",
+    "authorized": 5,
+    "total": 5,
+    "r": 2,
+    "d": 3,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      21033.0,
+      266312.0
+    ],
+    "size": null
+  },
+  "wiwd": {
+    "level": "district",
+    "parent_id": "ca7",
+    "authorized": 2,
+    "total": 2,
+    "r": 0,
+    "d": 2,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      -135954.0,
+      266659.0
+    ],
+    "size": null
+  },
+  "are": {
+    "level": "district",
+    "parent_id": "ca8",
+    "authorized": 5,
+    "total": 5,
+    "r": 2,
+    "d": 3,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      449046.0,
+      -853998.0
+    ],
+    "size": null
+  },
+  "arw": {
+    "level": "district",
+    "parent_id": "ca8",
+    "authorized": 3,
+    "total": 3,
+    "r": 2,
+    "d": 1,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      276147.0,
+      -981695.0
+    ],
+    "size": null
+  },
+  "iand": {
+    "level": "district",
+    "parent_id": "ca8",
+    "authorized": 2,
+    "total": 2,
+    "r": 1,
+    "d": 1,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      237364.0,
+      12169.0
+    ],
+    "size": null
+  },
+  "iasd": {
+    "level": "district",
+    "parent_id": "ca8",
+    "authorized": 3,
+    "total": 3,
+    "r": 0,
+    "d": 3,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      238513.0,
+      -154499.0
+    ],
+    "size": null
+  },
+  "mnd": {
+    "level": "district",
+    "parent_id": "ca8",
+    "authorized": 7,
+    "total": 7,
+    "r": 2,
+    "d": 4,
+    "o": 0,
+    "vacancies": 1,
+    "anchor": [
+      159433.0,
+      345557.0
+    ],
+    "size": null
+  },
+  "moed": {
+    "level": "district",
+    "parent_id": "ca8",
+    "authorized": 7,
+    "total": 9,
+    "r": 8,
+    "d": 1,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      484339.0,
+      -528618.0
+    ],
+    "size": null
+  },
+  "mowd": {
+    "level": "district",
+    "parent_id": "ca8",
+    "authorized": 5,
+    "total": 7,
+    "r": 3,
+    "d": 4,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      276438.0,
+      -529751.0
+    ],
+    "size": null
+  },
+  "ned": {
+    "level": "district",
+    "parent_id": "ca8",
+    "authorized": 3,
+    "total": 3,
+    "r": 1,
+    "d": 2,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      -246450.0,
+      -138081.0
+    ],
+    "size": null
+  },
+  "ndd": {
+    "level": "district",
+    "parent_id": "ca8",
+    "authorized": 2,
+    "total": 2,
+    "r": 2,
+    "d": 0,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      -285658.0,
+      528467.0
+    ],
+    "size": null
+  },
+  "sdd": {
+    "level": "district",
+    "parent_id": "ca8",
+    "authorized": 3,
+    "total": 3,
+    "r": 0,
+    "d": 3,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      -295202.0,
+      190541.0
+    ],
+    "size": null
+  },
+  "akd": {
+    "level": "district",
+    "parent_id": "ca9",
+    "authorized": 3,
+    "total": 3,
+    "r": 1,
+    "d": 1,
+    "o": 0,
+    "vacancies": 1,
+    "anchor": [
+      -1557447.0,
+      531941.0
+    ],
+    "size": null
+  },
+  "azd": {
+    "level": "district",
+    "parent_id": "ca9",
+    "authorized": 13,
+    "total": 13,
+    "r": 5,
+    "d": 8,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      369821.0,
+      -816987.0
+    ],
+    "size": null
+  },
+  "cand": {
+    "level": "district",
+    "parent_id": "ca9",
+    "authorized": 14,
+    "total": 14,
+    "r": 0,
+    "d": 14,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      -679149.0,
+      -311453.0
+    ],
+    "size": null
+  },
+  "caed": {
+    "level": "district",
+    "parent_id": "ca9",
+    "authorized": 6,
+    "total": 6,
+    "r": 0,
+    "d": 6,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      -433266.0,
+      -342940.0
+    ],
+    "size": null
+  },
+  "cacd": {
+    "level": "district",
+    "parent_id": "ca9",
+    "authorized": 28,
+    "total": 28,
+    "r": 9,
+    "d": 19,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      -87246.0,
+      -805678.0
+    ],
+    "size": null
+  },
+  "casd": {
+    "level": "district",
+    "parent_id": "ca9",
+    "authorized": 13,
+    "total": 13,
+    "r": 3,
+    "d": 9,
+    "o": 0,
+    "vacancies": 1,
+    "anchor": [
+      -24955.0,
+      -1050360.0
+    ],
+    "size": null
+  },
+  "hid": {
+    "level": "district",
+    "parent_id": "ca9",
+    "authorized": 4,
+    "total": 4,
+    "r": 1,
+    "d": 3,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      -1083254.0,
+      -660276.0
+    ],
+    "size": null
+  },
+  "idd": {
+    "level": "district",
+    "parent_id": "ca9",
+    "authorized": 2,
+    "total": 2,
+    "r": 1,
+    "d": 1,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      81248.0,
+      207043.0
+    ],
+    "size": null
+  },
+  "mtd": {
+    "level": "district",
+    "parent_id": "ca9",
+    "authorized": 3,
+    "total": 3,
+    "r": 2,
+    "d": 1,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      462396.0,
+      602231.0
+    ],
+    "size": null
+  },
+  "nvd": {
+    "level": "district",
+    "parent_id": "ca9",
+    "authorized": 7,
+    "total": 7,
+    "r": 0,
+    "d": 7,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      -87930.0,
+      -253475.0
+    ],
+    "size": null
+  },
+  "ord": {
+    "level": "district",
+    "parent_id": "ca9",
+    "authorized": 6,
+    "total": 6,
+    "r": 1,
+    "d": 5,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      -385118.0,
+      239838.0
+    ],
+    "size": null
+  },
+  "waed": {
+    "level": "district",
+    "parent_id": "ca9",
+    "authorized": 4,
+    "total": 4,
+    "r": 0,
+    "d": 4,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      -254085.0,
+      635406.0
+    ],
+    "size": null
+  },
+  "wawd": {
+    "level": "district",
+    "parent_id": "ca9",
+    "authorized": 7,
+    "total": 7,
+    "r": 0,
+    "d": 7,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      -601526.0,
+      783465.0
+    ],
+    "size": null
+  },
+  "gud": {
+    "level": "district",
+    "parent_id": "ca9",
+    "authorized": 1,
+    "total": 1,
+    "r": 1,
+    "d": 0,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": null,
+    "size": null
+  },
+  "nmid": {
+    "level": "district",
+    "parent_id": "ca9",
+    "authorized": 1,
+    "total": 1,
+    "r": 0,
+    "d": 1,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": null,
+    "size": null
+  },
+  "cod": {
+    "level": "district",
+    "parent_id": "ca10",
+    "authorized": 7,
+    "total": 7,
+    "r": 2,
+    "d": 5,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      -45790.0,
+      70748.0
+    ],
+    "size": null
+  },
+  "ksd": {
+    "level": "district",
+    "parent_id": "ca10",
+    "authorized": 6,
+    "total": 6,
+    "r": 6,
+    "d": 0,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      564756.0,
+      31762.0
+    ],
+    "size": null
+  },
+  "nmd": {
+    "level": "district",
+    "parent_id": "ca10",
+    "authorized": 7,
+    "total": 7,
+    "r": 1,
+    "d": 5,
+    "o": 0,
+    "vacancies": 1,
+    "anchor": [
+      -93777.0,
+      -428620.0
+    ],
+    "size": null
+  },
+  "oknd": {
+    "level": "district",
+    "parent_id": "ca10",
+    "authorized": 3,
+    "total": 3,
+    "r": 1,
+    "d": 2,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      797174.0,
+      -171444.0
+    ],
+    "size": null
+  },
+  "oked": {
+    "level": "district",
+    "parent_id": "ca10",
+    "authorized": 1,
+    "total": 1,
+    "r": 1,
+    "d": 0,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      847012.0,
+      -345920.0
+    ],
+    "size": null
+  },
+  "okwd": {
+    "level": "district",
+    "parent_id": "ca10",
+    "authorized": 6,
+    "total": 7,
+    "r": 7,
+    "d": 0,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      593833.0,
+      -281769.0
+    ],
+    "size": null
+  },
+  "utd": {
+    "level": "district",
+    "parent_id": "ca10",
+    "authorized": 5,
+    "total": 5,
+    "r": 2,
+    "d": 3,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      -568441.0,
+      147742.0
+    ],
+    "size": null
+  },
+  "wyd": {
+    "level": "district",
+    "parent_id": "ca10",
+    "authorized": 3,
+    "total": 3,
+    "r": 1,
+    "d": 2,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      -214199.0,
+      528880.0
+    ],
+    "size": null
+  },
+  "alnd": {
+    "level": "district",
+    "parent_id": "ca11",
+    "authorized": 8,
+    "total": 8,
+    "r": 6,
+    "d": 1,
+    "o": 0,
+    "vacancies": 1,
+    "anchor": [
+      -243212.0,
+      299469.0
+    ],
+    "size": null
+  },
+  "almd": {
+    "level": "district",
+    "parent_id": "ca11",
+    "authorized": 3,
+    "total": 3,
+    "r": 3,
+    "d": 0,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      -168597.0,
+      87969.0
+    ],
+    "size": null
+  },
+  "alsd": {
+    "level": "district",
+    "parent_id": "ca11",
+    "authorized": 3,
+    "total": 3,
+    "r": 3,
+    "d": 0,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      -331462.0,
+      42009.0
+    ],
+    "size": null
+  },
+  "flnd": {
+    "level": "district",
+    "parent_id": "ca11",
+    "authorized": 4,
+    "total": 4,
+    "r": 3,
+    "d": 1,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      -103038.0,
+      -101780.0
+    ],
+    "size": null
+  },
+  "flmd": {
+    "level": "district",
+    "parent_id": "ca11",
+    "authorized": 15,
+    "total": 15,
+    "r": 10,
+    "d": 4,
+    "o": 0,
+    "vacancies": 1,
+    "anchor": [
+      238080.0,
+      -309714.0
+    ],
+    "size": null
+  },
+  "flsd": {
+    "level": "district",
+    "parent_id": "ca11",
+    "authorized": 18,
+    "total": 18,
+    "r": 9,
+    "d": 9,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      384667.0,
+      -482809.0
+    ],
+    "size": null
+  },
+  "gand": {
+    "level": "district",
+    "parent_id": "ca11",
+    "authorized": 11,
+    "total": 11,
+    "r": 4,
+    "d": 6,
+    "o": 0,
+    "vacancies": 1,
+    "anchor": [
+      -33007.0,
+      307861.0
+    ],
+    "size": null
+  },
+  "gamd": {
+    "level": "district",
+    "parent_id": "ca11",
+    "authorized": 4,
+    "total": 4,
+    "r": 2,
+    "d": 2,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      7120.0,
+      81742.0
+    ],
+    "size": null
+  },
+  "gasd": {
+    "level": "district",
+    "parent_id": "ca11",
+    "authorized": 3,
+    "total": 3,
+    "r": 3,
+    "d": 0,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      193268.0,
+      67588.0
+    ],
+    "size": null
+  },
+  "dcd": {
+    "level": "district",
+    "parent_id": "cadc",
+    "authorized": 15,
+    "total": 15,
+    "r": 4,
+    "d": 11,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      96464.0,
+      143555.0
+    ],
+    "size": null
+  },
+  "cit": {
+    "level": "feeder",
+    "parent_id": "cafc",
+    "authorized": 9,
+    "total": 9,
+    "r": 2,
+    "d": 6,
+    "o": 0,
+    "vacancies": 1,
+    "anchor": [
+      1838204.0,
+      550000.0
+    ],
+    "size": null
+  },
+  "uscfc": {
+    "level": "feeder",
+    "parent_id": "cafc",
+    "authorized": 16,
+    "total": 16,
+    "r": 10,
+    "d": 6,
+    "o": 0,
+    "vacancies": 0,
+    "anchor": [
+      2194537.0,
+      550000.0
+    ],
+    "size": null
+  }
+}

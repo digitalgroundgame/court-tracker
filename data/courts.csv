@@ -1,0 +1,111 @@
+court_id,court_name,short_name,court_level,parent_id,tenure_type,authorized_judgeships,has_geography,is_inset,geometry_key
+scotus,Supreme Court of the United States,SCOTUS,scotus,,life_tenured,9,false,false,
+ca1,U.S. Court of Appeals for the First Circuit,1st Cir.,circuit,,life_tenured,6,true,false,ca1
+ca2,U.S. Court of Appeals for the Second Circuit,2nd Cir.,circuit,,life_tenured,13,true,false,ca2
+ca3,U.S. Court of Appeals for the Third Circuit,3rd Cir.,circuit,,life_tenured,14,true,false,ca3
+ca4,U.S. Court of Appeals for the Fourth Circuit,4th Cir.,circuit,,life_tenured,15,true,false,ca4
+ca5,U.S. Court of Appeals for the Fifth Circuit,5th Cir.,circuit,,life_tenured,17,true,false,ca5
+ca6,U.S. Court of Appeals for the Sixth Circuit,6th Cir.,circuit,,life_tenured,16,true,false,ca6
+ca7,U.S. Court of Appeals for the Seventh Circuit,7th Cir.,circuit,,life_tenured,11,true,false,ca7
+ca8,U.S. Court of Appeals for the Eighth Circuit,8th Cir.,circuit,,life_tenured,11,true,false,ca8
+ca9,U.S. Court of Appeals for the Ninth Circuit,9th Cir.,circuit,,life_tenured,29,true,false,ca9
+ca10,U.S. Court of Appeals for the Tenth Circuit,10th Cir.,circuit,,life_tenured,12,true,false,ca10
+ca11,U.S. Court of Appeals for the Eleventh Circuit,11th Cir.,circuit,,life_tenured,12,true,false,ca11
+cadc,U.S. Court of Appeals for the D.C. Circuit,D.C. Cir.,circuit,,life_tenured,11,true,false,cadc
+cafc,U.S. Court of Appeals for the Federal Circuit,Fed. Cir.,circuit,,life_tenured,12,false,false,
+med,U.S. District Court for the District of Maine,D. Me.,district,ca1,life_tenured,3,true,false,med
+mad,U.S. District Court for the District of Massachusetts,D. Mass.,district,ca1,life_tenured,13,true,false,mad
+nhd,U.S. District Court for the District of New Hampshire,D.N.H.,district,ca1,life_tenured,3,true,false,nhd
+rid,U.S. District Court for the District of Rhode Island,D.R.I.,district,ca1,life_tenured,3,true,false,rid
+prd,U.S. District Court for the District of Puerto Rico,D.P.R.,district,ca1,life_tenured,7,true,true,prd
+ctd,U.S. District Court for the District of Connecticut,D. Conn.,district,ca2,life_tenured,8,true,false,ctd
+nynd,U.S. District Court for the Northern District of New York,N.D.N.Y.,district,ca2,life_tenured,5,true,false,nynd
+nyed,U.S. District Court for the Eastern District of New York,E.D.N.Y.,district,ca2,life_tenured,15,true,false,nyed
+nysd,U.S. District Court for the Southern District of New York,S.D.N.Y.,district,ca2,life_tenured,28,true,false,nysd
+nywd,U.S. District Court for the Western District of New York,W.D.N.Y.,district,ca2,life_tenured,4,true,false,nywd
+vtd,U.S. District Court for the District of Vermont,D. Vt.,district,ca2,life_tenured,2,true,false,vtd
+ded,U.S. District Court for the District of Delaware,D. Del.,district,ca3,life_tenured,4,true,false,ded
+njd,U.S. District Court for the District of New Jersey,D.N.J.,district,ca3,life_tenured,17,true,false,njd
+paed,U.S. District Court for the Eastern District of Pennsylvania,E.D. Pa.,district,ca3,life_tenured,22,true,false,paed
+pamd,U.S. District Court for the Middle District of Pennsylvania,M.D. Pa.,district,ca3,life_tenured,6,true,false,pamd
+pawd,U.S. District Court for the Western District of Pennsylvania,W.D. Pa.,district,ca3,life_tenured,10,true,false,pawd
+vid,U.S. District Court for the District of the Virgin Islands,D.V.I.,district,ca3,fixed_term,2,true,true,vid
+mdd,U.S. District Court for the District of Maryland,D. Md.,district,ca4,life_tenured,10,true,false,mdd
+nced,U.S. District Court for the Eastern District of North Carolina,E.D.N.C.,district,ca4,life_tenured,4,true,false,nced
+ncmd,U.S. District Court for the Middle District of North Carolina,M.D.N.C.,district,ca4,life_tenured,4,true,false,ncmd
+ncwd,U.S. District Court for the Western District of North Carolina,W.D.N.C.,district,ca4,life_tenured,5,true,false,ncwd
+scd,U.S. District Court for the District of South Carolina,D.S.C.,district,ca4,life_tenured,10,true,false,scd
+vaed,U.S. District Court for the Eastern District of Virginia,E.D. Va.,district,ca4,life_tenured,11,true,false,vaed
+vawd,U.S. District Court for the Western District of Virginia,W.D. Va.,district,ca4,life_tenured,4,true,false,vawd
+wvnd,U.S. District Court for the Northern District of West Virginia,N.D.W. Va.,district,ca4,life_tenured,3,true,false,wvnd
+wvsd,U.S. District Court for the Southern District of West Virginia,S.D.W. Va.,district,ca4,life_tenured,5,true,false,wvsd
+laed,U.S. District Court for the Eastern District of Louisiana,E.D. La.,district,ca5,life_tenured,12,true,false,laed
+lamd,U.S. District Court for the Middle District of Louisiana,M.D. La.,district,ca5,life_tenured,3,true,false,lamd
+lawd,U.S. District Court for the Western District of Louisiana,W.D. La.,district,ca5,life_tenured,7,true,false,lawd
+msnd,U.S. District Court for the Northern District of Mississippi,N.D. Miss.,district,ca5,life_tenured,3,true,false,msnd
+mssd,U.S. District Court for the Southern District of Mississippi,S.D. Miss.,district,ca5,life_tenured,6,true,false,mssd
+txnd,U.S. District Court for the Northern District of Texas,N.D. Tex.,district,ca5,life_tenured,12,true,false,txnd
+txed,U.S. District Court for the Eastern District of Texas,E.D. Tex.,district,ca5,life_tenured,8,true,false,txed
+txsd,U.S. District Court for the Southern District of Texas,S.D. Tex.,district,ca5,life_tenured,19,true,false,txsd
+txwd,U.S. District Court for the Western District of Texas,W.D. Tex.,district,ca5,life_tenured,13,true,false,txwd
+kyed,U.S. District Court for the Eastern District of Kentucky,E.D. Ky.,district,ca6,life_tenured,5,true,false,kyed
+kywd,U.S. District Court for the Western District of Kentucky,W.D. Ky.,district,ca6,life_tenured,4,true,false,kywd
+mied,U.S. District Court for the Eastern District of Michigan,E.D. Mich.,district,ca6,life_tenured,15,true,false,mied
+miwd,U.S. District Court for the Western District of Michigan,W.D. Mich.,district,ca6,life_tenured,4,true,false,miwd
+ohnd,U.S. District Court for the Northern District of Ohio,N.D. Ohio,district,ca6,life_tenured,11,true,false,ohnd
+ohsd,U.S. District Court for the Southern District of Ohio,S.D. Ohio,district,ca6,life_tenured,8,true,false,ohsd
+tned,U.S. District Court for the Eastern District of Tennessee,E.D. Tenn.,district,ca6,life_tenured,5,true,false,tned
+tnmd,U.S. District Court for the Middle District of Tennessee,M.D. Tenn.,district,ca6,life_tenured,4,true,false,tnmd
+tnwd,U.S. District Court for the Western District of Tennessee,W.D. Tenn.,district,ca6,life_tenured,5,true,false,tnwd
+ilnd,U.S. District Court for the Northern District of Illinois,N.D. Ill.,district,ca7,life_tenured,22,true,false,ilnd
+ilcd,U.S. District Court for the Central District of Illinois,C.D. Ill.,district,ca7,life_tenured,4,true,false,ilcd
+ilsd,U.S. District Court for the Southern District of Illinois,S.D. Ill.,district,ca7,life_tenured,4,true,false,ilsd
+innd,U.S. District Court for the Northern District of Indiana,N.D. Ind.,district,ca7,life_tenured,5,true,false,innd
+insd,U.S. District Court for the Southern District of Indiana,S.D. Ind.,district,ca7,life_tenured,5,true,false,insd
+wied,U.S. District Court for the Eastern District of Wisconsin,E.D. Wis.,district,ca7,life_tenured,5,true,false,wied
+wiwd,U.S. District Court for the Western District of Wisconsin,W.D. Wis.,district,ca7,life_tenured,2,true,false,wiwd
+are,U.S. District Court for the Eastern District of Arkansas,E.D. Ark.,district,ca8,life_tenured,5,true,false,are
+arw,U.S. District Court for the Western District of Arkansas,W.D. Ark.,district,ca8,life_tenured,3,true,false,arw
+iand,U.S. District Court for the Northern District of Iowa,N.D. Iowa,district,ca8,life_tenured,2,true,false,iand
+iasd,U.S. District Court for the Southern District of Iowa,S.D. Iowa,district,ca8,life_tenured,3,true,false,iasd
+mnd,U.S. District Court for the District of Minnesota,D. Minn.,district,ca8,life_tenured,7,true,false,mnd
+moed,U.S. District Court for the Eastern District of Missouri,E.D. Mo.,district,ca8,life_tenured,7,true,false,moed
+mowd,U.S. District Court for the Western District of Missouri,W.D. Mo.,district,ca8,life_tenured,5,true,false,mowd
+ned,U.S. District Court for the District of Nebraska,D. Neb.,district,ca8,life_tenured,3,true,false,ned
+ndd,U.S. District Court for the District of North Dakota,D.N.D.,district,ca8,life_tenured,2,true,false,ndd
+sdd,U.S. District Court for the District of South Dakota,D.S.D.,district,ca8,life_tenured,3,true,false,sdd
+akd,U.S. District Court for the District of Alaska,D. Alaska,district,ca9,life_tenured,3,true,true,akd
+azd,U.S. District Court for the District of Arizona,D. Ariz.,district,ca9,life_tenured,13,true,false,azd
+cand,U.S. District Court for the Northern District of California,N.D. Cal.,district,ca9,life_tenured,14,true,false,cand
+caed,U.S. District Court for the Eastern District of California,E.D. Cal.,district,ca9,life_tenured,6,true,false,caed
+cacd,U.S. District Court for the Central District of California,C.D. Cal.,district,ca9,life_tenured,28,true,false,cacd
+casd,U.S. District Court for the Southern District of California,S.D. Cal.,district,ca9,life_tenured,13,true,false,casd
+hid,U.S. District Court for the District of Hawaii,D. Haw.,district,ca9,life_tenured,4,true,true,hid
+idd,U.S. District Court for the District of Idaho,D. Idaho,district,ca9,life_tenured,2,true,false,idd
+mtd,U.S. District Court for the District of Montana,D. Mont.,district,ca9,life_tenured,3,true,false,mtd
+nvd,U.S. District Court for the District of Nevada,D. Nev.,district,ca9,life_tenured,7,true,false,nvd
+ord,U.S. District Court for the District of Oregon,D. Or.,district,ca9,life_tenured,6,true,false,ord
+waed,U.S. District Court for the Eastern District of Washington,E.D. Wash.,district,ca9,life_tenured,4,true,false,waed
+wawd,U.S. District Court for the Western District of Washington,W.D. Wash.,district,ca9,life_tenured,7,true,false,wawd
+gud,U.S. District Court for the District of Guam,D. Guam,district,ca9,fixed_term,1,true,true,gud
+nmid,U.S. District Court for the District of the Northern Mariana Islands,D.N. Mar. I.,district,ca9,fixed_term,1,true,true,nmid
+cod,U.S. District Court for the District of Colorado,D. Colo.,district,ca10,life_tenured,7,true,false,cod
+ksd,U.S. District Court for the District of Kansas,D. Kan.,district,ca10,life_tenured,6,true,false,ksd
+nmd,U.S. District Court for the District of New Mexico,D.N.M.,district,ca10,life_tenured,7,true,false,nmd
+oknd,U.S. District Court for the Northern District of Oklahoma,N.D. Okla.,district,ca10,life_tenured,3,true,false,oknd
+oked,U.S. District Court for the Eastern District of Oklahoma,E.D. Okla.,district,ca10,life_tenured,1,true,false,oked
+okwd,U.S. District Court for the Western District of Oklahoma,W.D. Okla.,district,ca10,life_tenured,6,true,false,okwd
+utd,U.S. District Court for the District of Utah,D. Utah,district,ca10,life_tenured,5,true,false,utd
+wyd,U.S. District Court for the District of Wyoming,D. Wyo.,district,ca10,life_tenured,3,true,false,wyd
+alnd,U.S. District Court for the Northern District of Alabama,N.D. Ala.,district,ca11,life_tenured,8,true,false,alnd
+almd,U.S. District Court for the Middle District of Alabama,M.D. Ala.,district,ca11,life_tenured,3,true,false,almd
+alsd,U.S. District Court for the Southern District of Alabama,S.D. Ala.,district,ca11,life_tenured,3,true,false,alsd
+flnd,U.S. District Court for the Northern District of Florida,N.D. Fla.,district,ca11,life_tenured,4,true,false,flnd
+flmd,U.S. District Court for the Middle District of Florida,M.D. Fla.,district,ca11,life_tenured,15,true,false,flmd
+flsd,U.S. District Court for the Southern District of Florida,S.D. Fla.,district,ca11,life_tenured,18,true,false,flsd
+gand,U.S. District Court for the Northern District of Georgia,N.D. Ga.,district,ca11,life_tenured,11,true,false,gand
+gamd,U.S. District Court for the Middle District of Georgia,M.D. Ga.,district,ca11,life_tenured,4,true,false,gamd
+gasd,U.S. District Court for the Southern District of Georgia,S.D. Ga.,district,ca11,life_tenured,3,true,false,gasd
+dcd,U.S. District Court for the District of Columbia,D.D.C.,district,cadc,life_tenured,15,true,false,dcd
+cit,U.S. Court of International Trade,CIT,specialized,cafc,life_tenured,9,false,false,
+uscfc,U.S. Court of Federal Claims,CFC,specialized,cafc,fixed_term_senior,16,false,false,

@@ -1,0 +1,77 @@
+
+okay, this all looks excellent for a first pass. but there are a significant number of bugs we'll have to work through. it might be the case that some of these technically fall within the purview of another phase. for example, morphing is not functional yet and that appears to be a phase 3 item, though i'm not concerned with this at the moment. in case any of the following bugs or lack of features are things that are intended to be addressed in the future, please indicate so:
+
+1. when hovering over a circuit court shape, the mainland shape shows an outline, but not any of the insets which belong within the jurisdiction of their respective circuits. for example, mouse hovering over california should also cause an outline to appear around alaska. the web claude session had this to say about it: the `ca9` circuit outline path is mainland-only — dissolve #2 unions the mainland districts, and insets are deliberately excluded because they're in a different projection and would produce a nonsense outline. So highlighting must be driven by `data-parent-circuit` on the district paths, not by stroking the circuit path. If they stroke the outline, Alaska won't light up.
+
+2. insets need to have the same non-hover outline color as the mainland districts. moreover, there should be a thicker and thinner type of border line shown for the edges of circuit court territory and district court territory, respectively. district courts currently lack marking on the national view (they don't need to be individually selectable on the national view), as well as in district view, when districts should not only be visible, but selectable to show their court composition the same way the selector bar allows.
+
+3. when within a circuit court view, above the "8th Cir. districts" label (or whichever particular label it may be) in the selector bar, there should be a repeat option for the same circuit, so it can be selected using the bar without having to return to the national view, and so that the circuit drilled-down can exclusively allow selecting district courts within that circuit by map-click (assuming #2 is addressed).
+
+4. when an option is selected in the selector bar and the info pane is hidden using the arrow button, clicking the arrow again fails to show the info pane.
+
+5. it appears that when hovering over one judge in a set of judges appointed by a particular president, only the other judges in that set besides the current one being hovered over receive a temporary yellow outline. this should be changed so that all judges in that set receive that outline. this yellow outline should not be grayed by the senior status of a judge. furthermore, the party color of senior judges should only be partially grayed so that it's still easy to tell the party of the appointing president.
+
+6. in "majority" view of the info pane, the circuit justice icon clips with the judge icon at the top of the semicircle. the circuit justice icon should be lowered into the center of the circle, and the dotted line can be shortened so that it does not extend quite as far down. furthermore, the senior judges in the outer semicircle clip slightly with the inner semicircle, and should be moved out a little further. clicking the "Count senior judges in the majority" doesn't cause them to be moved into the semicircle. additionally, there are often only a small number of senior judges, so their arrangement will often not actually look like a semicircle. to fix this, i suggest putting subtle semicircle traces along which the judge icons are aligned.
+
+7. in "timeline" view of the info pane, the circuit justice icon can clip with the list of judge icons if it fills up a full row. perhaps the circuit justice icon can be placed next to the name of the court at the top, and then it moves when switching to "majority" view.
+
+8. in "majority" view of the info pane, though this probably applies with a long enough list of judges in "timeline" view, when in desktop orientation the info tooltip that shows up when hovering over a judge's icon can obscure the hovering of judge icons lying underneath it, and causes some bugged flicker behavior. they are still viewable on hover, but it would be preferrable if the tooltip swapped to the opposite corner for hovering icons which are too close to that side (currently bottom right of the info pane).
+
+9. this is a feature addition rather than a bug, please modify the selector bar such that when an already-selected option is clicked again, it deselects it and hides the info pane (its current behavior when trying to do this is that it re-animates the content of the info pane, even if it was the same information).
+
+10. in vertical/phone-sized page orientation:
+10a. the selector bar develops a scroll bar, and fails to show all the options at once. when in this orientation, it should expand to accomodate all options so that scrolling of a tiny webpage-internal box isn't needed).
+10b. when the info pane opens on a circuit court, the arrow to hide the info pane disappears as the info pane fills the entirety of the map space (implementing #9 would partially relieve this, but there should still be an obvious way of hiding the info pane). there is otherwise no way of returning to the map without clicking "View districts" within the info pane and then clicking "Back to national" in the selector bar.
+10c. in both timeline and majority view of the info pane, the judge tooltip covers up a significant portion of it. so there may need to be a dedicated buffer for the tooltip so that it doesn't shrink the available space to show judges, and cause scrolling of a large feature within a small window (we seem to have some space at the bottom).
+
+
+-----------------------------
+
+
+here are some more either bugs to sort out or features to add:
+
+11. the insets in the national map for puerto rico, the virgin islands, hawaii, alaska, guam, and the northern mariana islands are not selectable. moreover, they should be getting the circuit court outline color. otherwise, the contiguous area highlights the insets correctly.
+
+12. circuit court borders appear to have district court borders drawn on top of them, making it harder to see circuit boundaries.
+
+13. in the drill down district view within a circuit court, district court shapes appear to be sort-of highlightable by moving the cursor right over district court borders internal to the circuit, but hovering in the rest of the area only shows a highlight to select the whole circuit. the whole circuit selection via the map should be disabled in the district view (it's there to be selected in the selector bar).
+
+14. frequently, when borders are drawn around the paths of a shape and an edge of the shape passes on the border of the bounding box, it causes the drawn border to get clipped on the edge. suggestion: add a buffer.
+
+15. in the "majority" view of the info pane, the dotted line should lie underneath the judge icons and extend higher than it currently does. the outer semicircle still needs to be slightly further out to prevent text label clipping of senior judges with the inner semicircle.
+
+16. in the "majority" view of the info pane, this will be a somewhat major change, but i'd like judge icons, when they are in sufficiently large number (and start clipping with each other), to be capable of being spread over an additional concentric semicircle (also consistent with the parliamentary seat view, which typically has more than one concentric semicircle), such that the average distance between adjacent icons is widened above a threshold below which they and their labels clip into each other. there is probably only room for one more semicircle within the current arrangement, and any more than one will need to be added between the current main semicircle and the senior judges' one, so that it doesn't clip with the circuit justice. because the order of the judges matters as to their position in the semicircle(s), they should *not* be ordered across multiple semicircles *by wrapping* the current order split by party and ordered internally by appointment date, but *by stacking*, where even though the number of judge icons in an outer ring (not considering seniors for the moment) should always be >= than the number in an inner ring, the "slots" to be arranged in on a given number of semicircles can be considered to have an ordering, where the 9 o'clock (as it were) position is tied for number one across each semicircle, then the innermost semicircle's second slot is second, the next semicircle is third (and so on)-- essentially, the order could be determined by considering the semicircle as a protractor and the slots in-order according to their degree number. if this is confusing or you want to check we're on the same page in understanding this by using an example, please do so.
+
+
+----------------------
+
+
+17. i'm still running into the issue mentioned in #13, although the circuit selection by-map in district view has been disabled, i suspect whatever geometry is still there and is simply no longer being highlighted. there is a different issue at work here.
+
+18. moreover, perhaps related to #17, district court boundary lines no longer appear visible on both national and circuit views. in fact, circuit court boundary lines are not visible (there are very very faint white traces now) except on the insets (for which the thickness is consistent for all except DC, which seems to be different from the other insets, and has a thinner border). however, the blue highlight of circuit court borders still functions correctly.
+
+19. a few comments on the majority view of the info pane:
+19a. the text starting with "Majority is computed over active judgeships" should be lowered slightly.
+19b. specifically for the senior judge rings, they do not need to snap to -180 and 0 degrees, and can behave like before.
+19c. if there is not already, there should be a separate calculation for the majority semicircle count and arrangement when the box for "Count senior judges in the majority" is checked
+19d. the dotted line starting and ending points should be determined in accordance with the number of non-senior, in-use semicircles, such that it extends slightly above a possible outermost semicircle icon, and slightly below a possible innermost semicircle icon at -90 deg.
+
+20. when clicking a judge's icon rather than simply hovering over it, that should cause the tooltip to stick around and be interactable itself without going away (so you can copy text from it and click the courtlistener link), until you click off the tooltip or press a button, which causes it to unselect.
+
+
+----------------
+
+
+21. concerning 19d, the dotted line now appears to be changing, but it still extends a bit too low and not high enough (need to be shifted up so that the center of the line lies on a semicircle in the case of a single semicircle, and in the centerpoint of the centerpoints of the semicircles in the case of multiple).
+
+22. let's move the "Back to national" button so that it sits at the top of the selector bar list instead of the bottom.
+
+23. in vertical/phone-sized page orientation, the map box/area in which the info pane can appear needs to extend a bit lower (25% more).
+
+
+
+
+
+
+
+

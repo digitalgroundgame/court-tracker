@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>tune-dot-sizes — appointments beeswarm (formula knobs)</title>
+<link rel="stylesheet" href="../embed/appointments-chart.css">
+<style>
+  body { margin: 0; font-family: system-ui, sans-serif; background: #eef1f5; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 12px 16px 40px; }
+  .bar { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; background: #fff;
+         border: 1px solid #d8dde4; border-radius: 8px; padding: 10px 14px; margin-bottom: 12px;
+         font-size: 13px; }
+  .bar label { display: inline-flex; align-items: center; gap: 6px; }
+  .bar input[type="range"] { width: 120px; }
+  .bar b { min-width: 3em; font-variant-numeric: tabular-nums; }
+  #report { font-family: ui-monospace, monospace; font-size: 12px; background: #f2f4f7;
+            border-radius: 6px; padding: 4px 8px; user-select: all; }
+  .note { color: #5b6470; font-size: 12px; margin: 6px 2px 14px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="bar">
+    <label>cap <input id="cap" type="range" min="4" max="80" step="0.5" value="30"><b id="capv">30</b></label>
+    <label>mult <input id="mult" type="range" min="10" max="400" step="2" value="120"><b id="multv">120</b></label>
+    <label>appellate× <input id="rc" type="range" min="1" max="5" step="0.05" value="2"><b id="rcv">2</b></label>
+    <label>SCOTUS× <input id="rs" type="range" min="1.5" max="12" step="0.1" value="7"><b id="rsv">7</b></label>
+    <label>fit <input id="fit" type="range" min="0.5" max="2" step="0.05" value="1.2"><b id="fitv">1.2</b></label>
+    <button id="off" type="button">Reset to shipped formula</button>
+    <span id="report">—</span>
+  </div>
+  <p class="note">
+    These are the widget's actual FORMULA knobs, applied live (the auto-shrink fit still
+    runs, exactly as shipped): <code>base = max(2.4, min(cap, pxPerDay·mult))</code>, then
+    district = base, appellate = base·appellate×, SCOTUS = base·SCOTUS× — and the auto-shrink
+    fits the swarm to <code>fit</code> × the chart half-height (fit &gt; 1 overflows, clipped). Change the span with
+    the widget's own control and resize / device-toolbar for other orientations — the report
+    line always shows the knobs plus the RESULTING radii at the current view. Copy it back
+    for implementation. Serve the REPO ROOT and open <code>/tools/tune-dot-sizes.html</code>.
+  </p>
+  <div id="appointments-chart-root"></div>
+</div>
+<script type="module">
+const root = document.getElementById("appointments-chart-root");
+root.dataset.ctaMounted = "1";                  // suppress automount; we drive it
+const { mount, _dev } = await import("../embed/appointments-chart.js");
+await mount(root);
+const A = _dev.A;
+const $ = (id) => document.getElementById(id);
+
+function apply() {
+  A.formulaOverride = { cap: +$("cap").value, mult: +$("mult").value,
+                        rCircuit: +$("rc").value, rScotus: +$("rs").value, fit: +$("fit").value };
+  for (const [i, o] of [["cap","capv"],["mult","multv"],["rc","rcv"],["rs","rsv"],["fit","fitv"]])
+    $(o).textContent = $(i).value;
+  _dev.layoutDots(); _dev.drawAll();
+  report();
+}
+function report() {
+  const w = Math.round(root.querySelector(".cta-chart-wrap").getBoundingClientRect().width);
+  const portrait = window.matchMedia("(max-width: 640px)").matches ? "mobile" : "desktop";
+  const rD = A.dots.find((d) => d.row.court_level === "district")?.r ?? 0;
+  const rC = A.dots.find((d) => d.row.court_level === "circuit")?.r ?? 0;
+  const rS = A.dots.find((d) => d.row.court_level === "scotus")?.r ?? 0;
+  const F = A.formulaOverride;
+  $("report").textContent =
+    (F ? `cap=${F.cap} mult=${F.mult} appellate×=${F.rCircuit} scotus×=${F.rScotus} fit=${F.fit}` : "shipped formula") +
+    ` | span=${A.spanYears}yr chart=${w}px ${portrait} → r: district=${rD.toFixed(1)} appellate=${rC.toFixed(1)} scotus=${rS.toFixed(1)}`;
+}
+for (const id of ["cap", "mult", "rc", "rs", "fit"]) $(id).addEventListener("input", apply);
+$("off").addEventListener("click", () => {
+  A.formulaOverride = null; _dev.layoutDots(); _dev.drawAll();
+  $("cap").value = 30; $("mult").value = 120; $("rc").value = 2; $("rs").value = 7; $("fit").value = 1.2;
+  for (const [i, o] of [["cap","capv"],["mult","multv"],["rc","rcv"],["rs","rsv"],["fit","fitv"]]) $(o).textContent = $(i).value;
+  report();
+});
+setInterval(report, 400);
+window.addEventListener("resize", () => setTimeout(() => { if (A.formulaOverride) { _dev.layoutDots(); _dev.drawAll(); } report(); }, 250));
+</script>
+</body>
+</html>

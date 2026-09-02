@@ -1,0 +1,1448 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>District block builder</title>
+<style>
+  body { margin: 0; font-family: system-ui, sans-serif; background: #eef1f5; color: #1b1f24; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 14px; }
+  h1 { font-size: 17px; margin: 0 0 2px; }
+  h2 { font-size: 14px; margin: 0 0 8px; }
+  .lede { color: #5b6470; font-size: 13px; margin: 0 0 12px; line-height: 1.5; }
+  .tabs { display: flex; gap: 6px; margin-bottom: 10px; }
+  .tabs button { font: inherit; font-size: 13px; padding: 7px 14px; border: 1px solid #d8dde4;
+                 border-radius: 8px 8px 0 0; background: #fff; cursor: pointer; color: #5b6470; }
+  .tabs button.active { background: #2f6feb; color: #fff; border-color: #2f6feb; font-weight: 600; }
+  .tabs button.stub { color: #b7bfc9; cursor: default; }
+  .card { background: #fff; border: 1px solid #d8dde4; border-radius: 8px; padding: 12px 14px; margin-bottom: 10px; }
+  .bar { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+  .bar label { font-size: 12px; color: #5b6470; display: flex; align-items: center; gap: 6px; }
+  select, button, input[type=number] { font: inherit; font-size: 13px; padding: 4px 8px; border: 1px solid #d8dde4;
+                   border-radius: 6px; background: #fff; cursor: pointer; }
+  input[type=number] { width: 70px; cursor: text; }
+  button.primary { background: #2f6feb; color: #fff; border-color: #2f6feb; }
+  button.primary:disabled { background: #aac0ea; border-color: #aac0ea; cursor: not-allowed; }
+  button:disabled { cursor: not-allowed; opacity: .55; }
+  button.ghost { background: transparent; }
+  .hint { font-size: 12px; color: #5b6470; margin: 6px 0; line-height: 1.5; }
+  textarea { width: 100%; height: 130px; font-family: ui-monospace, monospace; font-size: 11px;
+             border: 1px solid #d8dde4; border-radius: 8px; padding: 8px; box-sizing: border-box; }
+  table { border-collapse: collapse; width: 100%; font-size: 12px; }
+  th, td { text-align: left; padding: 4px 8px; border-bottom: 1px solid #eef1f5; }
+  th { color: #5b6470; font-weight: 600; }
+  tr.viable td { color: #16794a; font-weight: 600; }
+  tr.match { background: #eaf1fd; cursor: pointer; }
+  tr.match.selected { background: #2f6feb; color: #fff; }
+  .status { font-size: 12px; color: #2f6feb; font-weight: 600; min-height: 16px; }
+  .grid-wrap { overflow: auto; border: 1px dashed #d8dde4; border-radius: 8px; padding: 10px; background: #fafbfc; }
+  .cols2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start; }
+  #err { background: #fdecec; border: 1px solid #f0b4b4; color: #8a1f1f; border-radius: 8px;
+         padding: 12px 14px; margin-bottom: 10px; font-size: 13px; line-height: 1.5; }
+  #err code { background: #fff; padding: 1px 5px; border-radius: 4px; }
+  .editor-cell { width: 22px; height: 22px; border: 1px solid #d8dde4; background: #fff; cursor: pointer; box-sizing: border-box; }
+  .editor-cell.on { background: #1b1f24; border-color: #1b1f24; }
+  .editor-grid { display: inline-grid; gap: 3px; background: transparent; }
+  .pill { display: inline-block; background: #eef1f5; border-radius: 999px; padding: 1px 8px; font-size: 11px; color: #5b6470; }
+  tr.district-row { cursor: pointer; }
+  tr.district-row.active { background: #eaf1fd; }
+  tr.district-row td { vertical-align: middle; }
+  tr.district-row select { font-size: 11px; padding: 2px 4px; }
+  .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+  .arrange-item { cursor: grab; }
+  .arrange-item.dragging { cursor: grabbing; }
+  .arrange-item rect.hit { fill: transparent; }
+  .arrange-item:hover rect.hit { fill: rgba(47,111,235,0.06); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>District block builder</h1>
+  <p class="lede">
+    Builds the new <b>district-seat block cluster</b> feature (national view only): one shaped
+    cluster of squares per circuit, sized to that circuit's total authorized district judgeships,
+    hand-arranged to roughly resemble the shape of the circuit (and, assembled together in the
+    Arrangement stage, the shape of the US). This tool covers the first two stages —
+    <b>Sampler</b> (grid-fits a circuit's real boundary to a target block count),
+    <b>Editor</b> (freehand tailoring of the resulting matrix), <b>District linker</b>
+    (assign blocks to specific districts + red/blue/vacant colors + reading order), and
+    <b>Arrangement</b> (position every circuit's linked cluster on one canvas, export for the
+    map — not yet consumed by the live widget, see <code>PROGRESS.md</code>).
+  </p>
+
+  <div id="err" hidden></div>
+
+  <div class="tabs">
+    <button id="tab-sampler" class="active">1. Sampler</button>
+    <button id="tab-editor">2. Editor</button>
+    <button id="tab-linker">3. District linker</button>
+    <button id="tab-arrangement">4. Arrangement</button>
+  </div>
+
+  <!-- ===================== SAMPLER ===================== -->
+  <div id="panel-sampler">
+    <div class="card bar">
+      <label>Circuit
+        <select id="circuit"></select>
+      </label>
+      <label>Projection
+        <select id="projection">
+          <option value="local" selected>Circuit-local</option>
+          <option value="national">National</option>
+        </select>
+      </label>
+      <label>Target block count
+        <input type="number" id="target" min="1" step="1">
+      </label>
+      <button id="run" class="primary">Run search</button>
+      <button id="abort" class="ghost" disabled>Abort</button>
+      <span class="status" id="searchStatus"></span>
+    </div>
+
+    <div class="card" id="rangeCard" hidden>
+      <h2>Viable L range</h2>
+      <p class="hint" id="rangeSummary"></p>
+      <div class="bar">
+        <label>Collect
+          <input type="number" id="collectN" value="12" min="1" step="1">
+        </label>
+        <button id="collect" class="primary" disabled>Collect exact-match samples</button>
+        <span class="status" id="collectStatus"></span>
+      </div>
+    </div>
+
+    <div class="cols2">
+      <div class="card">
+        <h2>L search log</h2>
+        <div style="max-height:260px; overflow:auto;">
+          <table id="logTable">
+            <thead><tr><th>L</th><th>mean</th><th>std</th><th>viable?</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Matching samples <span class="pill" id="matchCount">0</span></h2>
+        <div style="max-height:260px; overflow:auto;">
+          <table id="matchTable">
+            <thead><tr><th>#</th><th>L</th><th>jitter</th><th>dims</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="bar">
+        <h2 style="margin:0;">Sample viewer</h2>
+        <button id="prevSample" disabled>&larr; Prev</button>
+        <span class="status" id="viewerPos"></span>
+        <button id="nextSample" disabled>Next &rarr;</button>
+        <label><input type="checkbox" id="showShape" checked> show shape outline</label>
+        <label>Zoom
+          <input type="range" id="samplerZoom" min="1" max="5" step="0.5" value="2">
+          <span id="samplerZoomVal">2.0&times;</span>
+        </label>
+        <button id="sendToEditor" class="primary" disabled>Send to Editor &rarr;</button>
+      </div>
+      <div class="grid-wrap" id="samplerView" style="min-height:220px;"></div>
+    </div>
+  </div>
+
+  <!-- ===================== EDITOR ===================== -->
+  <div id="panel-editor" hidden>
+    <div class="card bar">
+      <span id="editorTitle" class="pill">no matrix loaded — send one from the Sampler, or paste JSON below</span>
+      <span class="status" id="editorCount"></span>
+    </div>
+    <div class="card bar">
+      <button id="addRowTop">+ row (top)</button>
+      <button id="addRowBottom">+ row (bottom)</button>
+      <button id="addColLeft">+ col (left)</button>
+      <button id="addColRight">+ col (right)</button>
+      <button id="trim">Trim to content</button>
+      <button id="clearAll" class="ghost">Clear all</button>
+      <button id="sendToLinker" class="primary" disabled>Send to District linker &rarr;</button>
+    </div>
+    <div class="card">
+      <div class="grid-wrap" id="editorView"></div>
+    </div>
+    <div class="card">
+      <div class="bar">
+        <h2 style="margin:0;">Export / import</h2>
+        <button id="exportJson" class="primary">Export JSON &darr;</button>
+        <button id="importJson">Load pasted JSON &uarr;</button>
+        <span class="hint" style="margin:0;">Paste a matrix export below, then click Load.</span>
+      </div>
+      <textarea id="io" spellcheck="false" placeholder="Export JSON writes here; paste a matrix export here + Load to import."></textarea>
+    </div>
+  </div>
+
+  <!-- ===================== DISTRICT LINKER ===================== -->
+  <div id="panel-linker" hidden>
+    <div class="card">
+      <h2>Circuits loaded into the linker</h2>
+      <table id="linkerCircuitsTable">
+        <thead><tr><th>Circuit</th><th>Blocks</th><th>Assigned</th><th></th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <p class="hint">Paste a Sampler/Editor matrix export below to load a circuit directly (skips the Editor).</p>
+      <textarea id="linkerImportIo" spellcheck="false" placeholder="Paste a circuit-matrix JSON export here, then click Load."></textarea>
+      <button id="linkerImport">Load pasted JSON &uarr;</button>
+    </div>
+
+    <div id="linkerEditArea" hidden>
+      <div class="card bar">
+        <h2 style="margin:0;" id="linkerEditTitle"></h2>
+        <span class="hint" style="margin:0;">Click a district row to make it active, then click blocks in the grid to assign them to it.</span>
+      </div>
+      <div class="card">
+        <div style="max-height:320px; overflow:auto;">
+          <table id="districtTable">
+            <thead><tr>
+              <th>District</th><th>Judges</th><th>R</th><th>D</th><th>Vacant</th>
+              <th>Assigned</th><th>Order 1</th><th>Order 2</th><th></th>
+            </tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card">
+        <div class="bar">
+          <h2 style="margin:0;">Circuit grid</h2>
+          <span class="hint" id="linkerModeHint" style="margin:0;"></span>
+          <label>Zoom
+            <input type="range" id="linkerZoom" min="1" max="5" step="0.5" value="2">
+            <span id="linkerZoomVal">2.0&times;</span>
+          </label>
+        </div>
+        <div class="grid-wrap" id="linkerView"></div>
+      </div>
+      <div class="card bar">
+        <button id="linkerExport" class="primary">Export JSON &darr;</button>
+        <span class="hint" style="margin:0;">Exports the selected circuit above. Use "Send to Arrangement" in the circuits table to copy a circuit's linkage onto the Arrangement canvas (safe to re-send after edits).</span>
+      </div>
+      <textarea id="linkerIo" spellcheck="false" placeholder="Export JSON writes here."></textarea>
+    </div>
+  </div>
+
+  <!-- ===================== ARRANGEMENT ===================== -->
+  <div id="panel-arrangement" hidden>
+    <div class="card bar">
+      <h2 style="margin:0;">Arrangement canvas</h2>
+      <span class="hint" style="margin:0;">Drag a circuit's cluster to position it. All clusters render at the same scale — arrange them to roughly resemble the US.</span>
+      <label>Zoom
+        <input type="range" id="arrangeZoom" min="1" max="5" step="0.5" value="2">
+        <span id="arrangeZoomVal">2.0&times;</span>
+      </label>
+      <label><input type="checkbox" id="snapGrid"> Snap to grid</label>
+      <button id="arrangeExport" class="primary">Export arrangement JSON &darr;</button>
+      <button id="arrangeImport">Import arrangement JSON &uarr;</button>
+    </div>
+    <div class="card">
+      <h2>Circuits on the canvas</h2>
+      <table id="arrangeTable">
+        <thead><tr><th>Circuit</th><th>Blocks</th><th>Offset</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="card">
+      <div class="grid-wrap" id="arrangeView" style="min-height:520px;"></div>
+    </div>
+    <div class="card">
+      <textarea id="arrangeIo" spellcheck="false" placeholder="Export arrangement JSON writes here; paste a previously-exported arrangement here + Import to resume editing it."></textarea>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+const $ = (id) => document.getElementById(id);
+const fail = (html) => { const e = $("err"); if (!e.hidden) return; e.hidden = false; e.innerHTML = html; };
+window.addEventListener("error", (e) => fail(`<b>Script error:</b> ${e.message}`));
+if (location.protocol === "file:") {
+  fail(`<b>This page must be served over HTTP.</b> Chrome blocks <code>fetch</code> on
+        <code>file://</code>. Run <code>python3 -m http.server 8777</code> in the repo root, then open
+        <code>http://localhost:8777/tools/district-block-builder.html</code>.`);
+  throw new Error("file://");
+}
+
+// --- constants, shared with the widget's own seat-block rendering ---------------
+const BLOCK_PX = 6.5;
+const BLOCK_GAP = 0.30;
+const PITCH = BLOCK_PX * (1 + BLOCK_GAP);
+const SAMPLES_PER_L = 30;
+// Same palette as embed/court-tracker.css's --ctt-rep/--ctt-dem/--ctt-other + vacant square.
+const COLOR = { r: "#d1343f", d: "#2f6feb", o: "#9aa3ad", vacant: "#f0f2f5" };
+const VACANT_STROKE = "#39414d";
+const DIRS = ["", "up", "right", "down", "left"];   // "" = blank
+
+// --- geometry ---------------------------------------------------------------
+function parsePathAbs(d) {
+  const subs = [];
+  let cur = null;
+  const re = /([A-Za-z])([^A-Za-z]*)/g;
+  let m;
+  while ((m = re.exec(d || ""))) {
+    const cmd = m[1];
+    if (cmd === "Z" || cmd === "z") continue;
+    if (cmd !== "M" && cmd !== "L") return null;
+    const nums = m[2].match(/-?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?/g);
+    if (!nums) continue;
+    if (cmd === "M") { cur = []; subs.push(cur); }
+    if (!cur || nums.length % 2) return null;
+    for (let i = 0; i < nums.length; i++) cur.push(+nums[i]);
+  }
+  return subs.length ? subs.map((a) => Float64Array.from(a)) : null;
+}
+
+function buildShape(subs) {
+  const edges = [];
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  let area2 = 0;
+  for (const s of subs) {
+    const n = s.length / 2;
+    for (let k = 0; k < n; k++) {
+      const xi = s[2 * k], yi = s[2 * k + 1];
+      const k2 = (k + 1) % n;
+      const xj = s[2 * k2], yj = s[2 * k2 + 1];
+      edges.push(xi, yi, xj, yj);
+      area2 += xi * yj - xj * yi;
+      if (xi < x0) x0 = xi; if (xi > x1) x1 = xi;
+      if (yi < y0) y0 = yi; if (yi > y1) y1 = yi;
+    }
+  }
+  return { edges: Float64Array.from(edges), bbox: { x0, y0, x1, y1 }, area: Math.abs(area2) / 2 };
+}
+
+function pointInPolygon(shape, x, y) {
+  const e = shape.edges;
+  let inside = false;
+  for (let k = 0; k < e.length; k += 4) {
+    const xi = e[k], yi = e[k + 1], xj = e[k + 2], yj = e[k + 3];
+    if ((yi > y) !== (yj > y)) {
+      const xCross = (xj - xi) * (y - yi) / (yj - yi) + xi;
+      if (x < xCross) inside = !inside;
+    }
+  }
+  return inside;
+}
+
+const MAX_GRID_POINTS = 400000; // defensive cap — an L this fine is unusable anyway
+function sampleGrid(shape, L, dx, dy) {
+  const { x0, y0, x1, y1 } = shape.bbox;
+  const iMin = Math.floor((x0 - dx) / L) - 1, iMax = Math.ceil((x1 - dx) / L) + 1;
+  const jMin = Math.floor((y0 - dy) / L) - 1, jMax = Math.ceil((y1 - dy) / L) + 1;
+  if ((iMax - iMin + 1) * (jMax - jMin + 1) > MAX_GRID_POINTS) return null; // too fine, skip
+  const pts = [];
+  for (let i = iMin; i <= iMax; i++) {
+    const x = dx + i * L;
+    for (let j = jMin; j <= jMax; j++) {
+      const y = dy + j * L;
+      if (pointInPolygon(shape, x, y)) pts.push([i, j]);
+    }
+  }
+  return pts;
+}
+
+function meanStd(arr) {
+  const n = arr.length;
+  const mean = arr.reduce((a, b) => a + b, 0) / n;
+  const variance = n > 1 ? arr.reduce((a, b) => a + (b - mean) ** 2, 0) / (n - 1) : 0;
+  return { mean, std: Math.sqrt(variance) };
+}
+
+function yieldToUI() { return new Promise((r) => setTimeout(r, 0)); }
+
+// --- data load ---------------------------------------------------------------
+let courts, svgDoc, seatBlocks;
+try {
+  const [courtsRes, svgRes, seatRes] = await Promise.all([
+    fetch("../data/courts.json"),
+    fetch("../assets/geo/national.svg"),
+    fetch("../data/seat_blocks.json"),
+  ]);
+  if (!courtsRes.ok || !svgRes.ok || !seatRes.ok) throw new Error("fetch failed");
+  courts = await courtsRes.json();
+  const svgText = await svgRes.text();
+  svgDoc = new DOMParser().parseFromString(svgText, "image/svg+xml");
+  seatBlocks = await seatRes.json();   // real per-court r/d/o/vacancies — see build_seat_blocks()
+} catch (e) {
+  fail(`<b>Could not load data.</b> ${e.message}<br>
+        Serve the repo root over HTTP and open this page as
+        <code>/tools/district-block-builder.html</code>.`);
+  throw e;
+}
+
+const CIRCUIT_ORDER = ["ca1","ca2","ca3","ca4","ca5","ca6","ca7","ca8","ca9","ca10","ca11","cadc"];
+const byId = new Map(courts.map((c) => [c.court_id, c]));
+// Target = seat_blocks.json's real per-district TOTAL (max(authorized, active)), the same
+// number the District linker later caps each district's assignment at — not the raw
+// courts.json authorized_judgeships column. Those two differ for districts sharing "roving"
+// judgeships beyond their §133 base count (kyed/kywd, ilnd, moed/mowd, okwd — see CLAUDE.md's
+// roving-judgeship note): summing raw authorized_judgeships there undercounts by 1-4 blocks
+// (confirmed for ca6/ca7/ca8/ca10), which would silently generate a circuit matrix too small
+// for the Linker to ever fully assign those districts' real judges into.
+const CIRCUITS = CIRCUIT_ORDER.filter((cid) => byId.get(cid)?.has_geography).map((cid) => {
+  const c = byId.get(cid);
+  const target = courts.filter((r) => r.court_level === "district" && r.parent_id === cid)
+    .reduce((a, r) => a + (seatBlocks[r.court_id]?.total ?? r.authorized_judgeships), 0);
+  return { court_id: cid, short_name: c.short_name, target };
+});
+
+$("circuit").innerHTML = CIRCUITS.map((c) =>
+  `<option value="${c.court_id}">${c.short_name} — ${c.target} district judgeships</option>`).join("");
+
+// Two available sources of a circuit's boundary: the shared national.svg (one Albers
+// projection for the whole country — already loaded) or that circuit's own dedicated
+// assets/geo/circuits/<cid>.svg (a per-circuit "circuit-local" projection, tighter-scaled and
+// less distorted for that specific region — the same file the live widget drills into,
+// separately projected, hence its own morph animation on drill-in). Circuit-local is the
+// default per operator request: it's the more faithful shape for a circuit-only tool. Local
+// files are lazy-fetched on demand (some run ~190KB — ca9 — not worth loading all 12 upfront).
+let localSvgCache = new Map();   // cid -> parsed Document
+async function getLocalSvgDoc(cid) {
+  if (localSvgCache.has(cid)) return localSvgCache.get(cid);
+  const res = await fetch(`../assets/geo/circuits/${cid}.svg`);
+  if (!res.ok) throw new Error(`could not fetch circuit-local geometry for ${cid} (HTTP ${res.status})`);
+  const doc = new DOMParser().parseFromString(await res.text(), "image/svg+xml");
+  localSvgCache.set(cid, doc);
+  return doc;
+}
+// Synchronous accessor — valid once the relevant doc is guaranteed loaded (national always is;
+// local only after getLocalSvgDoc has resolved at least once for that circuit).
+function docFor(cid, mode) { return mode === "local" ? localSvgCache.get(cid) : svgDoc; }
+
+function shapeFor(cid, mode) {
+  const doc = docFor(cid, mode);
+  const path = doc && doc.querySelector(`path[data-court-id="${cid}"]`);
+  if (!path) return null;
+  const subs = parsePathAbs(path.getAttribute("d"));
+  if (!subs) return null;
+  return buildShape(subs);
+}
+
+const shapeCache = new Map();   // `${mode}:${cid}` -> shape
+async function getShape(cid, mode) {
+  const key = `${mode}:${cid}`;
+  if (shapeCache.has(key)) return shapeCache.get(key);
+  if (mode === "local") await getLocalSvgDoc(cid);
+  const s = shapeFor(cid, mode);
+  shapeCache.set(key, s);
+  return s;
+}
+
+function syncTarget() {
+  const c = CIRCUITS.find((c) => c.court_id === $("circuit").value);
+  $("target").value = c ? c.target : "";
+}
+$("circuit").addEventListener("change", syncTarget);
+syncTarget();
+
+// --- search state -------------------------------------------------------------
+let allSamples = [];      // {L, dx, dy, count, points}
+let logRows = [];         // {L, mean, std, viable}
+let matches = [];         // subset of allSamples with count === target
+let viewIdx = -1;
+let aborted = false;
+
+function addLogRow(row) {
+  logRows.push(row);
+  logRows.sort((a, b) => a.L - b.L);
+  renderLog();
+}
+function renderLog() {
+  $("logTable").querySelector("tbody").innerHTML = logRows.map((r) =>
+    `<tr class="${r.viable ? "viable" : ""}"><td>${r.L.toFixed(1)}</td><td>${r.mean.toFixed(2)}</td>` +
+    `<td>${r.std.toFixed(2)}</td><td>${r.viable ? "yes" : "no"}</td></tr>`).join("");
+}
+function renderMatches() {
+  $("matchCount").textContent = matches.length;
+  $("matchTable").querySelector("tbody").innerHTML = matches.map((s, i) => {
+    const dims = matrixDims(s.points);
+    return `<tr class="match ${i === viewIdx ? "selected" : ""}" data-i="${i}">` +
+      `<td>${i + 1}</td><td>${s.L.toFixed(1)}</td><td>(${s.dx.toFixed(0)}, ${s.dy.toFixed(0)})</td>` +
+      `<td>${dims.rows}&times;${dims.cols}</td></tr>`;
+  }).join("");
+  $("matchTable").querySelectorAll("tr.match").forEach((tr) => {
+    tr.addEventListener("click", () => showSample(+tr.dataset.i));
+  });
+}
+
+function matrixDims(points) {
+  let iMin = Infinity, iMax = -Infinity, jMin = Infinity, jMax = -Infinity;
+  for (const [i, j] of points) {
+    if (i < iMin) iMin = i; if (i > iMax) iMax = i;
+    if (j < jMin) jMin = j; if (j > jMax) jMax = j;
+  }
+  return { rows: jMax - jMin + 1, cols: iMax - iMin + 1, iMin, iMax, jMin, jMax };
+}
+
+// Trimmed by construction: bounds are the tight bbox of included points, so every edge
+// row/col has at least one 1 already — no separate trim pass needed.
+function pointsToMatrix(points) {
+  const { rows, cols, iMin, jMax } = matrixDims(points);
+  const m = Array.from({ length: rows }, () => new Array(cols).fill(0));
+  for (const [i, j] of points) m[jMax - j][i - iMin] = 1;
+  return m;
+}
+
+async function sampleAt(shape, L, dx, dy) {
+  const points = sampleGrid(shape, L, dx, dy);
+  if (!points) return null;
+  const s = { L, dx, dy, count: points.length, points };
+  allSamples.push(s);
+  return s;
+}
+
+async function statsAt(shape, L, target) {
+  const counts = [];
+  let usable = 0;
+  for (let k = 0; k < SAMPLES_PER_L; k++) {
+    if (aborted) return null;
+    const dx = Math.random() * L, dy = Math.random() * L;
+    const s = await sampleAt(shape, L, dx, dy);
+    if (s) { counts.push(s.count); usable++; }
+    if (k % 6 === 0) await yieldToUI();
+  }
+  if (usable === 0) return { L, mean: NaN, std: NaN, viable: false, tooFine: true };
+  const { mean, std } = meanStd(counts);
+  const viable = Math.abs(target - mean) <= 2 * std;
+  return { L, mean, std, viable };
+}
+
+async function bisect(shape, target, lo, hi, loViable, wantLowerBound) {
+  // wantLowerBound: bracket is [nonViable(small), viable] and we push the nonViable bound up;
+  // otherwise bracket is [viable, nonViable(large)] and we push the nonViable bound down.
+  let a = lo, b = hi; // a: viable-adjacent side per direction, tracked via loViable flag below
+  for (let iter = 0; iter < 24 && !aborted; iter++) {
+    if (Math.abs(b - a) / Math.min(a, b) <= 0.05) break;
+    const mid = Math.sqrt(a * b);
+    const r = await statsAt(shape, mid, target);
+    addLogRow(r);
+    if (!r || r.tooFine) { if (wantLowerBound) a = mid; else b = mid; continue; }
+    if (wantLowerBound) {
+      if (r.viable) b = mid; else a = mid;
+    } else {
+      if (r.viable) a = mid; else b = mid;
+    }
+  }
+  return (a + b) / 2;
+}
+
+// The circuit/projection actually behind the CURRENT result set — tracked separately from the
+// live dropdowns so switching either one mid-review (without re-running) can't make the sample
+// viewer overlay the wrong shape, or "Collect more" sample against a different shape than the
+// one the viable-L range was computed from.
+let activeCircuit = null, activeMode = null;
+
+async function runSearch() {
+  const cid = $("circuit").value;
+  const mode = $("projection").value;
+  const target = Math.max(1, Math.round(+$("target").value || 1));
+  activeCircuit = cid; activeMode = mode;
+  $("run").disabled = true; $("abort").disabled = false; aborted = false;
+  $("searchStatus").textContent = mode === "local" ? "loading circuit-local geometry…" : "";
+  await yieldToUI();
+  let shape;
+  try { shape = await getShape(cid, mode); }
+  catch (e) { fail(`<b>Could not load geometry for ${cid}.</b> ${e.message}`); $("run").disabled = false; $("abort").disabled = true; return; }
+  if (!shape) { fail(`<b>No geometry for ${cid}.</b>`); $("run").disabled = false; $("abort").disabled = true; return; }
+
+  allSamples = []; logRows = []; matches = []; viewIdx = -1;
+  renderLog(); renderMatches(); renderViewer();
+  $("rangeCard").hidden = true;
+  $("searchStatus").textContent = "estimating starting L…";
+  await yieldToUI();
+
+  const L0 = Math.sqrt(shape.area / target);
+  const factors = [4, 2.5, 1.6, 1, 0.65, 0.4, 0.25];
+  let results = [];
+  for (const f of factors) {
+    if (aborted) break;
+    const L = L0 * f;
+    $("searchStatus").textContent = `coarse sampling L=${L.toFixed(1)} (${f}×L0)…`;
+    const r = await statsAt(shape, L, target);
+    if (r) { results.push(r); addLogRow(r); }
+  }
+  results.sort((a, b) => a.L - b.L);
+
+  // expand outward (a few rounds max) if nothing viable yet
+  let rounds = 0;
+  while (!aborted && rounds < 4 && !results.some((r) => r.viable)) {
+    rounds++;
+    const smallest = results[0].L, largest = results[results.length - 1].L;
+    for (const L of [smallest / 2, largest * 2]) {
+      $("searchStatus").textContent = `expanding search, L=${L.toFixed(1)}…`;
+      const r = await statsAt(shape, L, target);
+      if (r) { results.push(r); addLogRow(r); }
+    }
+    results.sort((a, b) => a.L - b.L);
+  }
+
+  if (aborted) { finishSearch(false, "aborted"); return; }
+  const viableIdx = results.map((r, i) => r.viable ? i : -1).filter((i) => i >= 0);
+  if (viableIdx.length === 0) {
+    finishSearch(false, "no viable L found in the searched range — try adjusting the target count");
+    return;
+  }
+  const loIdx = viableIdx[0], hiIdx = viableIdx[viableIdx.length - 1];
+
+  // lower bracket: [nonViable smaller than smallest viable, smallest viable]
+  let lowA, lowB = results[loIdx].L;
+  if (loIdx > 0) lowA = results[loIdx - 1].L;
+  else {
+    lowA = results[loIdx].L / 2;
+    while (!aborted) {
+      const r = await statsAt(shape, lowA, target);
+      addLogRow(r);
+      if (!r || !r.viable) break;
+      lowA /= 2;
+    }
+  }
+  // upper bracket: [largest viable, nonViable larger]
+  let highA = results[hiIdx].L, highB;
+  if (hiIdx < results.length - 1) highB = results[hiIdx + 1].L;
+  else {
+    highB = results[hiIdx].L * 2;
+    while (!aborted) {
+      const r = await statsAt(shape, highB, target);
+      addLogRow(r);
+      if (!r || r.viable) break;
+      highB *= 2;
+    }
+  }
+
+  $("searchStatus").textContent = "refining lower bound…";
+  const finalLow = await bisect(shape, target, lowA, lowB, true, true);
+  $("searchStatus").textContent = "refining upper bound…";
+  const finalHigh = await bisect(shape, target, highA, highB, false, false);
+
+  finishSearch(true, "", finalLow, finalHigh);
+}
+
+function finishSearch(ok, msg, finalLow, finalHigh) {
+  $("run").disabled = false; $("abort").disabled = true;
+  $("searchStatus").textContent = msg;
+  if (!ok) return;
+  window.__viableRange = { low: finalLow, high: finalHigh };
+  $("rangeCard").hidden = false;
+  $("rangeSummary").innerHTML =
+    `Viable L range: <b>${finalLow.toFixed(1)} – ${finalHigh.toFixed(1)}</b> map units ` +
+    `(bounds refined to within 5%). Smaller L → more, smaller blocks; larger L → fewer, bigger blocks. ` +
+    `Collect samples in this range and keep the ones whose vertex count matches the target exactly.`;
+  $("collect").disabled = false;
+  harvestMatches();
+}
+
+function harvestMatches() {
+  const target = Math.round(+$("target").value || 0);
+  matches = allSamples.filter((s) => s.count === target &&
+    s.L >= window.__viableRange.low * 0.999 && s.L <= window.__viableRange.high * 1.001);
+  renderMatches();
+  if (matches.length && viewIdx < 0) showSample(0);
+}
+
+async function collectMore() {
+  // Use the search's tracked circuit/mode, not the live dropdowns — the viable-L range was
+  // computed against that specific shape, and collecting against a different one (because the
+  // operator flipped Projection or Circuit after running the search) would be meaningless.
+  const target = Math.round(+$("target").value || 0);
+  const shape = await getShape(activeCircuit, activeMode);
+  const { low, high } = window.__viableRange;
+  const want = matches.length + Math.max(1, Math.round(+$("collectN").value || 1));
+  const maxAttempts = 4000;
+  $("collect").disabled = true; $("abort").disabled = false; aborted = false;
+  let attempts = 0;
+  while (!aborted && matches.length < want && attempts < maxAttempts) {
+    const L = low + Math.random() * (high - low);
+    const dx = Math.random() * L, dy = Math.random() * L;
+    const s = await sampleAt(shape, L, dx, dy);
+    attempts++;
+    if (s && s.count === target) { matches.push(s); renderMatches(); }
+    if (attempts % 40 === 0) {
+      $("collectStatus").textContent = `${attempts} tried, ${matches.length} matches…`;
+      await yieldToUI();
+    }
+  }
+  $("collectStatus").textContent = matches.length >= want
+    ? `done — ${matches.length} matches`
+    : `stopped after ${attempts} attempts — only ${matches.length} exact matches found. ` +
+      `Try nudging the target count by ±1.`;
+  $("collect").disabled = false; $("abort").disabled = true;
+  if (matches.length && viewIdx < 0) showSample(0);
+}
+
+// --- viewer (matrix-index space; optional shape overlay in the same frame) ---
+// Margin: the shape's real boundary can overshoot the trimmed grid's outer cells in the
+// fractional space between grid lines (the grid is trimmed to included VERTICES, not to the
+// shape's actual edge) — a flush 0,0 origin clipped that overshoot on the left/top (operator
+// report). One full PITCH of margin on every side matches the slack that already existed on
+// the right/bottom from the "+BLOCK_PX" viewBox pad.
+const VIEWER_MARGIN = PITCH;
+function renderViewer() {
+  const el = $("samplerView");
+  if (viewIdx < 0 || !matches[viewIdx]) { el.innerHTML = ""; $("viewerPos").textContent = ""; return; }
+  const s = matches[viewIdx];
+  const dims = matrixDims(s.points);
+  $("viewerPos").textContent = `${viewIdx + 1} / ${matches.length}`;
+  const zoom = +$("samplerZoom").value || 2;
+
+  const w = dims.cols * PITCH + BLOCK_PX + VIEWER_MARGIN * 2, h = dims.rows * PITCH + BLOCK_PX + VIEWER_MARGIN * 2;
+  const svgNS = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(svgNS, "svg");
+  svg.setAttribute("width", w * zoom); svg.setAttribute("height", h * zoom);
+  svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
+
+  if ($("showShape").checked) {
+    const colF = (x) => (x - s.dx) / s.L - dims.iMin;
+    const rowF = (y) => dims.jMax - (y - s.dy) / s.L;
+    let d = "";
+    // re-parse subpaths directly for the outline (the cached shape's edge list lost the
+    // per-ring structure). Uses the tracked activeCircuit/activeMode from the search that
+    // produced THIS sample, not the live dropdowns — those may have moved on since.
+    const doc = docFor(activeCircuit, activeMode);
+    const path = doc && doc.querySelector(`path[data-court-id="${activeCircuit}"]`);
+    const subs = path && parsePathAbs(path.getAttribute("d"));
+    if (subs) {
+      for (const sub of subs) {
+        let dd = "";
+        for (let k = 0; k < sub.length; k += 2) {
+          const px = VIEWER_MARGIN + colF(sub[k]) * PITCH + BLOCK_PX / 2, py = VIEWER_MARGIN + rowF(sub[k + 1]) * PITCH + BLOCK_PX / 2;
+          dd += (k === 0 ? "M" : "L") + px.toFixed(1) + " " + py.toFixed(1);
+        }
+        d += dd + "Z ";
+      }
+    }
+    const p = document.createElementNS(svgNS, "path");
+    p.setAttribute("d", d);
+    p.setAttribute("fill", "#2f6feb");
+    p.setAttribute("fill-opacity", "0.14");
+    p.setAttribute("fill-rule", "evenodd");   // matches the even-odd point-in-polygon test
+    p.setAttribute("stroke", "#2f6feb");
+    p.setAttribute("stroke-opacity", "0.55");
+    p.setAttribute("stroke-width", "1.2");
+    svg.appendChild(p);
+  }
+
+  for (const [i, j] of s.points) {
+    const col = i - dims.iMin, row = dims.jMax - j;
+    const r = document.createElementNS(svgNS, "rect");
+    r.setAttribute("x", VIEWER_MARGIN + col * PITCH); r.setAttribute("y", VIEWER_MARGIN + row * PITCH);
+    r.setAttribute("width", BLOCK_PX); r.setAttribute("height", BLOCK_PX);
+    r.setAttribute("fill", "#1b1f24");
+    svg.appendChild(r);
+  }
+  el.innerHTML = ""; el.appendChild(svg);
+  $("prevSample").disabled = viewIdx <= 0;
+  $("nextSample").disabled = viewIdx >= matches.length - 1;
+  $("sendToEditor").disabled = false;
+}
+function showSample(i) { viewIdx = i; renderMatches(); renderViewer(); }
+
+$("run").addEventListener("click", () => runSearch());
+$("abort").addEventListener("click", () => { aborted = true; });
+$("collect").addEventListener("click", () => collectMore());
+$("prevSample").addEventListener("click", () => showSample(viewIdx - 1));
+$("nextSample").addEventListener("click", () => showSample(viewIdx + 1));
+$("showShape").addEventListener("change", renderViewer);
+$("samplerZoom").addEventListener("input", () => {
+  $("samplerZoomVal").textContent = `${(+$("samplerZoom").value).toFixed(1)}×`;
+  renderViewer();
+});
+
+// ===================== EDITOR =====================
+let editorMatrix = null;
+let editorCircuit = null;
+
+function newMatrixFrom(points) { return pointsToMatrix(points); }
+
+function renderEditor() {
+  const el = $("editorView");
+  if (!editorMatrix) { el.innerHTML = ""; $("editorCount").textContent = ""; return; }
+  const rows = editorMatrix.length, cols = editorMatrix[0].length;
+  el.innerHTML = "";
+  const grid = document.createElement("div");
+  grid.className = "editor-grid";
+  grid.style.gridTemplateColumns = `repeat(${cols}, 22px)`;
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const cell = document.createElement("div");
+      cell.className = "editor-cell" + (editorMatrix[r][c] ? " on" : "");
+      cell.addEventListener("click", () => {
+        editorMatrix[r][c] = editorMatrix[r][c] ? 0 : 1;
+        renderEditor();
+      });
+      grid.appendChild(cell);
+    }
+  }
+  el.appendChild(grid);
+  const count = editorMatrix.flat().reduce((a, b) => a + b, 0);
+  $("editorCount").textContent = `${rows}×${cols}, ${count} block${count === 1 ? "" : "s"}`;
+}
+
+function addRow(atTop) {
+  if (!editorMatrix) return;
+  const cols = editorMatrix[0]?.length || 1;
+  const row = new Array(cols).fill(0);
+  if (atTop) editorMatrix.unshift(row); else editorMatrix.push(row);
+  renderEditor();
+}
+function addCol(atLeft) {
+  if (!editorMatrix) return;
+  for (const row of editorMatrix) { if (atLeft) row.unshift(0); else row.push(0); }
+  renderEditor();
+}
+function trimMatrix() {
+  if (!editorMatrix) return;
+  let m = editorMatrix;
+  const rowEmpty = (r) => m[r].every((v) => !v);
+  const colEmpty = (c) => m.every((row) => !row[c]);
+  while (m.length > 1 && rowEmpty(0)) m.shift();
+  while (m.length > 1 && rowEmpty(m.length - 1)) m.pop();
+  while (m[0].length > 1 && colEmpty(0)) m.forEach((row) => row.shift());
+  while (m[0].length > 1 && colEmpty(m[0].length - 1)) m.forEach((row) => row.pop());
+  editorMatrix = m;
+  renderEditor();
+}
+
+$("addRowTop").addEventListener("click", () => addRow(true));
+$("addRowBottom").addEventListener("click", () => addRow(false));
+$("addColLeft").addEventListener("click", () => addCol(true));
+$("addColRight").addEventListener("click", () => addCol(false));
+$("trim").addEventListener("click", trimMatrix);
+$("clearAll").addEventListener("click", () => {
+  if (!editorMatrix) return;
+  editorMatrix = editorMatrix.map((row) => row.map(() => 0));
+  renderEditor();
+});
+
+function loadIntoEditor(matrix, circuitId, meta) {
+  editorMatrix = matrix.map((row) => row.slice());
+  editorCircuit = circuitId;
+  $("editorTitle").textContent = circuitId
+    ? `${byId.get(circuitId)?.short_name || circuitId} — loaded ${meta || "from sampler"}`
+    : "loaded matrix (no circuit tag)";
+  $("sendToLinker").disabled = false;
+  renderEditor();
+}
+
+$("sendToEditor").addEventListener("click", () => {
+  if (viewIdx < 0 || !matches[viewIdx]) return;
+  const s = matches[viewIdx];
+  loadIntoEditor(newMatrixFrom(s.points), activeCircuit, `sample #${viewIdx + 1} (L=${s.L.toFixed(1)})`);
+  activateTab("editor");
+});
+
+$("exportJson").addEventListener("click", () => {
+  if (!editorMatrix) return;
+  trimMatrix();
+  const out = {
+    schema: "district-block/circuit-matrix@1",
+    circuit_id: editorCircuit,
+    matrix: editorMatrix,
+    block_count: editorMatrix.flat().reduce((a, b) => a + b, 0),
+  };
+  const json = JSON.stringify(out, null, 2);
+  $("io").value = json;
+  navigator.clipboard?.writeText(json).catch(() => {});
+});
+$("importJson").addEventListener("click", () => {
+  try {
+    const obj = JSON.parse($("io").value);
+    if (!Array.isArray(obj.matrix)) throw new Error("missing matrix[][]");
+    loadIntoEditor(obj.matrix, obj.circuit_id || null, "pasted JSON");
+  } catch (e) {
+    fail(`<b>Could not parse pasted JSON.</b> ${e.message}`);
+  }
+});
+
+// ===================== DISTRICT LINKER =====================
+// linkerCircuits[circuit_id] = {
+//   matrix: number[][],
+//   districts: { [district_court_id]: { cells: {"r,c": clickOrderNumber}, o1: "", o2: "" } },
+// }
+let linkerCircuits = {};
+let linkerFocusCircuit = null;
+let linkerActiveDistrict = null;
+
+function newLinkerEntry(matrix) { return { matrix: matrix.map((row) => row.slice()), districts: {} }; }
+
+// Circuits table holds many circuits at once, switchable like the district rows below it
+// (click a row to select/open it) — no overwrite confirmation: the table itself is now the
+// safety net (you can see and re-send anything before it's lost).
+function loadIntoLinker(matrix, circuitId) {
+  if (!circuitId) { fail("<b>Cannot load into the linker without a circuit_id.</b> Tag the export first."); return; }
+  linkerCircuits[circuitId] = newLinkerEntry(matrix);
+  openLinkerFocus(circuitId);
+}
+
+function districtsFor(circuitId) {
+  return courts.filter((c) => c.court_level === "district" && c.parent_id === circuitId)
+    .sort((a, b) => a.short_name.localeCompare(b.short_name));
+}
+
+function cellKey(r, c) { return `${r},${c}`; }
+
+function ownerOf(entry, r, c) {
+  const key = cellKey(r, c);
+  for (const [did, d] of Object.entries(entry.districts)) if (key in d.cells) return did;
+  return null;
+}
+
+function assignedCount(entry, districtId) {
+  const d = entry.districts[districtId];
+  return d ? Object.keys(d.cells).length : 0;
+}
+
+function nextOrderNumber(d) {
+  const used = new Set(Object.values(d.cells));
+  let n = 1;
+  while (used.has(n)) n++;
+  return n;
+}
+
+// district's real composition (from data/seat_blocks.json — never fabricated). Sequence order
+// matches the live widget's own seatSquares(): rep, other, dem, vacant.
+function colorSequence(districtId) {
+  const b = seatBlocks[districtId] || {};
+  const seq = [];
+  for (let i = 0; i < (b.r || 0); i++) seq.push("r");
+  for (let i = 0; i < (b.o || 0); i++) seq.push("o");
+  for (let i = 0; i < (b.d || 0); i++) seq.push("d");
+  for (let i = 0; i < (b.vacancies || 0); i++) seq.push("vacant");
+  return seq;
+}
+function capFor(districtId) { return seatBlocks[districtId]?.total ?? (byId.get(districtId)?.authorized_judgeships || 0); }
+
+// primary direction sweeps WITHIN a line; the line axis is orthogonal to primary; secondary
+// orders the lines. This generalizes the spec's default {down,right} = column-major, top-to-
+// bottom, left-to-right (down sweeps rows within a column, right orders columns ascending).
+function axisOf(dir) { return (dir === "up" || dir === "down") ? "v" : "h"; }
+function sortByReadingOrder(cells, primary, secondary) {
+  const pAxis = axisOf(primary);
+  const lineAxis = pAxis === "v" ? "h" : "v";
+  const primarySign = (primary === "down" || primary === "right") ? 1 : -1;
+  let secondarySign = 1;
+  if (secondary && axisOf(secondary) === lineAxis) secondarySign = (secondary === "down" || secondary === "right") ? 1 : -1;
+  const lineKey = (c) => (lineAxis === "v" ? c.r : c.c);
+  const sweepKey = (c) => (pAxis === "v" ? c.r : c.c);
+  return cells.slice().sort((a, b) => {
+    const la = lineKey(a) * secondarySign, lb = lineKey(b) * secondarySign;
+    if (la !== lb) return la - lb;
+    return sweepKey(a) * primarySign - sweepKey(b) * primarySign;
+  });
+}
+
+function rankOf(entry, districtId, r, c) {
+  const d = entry.districts[districtId];
+  const key = cellKey(r, c);
+  if (d.o1 && d.o2) {
+    const cells = Object.keys(d.cells).map((k) => { const [rr, cc] = k.split(",").map(Number); return { r: rr, c: cc, key: k }; });
+    const sorted = sortByReadingOrder(cells, d.o1, d.o2);
+    return sorted.findIndex((x) => x.key === key) + 1;
+  }
+  return d.cells[key];
+}
+
+function colorForCell(entry, districtId, r, c) {
+  const rank = rankOf(entry, districtId, r, c);
+  const seq = colorSequence(districtId);
+  return seq[rank - 1] || "o";   // rank beyond real composition can't happen (capped at total)
+}
+
+// Single entry point for any change that can affect the circuits table, the district table,
+// or the grid — keeps the circuits table's "Assigned" column from going stale (it used to be
+// rendered once on load/select and never refreshed on assignment changes — operator report).
+function refreshLinker() {
+  renderLinkerCircuitsTable();
+  renderDistrictTable();
+  renderLinkerGrid();
+}
+
+function renderLinkerCircuitsTable() {
+  const rows = Object.keys(linkerCircuits).sort().map((cid) => {
+    const entry = linkerCircuits[cid];
+    const total = entry.matrix.flat().reduce((a, b) => a + b, 0);
+    const assigned = Object.values(entry.districts).reduce((a, d) => a + Object.keys(d.cells).length, 0);
+    return `<tr class="district-row ${linkerFocusCircuit === cid ? "active" : ""}" data-cid="${cid}">
+      <td>${byId.get(cid)?.short_name || cid}</td>
+      <td>${total}</td>
+      <td>${assigned}/${total}</td>
+      <td><button data-act="arrange" data-cid="${cid}" class="primary">Send to Arrangement</button></td>
+      <td><button data-act="remove" data-cid="${cid}" class="ghost">Remove</button></td>
+    </tr>`;
+  });
+  $("linkerCircuitsTable").querySelector("tbody").innerHTML = rows.join("");
+  $("linkerCircuitsTable").querySelectorAll("tr.district-row").forEach((tr) => {
+    tr.addEventListener("click", (e) => {
+      if (e.target.closest("button")) return;
+      openLinkerFocus(tr.dataset.cid);
+    });
+  });
+  $("linkerCircuitsTable").querySelectorAll("button[data-act]").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const cid = btn.dataset.cid;
+      if (btn.dataset.act === "arrange") sendCircuitToArrangement(cid);
+      else { delete linkerCircuits[cid]; if (linkerFocusCircuit === cid) closeLinkerFocus(); refreshLinker(); }
+    });
+  });
+}
+
+function openLinkerFocus(cid) {
+  linkerFocusCircuit = cid;
+  linkerActiveDistrict = null;
+  $("linkerEditArea").hidden = false;
+  $("linkerEditTitle").textContent = `${byId.get(cid)?.short_name || cid} — district linking`;
+  refreshLinker();
+}
+function closeLinkerFocus() {
+  linkerFocusCircuit = null;
+  $("linkerEditArea").hidden = true;
+}
+
+function renderDistrictTable() {
+  if (!linkerFocusCircuit) return;
+  const entry = linkerCircuits[linkerFocusCircuit];
+  const dists = districtsFor(linkerFocusCircuit);
+  const body = dists.map((c) => {
+    const cid = c.court_id;
+    entry.districts[cid] ||= { cells: {}, o1: "", o2: "" };
+    const d = entry.districts[cid];
+    const b = seatBlocks[cid] || {};
+    const assigned = assignedCount(entry, cid);
+    const cap = capFor(cid);
+    const opt = (val, other) => DIRS.filter((v) => v === "" || v !== other)
+      .map((v) => `<option value="${v}" ${v === val ? "selected" : ""}>${v || "—"}</option>`).join("");
+    return `<tr class="district-row ${linkerActiveDistrict === cid ? "active" : ""}" data-cid="${cid}">
+      <td>${c.short_name}</td>
+      <td>${cap}</td>
+      <td><span class="swatch" style="background:${COLOR.r}"></span>${b.r ?? 0}</td>
+      <td><span class="swatch" style="background:${COLOR.d}"></span>${b.d ?? 0}</td>
+      <td><span class="swatch" style="background:${COLOR.vacant};border:1px solid ${VACANT_STROKE}"></span>${b.vacancies ?? 0}</td>
+      <td>${assigned}/${cap}</td>
+      <td><select data-cid="${cid}" data-slot="o1">${opt(d.o1, d.o2)}</select></td>
+      <td><select data-cid="${cid}" data-slot="o2">${opt(d.o2, d.o1)}</select></td>
+      <td><button data-act="clear" data-cid="${cid}" class="ghost">Clear</button></td>
+    </tr>`;
+  });
+  $("districtTable").querySelector("tbody").innerHTML = body.join("");
+  $("districtTable").querySelectorAll("tr.district-row").forEach((tr) => {
+    tr.addEventListener("click", (e) => {
+      if (e.target.closest("select,button")) return;
+      const cid = tr.dataset.cid;
+      linkerActiveDistrict = linkerActiveDistrict === cid ? null : cid;
+      renderDistrictTable(); renderLinkerGrid();
+    });
+  });
+  $("districtTable").querySelectorAll("select").forEach((sel) => {
+    sel.addEventListener("click", (e) => e.stopPropagation());
+    sel.addEventListener("change", () => {
+      entry.districts[sel.dataset.cid][sel.dataset.slot] = sel.value;
+      refreshLinker();
+    });
+  });
+  $("districtTable").querySelectorAll("button[data-act=clear]").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      entry.districts[btn.dataset.cid].cells = {};
+      refreshLinker();
+    });
+  });
+  $("linkerModeHint").textContent = linkerActiveDistrict
+    ? `Assigning to ${byId.get(linkerActiveDistrict)?.short_name} — click blocks to add/remove. Other districts' blocks show black.`
+    : "No district selected — showing composite colors (unassigned blocks are black). Select a district row to start assigning.";
+}
+
+function renderLinkerGrid() {
+  const el = $("linkerView");
+  if (!linkerFocusCircuit) { el.innerHTML = ""; return; }
+  const entry = linkerCircuits[linkerFocusCircuit];
+  const rows = entry.matrix.length, cols = entry.matrix[0].length;
+  const zoom = +$("linkerZoom").value || 2;
+  const w = cols * PITCH + BLOCK_PX, h = rows * PITCH + BLOCK_PX;
+  const svgNS = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(svgNS, "svg");
+  svg.setAttribute("width", w * zoom); svg.setAttribute("height", h * zoom);
+  svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
+
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      if (!entry.matrix[r][c]) continue;
+      const owner = ownerOf(entry, r, c);
+      let fill = "#1b1f24", stroke = null, showNumber = false, orderNum = null;
+      if (linkerActiveDistrict) {
+        if (owner === linkerActiveDistrict) {
+          const colorKey = colorForCell(entry, owner, r, c);
+          fill = colorKey === "vacant" ? COLOR.vacant : COLOR[colorKey];
+          if (colorKey === "vacant") stroke = VACANT_STROKE;
+          showNumber = true; orderNum = entry.districts[owner].cells[cellKey(r, c)];
+        }
+      } else if (owner) {
+        const colorKey = colorForCell(entry, owner, r, c);
+        fill = colorKey === "vacant" ? COLOR.vacant : COLOR[colorKey];
+        if (colorKey === "vacant") stroke = VACANT_STROKE;
+      }
+      const x = c * PITCH, y = r * PITCH;
+      const rect = document.createElementNS(svgNS, "rect");
+      rect.setAttribute("x", x); rect.setAttribute("y", y);
+      rect.setAttribute("width", BLOCK_PX); rect.setAttribute("height", BLOCK_PX);
+      rect.setAttribute("fill", fill);
+      if (stroke) { rect.setAttribute("stroke", stroke); rect.setAttribute("stroke-width", "0.8"); }
+      rect.style.cursor = linkerActiveDistrict ? "pointer" : "default";
+      rect.addEventListener("click", () => onGridCellClick(r, c));
+      svg.appendChild(rect);
+      if (showNumber) {
+        const t = document.createElementNS(svgNS, "text");
+        t.setAttribute("x", x + BLOCK_PX / 2); t.setAttribute("y", y + BLOCK_PX / 2 + 1.4);
+        t.setAttribute("text-anchor", "middle");
+        t.setAttribute("font-size", "4.2"); t.setAttribute("font-family", "system-ui, sans-serif");
+        t.setAttribute("fill", "#fff"); t.setAttribute("stroke", "#1b1f24"); t.setAttribute("stroke-width", "1.8");
+        t.setAttribute("paint-order", "stroke fill");
+        t.textContent = String(orderNum);
+        t.style.pointerEvents = "none";
+        svg.appendChild(t);
+      }
+    }
+  }
+  el.innerHTML = ""; el.appendChild(svg);
+}
+
+function onGridCellClick(r, c) {
+  if (!linkerActiveDistrict) return;
+  const entry = linkerCircuits[linkerFocusCircuit];
+  const d = entry.districts[linkerActiveDistrict];
+  const owner = ownerOf(entry, r, c);
+  const key = cellKey(r, c);
+  if (owner === linkerActiveDistrict) {
+    delete d.cells[key];
+  } else if (!owner) {
+    if (assignedCount(entry, linkerActiveDistrict) >= capFor(linkerActiveDistrict)) {
+      $("linkerModeHint").textContent = `${byId.get(linkerActiveDistrict)?.short_name} already has all ${capFor(linkerActiveDistrict)} seats assigned — clear one first.`;
+      return;
+    }
+    d.cells[key] = nextOrderNumber(d);
+  }
+  refreshLinker();
+}
+
+$("linkerZoom").addEventListener("input", () => {
+  $("linkerZoomVal").textContent = `${(+$("linkerZoom").value).toFixed(1)}×`;
+  renderLinkerGrid();
+});
+
+$("sendToLinker").addEventListener("click", () => {
+  if (!editorMatrix) return;
+  trimMatrix();
+  loadIntoLinker(editorMatrix, editorCircuit);
+  activateTab("linker");
+});
+
+// Every assigned cell, once: {r, c, key, owner}. The one place that walks the matrix looking
+// for ownership, so the round-trip export, color resolution, and Arrangement hand-off can't
+// drift out of sync with each other.
+function ownedCells(entry) {
+  const out = [];
+  const rows = entry.matrix.length, cols = entry.matrix[0].length;
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+    if (!entry.matrix[r][c]) continue;
+    const owner = ownerOf(entry, r, c);
+    if (owner) out.push({ r, c, key: cellKey(r, c), owner });
+  }
+  return out;
+}
+
+// Colors are ALWAYS derived (click order or reading-order rank + live seat_blocks.json
+// composition) — never a stored source of truth, so a reload can never drift from what's
+// actually assigned. Call this wherever a color is needed; never persist its output as input.
+function resolvedCellColors(entry) {
+  const out = {};
+  for (const { key, owner, r, c } of ownedCells(entry)) out[key] = colorForCell(entry, owner, r, c);
+  return out;
+}
+
+// The ONLY state that can't be derived from anything else: which district owns each cell, and
+// that cell's click-order number (the on-block badge — always literal click order, independent
+// of any reading-order override). Round-tripping this exactly reconstructs colors AND badges.
+function linkerRoundTripData(cid) {
+  const entry = linkerCircuits[cid];
+  const cellDistrict = {}, cellOrder = {};
+  for (const { key, owner } of ownedCells(entry)) {
+    cellDistrict[key] = owner;
+    cellOrder[key] = entry.districts[owner].cells[key];
+  }
+  return {
+    schema: "district-block/circuit-linked@2",
+    circuit_id: cid,
+    matrix: entry.matrix,
+    cell_district: cellDistrict,
+    cell_order: cellOrder,
+    // only districts with an override or an assignment are worth writing out
+    districts: Object.fromEntries(Object.entries(entry.districts)
+      .filter(([, d]) => d.o1 || d.o2 || Object.keys(d.cells).length)
+      .map(([did, d]) => [did, { order1: d.o1, order2: d.o2 }])),
+  };
+}
+
+function loadLinkedIntoLinker(obj) {
+  if (!obj.circuit_id) { fail("<b>Cannot load — export has no circuit_id.</b>"); return; }
+  if (!Array.isArray(obj.matrix)) { fail("<b>Cannot load — export has no matrix[][].</b>"); return; }
+  const entry = newLinkerEntry(obj.matrix);
+  for (const [did, meta] of Object.entries(obj.districts || {})) {
+    entry.districts[did] = { cells: {}, o1: meta.order1 || "", o2: meta.order2 || "" };
+  }
+  for (const [key, did] of Object.entries(obj.cell_district || {})) {
+    entry.districts[did] ||= { cells: {}, o1: "", o2: "" };
+    const order = obj.cell_order ? obj.cell_order[key] : undefined;
+    if (order != null) entry.districts[did].cells[key] = order;
+  }
+  linkerCircuits[obj.circuit_id] = entry;
+  openLinkerFocus(obj.circuit_id);
+}
+
+$("linkerImport").addEventListener("click", () => {
+  try {
+    const obj = JSON.parse($("linkerImportIo").value);
+    if (!Array.isArray(obj.matrix)) throw new Error("missing matrix[][]");
+    if (obj.cell_district && obj.cell_order) {
+      loadLinkedIntoLinker(obj);
+    } else if (obj.cell_colors) {
+      // an older circuit-linked@1 export: it only stored RESOLVED colors, not who-owns-what or
+      // click order, so assignments genuinely cannot be reconstructed from it — say so rather
+      // than silently dropping them (that silent drop is exactly the bug this format replaces).
+      loadIntoLinker(obj.matrix, obj.circuit_id);
+      alert(`Loaded ${obj.circuit_id}'s matrix, but this export is the old format ` +
+        `(district-block/circuit-linked@1), which only stored resolved colors — it doesn't ` +
+        `carry enough information to reconstruct district assignments. Re-assign from scratch, ` +
+        `or re-export from a live session using the current format if one is still open.`);
+    } else {
+      loadIntoLinker(obj.matrix, obj.circuit_id);
+    }
+  } catch (e) {
+    fail(`<b>Could not parse pasted JSON.</b> ${e.message}`);
+  }
+});
+
+$("linkerExport").addEventListener("click", () => {
+  if (!linkerFocusCircuit) return;
+  const json = JSON.stringify(linkerRoundTripData(linkerFocusCircuit), null, 2);
+  $("linkerIo").value = json;
+  navigator.clipboard?.writeText(json).catch(() => {});
+});
+
+// ===================== ARRANGEMENT =====================
+let arrangement = {};   // circuit_id -> { matrix, cellColors, cellDistrict, offset: [dx, dy] }
+
+// Callable per-row from the Linker's circuits table — does not require that circuit to be the
+// one currently open for editing. Arrangement is positioning-only (no further reassignment), so
+// baking resolved colors in at send-time is the one place it's correct to store them rather
+// than derive them — Arrangement has no district/order state of its own to derive FROM.
+function sendCircuitToArrangement(cid) {
+  const entry = linkerCircuits[cid];
+  if (!entry) return;
+  const cellColors = resolvedCellColors(entry);
+  const cellDistrict = Object.fromEntries(ownedCells(entry).map(({ key, owner }) => [key, owner]));
+  const prevOffset = arrangement[cid]?.offset;
+  arrangement[cid] = {
+    matrix: entry.matrix, cellColors, cellDistrict,
+    offset: prevOffset || [Object.keys(arrangement).length * 40, 0],
+  };
+  activateTab("arrangement");
+  renderArrangement();
+}
+
+function renderArrangeTable() {
+  const rows = Object.keys(arrangement).sort().map((cid) => {
+    const a = arrangement[cid];
+    const total = a.matrix.flat().reduce((x, y) => x + y, 0);
+    return `<tr>
+      <td>${byId.get(cid)?.short_name || cid}</td>
+      <td>${total}</td>
+      <td>(${Math.round(a.offset[0])}, ${Math.round(a.offset[1])})</td>
+      <td><button data-cid="${cid}" class="ghost">Remove</button></td>
+    </tr>`;
+  });
+  $("arrangeTable").querySelector("tbody").innerHTML = rows.length ? rows.join("")
+    : `<tr><td colspan="4" class="hint">No circuits sent yet — finish a circuit in the District linker, then click "Send to Arrangement".</td></tr>`;
+  $("arrangeTable").querySelectorAll("button[data-cid]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      delete arrangement[btn.dataset.cid];
+      renderArrangement();
+    });
+  });
+}
+
+function renderArrangement() {
+  renderArrangeTable();
+  const el = $("arrangeView");
+  const ids = Object.keys(arrangement);
+  if (!ids.length) { el.innerHTML = `<p class="hint">No circuits on the canvas yet.</p>`; return; }
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const cid of ids) {
+    const a = arrangement[cid];
+    const rows = a.matrix.length, cols = a.matrix[0].length;
+    const w = cols * PITCH, h = rows * PITCH;
+    x0 = Math.min(x0, a.offset[0]); y0 = Math.min(y0, a.offset[1]);
+    x1 = Math.max(x1, a.offset[0] + w); y1 = Math.max(y1, a.offset[1] + h);
+  }
+  const pad = 30;
+  const zoom = +$("arrangeZoom").value || 2;
+  const W = (x1 - x0) + pad * 2, H = (y1 - y0) + pad * 2;
+  const vbW = Math.max(W, 200), vbH = Math.max(H, 200);
+  const svgNS = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(svgNS, "svg");
+  svg.setAttribute("width", vbW * zoom); svg.setAttribute("height", vbH * zoom);
+  svg.setAttribute("viewBox", `0 0 ${vbW} ${vbH}`);
+  const originX = x0 - pad, originY = y0 - pad;
+
+  for (const cid of ids) {
+    const a = arrangement[cid];
+    const rows = a.matrix.length, cols = a.matrix[0].length;
+    const g = document.createElementNS(svgNS, "g");
+    g.setAttribute("class", "arrange-item");
+    g.setAttribute("data-circuit-id", cid);
+    g.setAttribute("transform", `translate(${a.offset[0] - originX} ${a.offset[1] - originY})`);
+    const hit = document.createElementNS(svgNS, "rect");
+    hit.setAttribute("class", "hit");
+    hit.setAttribute("x", -4); hit.setAttribute("y", -4);
+    hit.setAttribute("width", cols * PITCH + 8); hit.setAttribute("height", rows * PITCH + 8);
+    g.appendChild(hit);
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+      if (!a.matrix[r][c]) continue;
+      const key = cellKey(r, c);
+      const colorKey = a.cellColors[key];
+      const fill = colorKey ? (colorKey === "vacant" ? COLOR.vacant : COLOR[colorKey]) : "#1b1f24";
+      const rect = document.createElementNS(svgNS, "rect");
+      rect.setAttribute("x", c * PITCH); rect.setAttribute("y", r * PITCH);
+      rect.setAttribute("width", BLOCK_PX); rect.setAttribute("height", BLOCK_PX);
+      rect.setAttribute("fill", fill);
+      if (colorKey === "vacant") { rect.setAttribute("stroke", VACANT_STROKE); rect.setAttribute("stroke-width", "0.8"); }
+      g.appendChild(rect);
+    }
+    const label = document.createElementNS(svgNS, "text");
+    label.setAttribute("x", 0); label.setAttribute("y", -3);
+    label.setAttribute("font-size", "6"); label.setAttribute("font-family", "system-ui, sans-serif");
+    label.setAttribute("fill", "#5b6470");
+    label.textContent = byId.get(cid)?.short_name || cid;
+    g.appendChild(label);
+    svg.appendChild(g);
+  }
+  el.innerHTML = ""; el.appendChild(svg);
+  wireArrangeDrag(svg, originX, originY);
+}
+
+// Screen-px mouse deltas must be divided by the zoom factor to get true viewBox-unit deltas —
+// the svg's rendered size is now `zoom` times its viewBox (see renderArrangement), so a 50px
+// mouse move is only a 50/zoom true-unit move at any zoom other than 1x.
+// Grid unit = PITCH (the same centre-to-centre spacing the squares themselves use), applied to
+// the ABSOLUTE offset coordinate (not anything screen/pan-dependent), so snapped clusters'
+// internal block grids land on one shared lattice regardless of how the canvas auto-fits.
+// PITCH (8.45 = 6.5*1.3) isn't exactly representable in binary floating point, so
+// Math.round(v/PITCH)*PITCH lands a hair off true (e.g. 76.05 -> 76.050000000000011) — round
+// the RESULT back to a fixed decimal precision rather than leaving that noise to compound
+// across further drags/imports and show up in exports (operator report, real data:
+// -16.900000000000002 traced to exactly this). 3 decimal places is far finer than anything
+// visually distinguishable at this scale and is exact for any true PITCH multiple.
+function cleanCoord(v) { return Math.round(v * 1000) / 1000; }
+function snapToPitch(v) { return cleanCoord(Math.round(v / PITCH) * PITCH); }
+
+function wireArrangeDrag(svg, originX, originY) {
+  let drag = null;
+  svg.addEventListener("pointerdown", (e) => {
+    const g = e.target.closest(".arrange-item");
+    if (!g) return;
+    const cid = g.dataset.circuitId;
+    drag = { cid, g, startClientX: e.clientX, startClientY: e.clientY, startOffset: arrangement[cid].offset.slice() };
+    g.classList.add("dragging");
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp, { once: true });
+  });
+  // With snap on, this is the ONLY place rounding happens — both the live visual position and
+  // the final committed offset go through it, so the circuit always ends up exactly where it
+  // last visually sat, never at the raw (unsnapped) cursor position. The visual "stutter" the
+  // operator asked for falls out for free: rounding to the nearest grid vertex only changes
+  // its result when the cursor crosses the halfway point to a different vertex, so the on-
+  // screen position holds still between crossings instead of tracking the cursor 1:1.
+  function pointerOffset(e) {
+    const zoom = +$("arrangeZoom").value || 2;
+    const dx = (e.clientX - drag.startClientX) / zoom, dy = (e.clientY - drag.startClientY) / zoom;
+    const raw = [drag.startOffset[0] + dx, drag.startOffset[1] + dy];
+    // unsnapped drags go through cleanCoord too — a non-integer zoom (e.g. 1.5x) divides just
+    // as unevenly as PITCH does, so the same noise can appear there over repeated drags.
+    return $("snapGrid").checked ? [snapToPitch(raw[0]), snapToPitch(raw[1])] : [cleanCoord(raw[0]), cleanCoord(raw[1])];
+  }
+  function onMove(e) {
+    if (!drag) return;
+    const [nx, ny] = pointerOffset(e);
+    drag.g.setAttribute("transform", `translate(${nx - originX} ${ny - originY})`);
+  }
+  function onUp(e) {
+    window.removeEventListener("pointermove", onMove);
+    if (!drag) return;
+    arrangement[drag.cid].offset = pointerOffset(e);
+    drag.g.classList.remove("dragging");
+    drag = null;
+    renderArrangement();
+  }
+}
+
+$("arrangeZoom").addEventListener("input", () => {
+  $("arrangeZoomVal").textContent = `${(+$("arrangeZoom").value).toFixed(1)}×`;
+  renderArrangement();
+});
+
+$("arrangeExport").addEventListener("click", () => {
+  const out = {
+    schema: "district-block/arrangement@1",
+    circuits: Object.entries(arrangement).map(([cid, a]) => ({
+      circuit_id: cid, offset: a.offset, matrix: a.matrix, cell_colors: a.cellColors, cell_district: a.cellDistrict,
+    })),
+  };
+  const json = JSON.stringify(out, null, 2);
+  $("arrangeIo").value = json;
+  navigator.clipboard?.writeText(json).catch(() => {});
+});
+
+// Import REPLACES the canvas (an arrangement export is a complete snapshot, not a delta) —
+// resuming editing a saved arrangement, not merging it with whatever happened to be on screen.
+$("arrangeImport").addEventListener("click", () => {
+  try {
+    const obj = JSON.parse($("arrangeIo").value);
+    if (!Array.isArray(obj.circuits)) throw new Error("missing circuits[] array");
+    const next = {};
+    for (const c of obj.circuits) {
+      if (!c.circuit_id || !Array.isArray(c.matrix)) continue;
+      next[c.circuit_id] = {
+        matrix: c.matrix,
+        cellColors: c.cell_colors || {},
+        cellDistrict: c.cell_district || {},
+        // cleanCoord here too: an older export carrying float-noise offsets (the
+        // -16.900000000000002 class of bug) self-repairs on import rather than perpetuating.
+        offset: Array.isArray(c.offset) ? [cleanCoord(c.offset[0]), cleanCoord(c.offset[1])] : [0, 0],
+      };
+    }
+    arrangement = next;
+    renderArrangement();
+  } catch (e) {
+    fail(`<b>Could not parse pasted JSON.</b> ${e.message}`);
+  }
+});
+
+// --- tabs ---------------------------------------------------------------------
+function activateTab(name) {
+  $("tab-sampler").classList.toggle("active", name === "sampler");
+  $("tab-editor").classList.toggle("active", name === "editor");
+  $("tab-linker").classList.toggle("active", name === "linker");
+  $("tab-arrangement").classList.toggle("active", name === "arrangement");
+  $("panel-sampler").hidden = name !== "sampler";
+  $("panel-editor").hidden = name !== "editor";
+  $("panel-linker").hidden = name !== "linker";
+  $("panel-arrangement").hidden = name !== "arrangement";
+  if (name === "arrangement") renderArrangement();
+}
+$("tab-sampler").addEventListener("click", () => activateTab("sampler"));
+$("tab-editor").addEventListener("click", () => activateTab("editor"));
+$("tab-linker").addEventListener("click", () => activateTab("linker"));
+$("tab-arrangement").addEventListener("click", () => activateTab("arrangement"));
+</script>
+</body>
+</html>

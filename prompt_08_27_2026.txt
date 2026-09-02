@@ -1,0 +1,8 @@
+
+
+I'll take your recommended option, but make sure subagents keep track of the number of websearch requests they use and report them back to you, to keep a running total of how many we have left (/200). we can continue to launch subagents in future waves: estimate the number of websearch queries needed for the next round of subagents (using the previous round), and if we are safely below the limit assuming that number is uses, then we can safely launch 10 at once.
+
+
+
+
+

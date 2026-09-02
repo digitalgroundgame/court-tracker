@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>court-tracker — visual harness</title>
+<link rel="stylesheet" href="../embed/court-tracker.css">
+<style>
+  body { margin: 0; font-family: system-ui, sans-serif; background: #eef1f5; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 16px; }
+</style>
+</head>
+<body>
+<!--
+  DEV HARNESS — not shipped, not part of the widget. jsdom (tests/smoke.mjs) does no layout,
+  so this exists to drive the widget in a real browser for screenshots:
+
+    python3 -m http.server 8777
+    google-chrome-stable --headless --disable-gpu --hide-scrollbars \
+      --window-size=1200,900 --virtual-time-budget=20000 \
+      --screenshot=out.png "http://localhost:8777/tests/visual.html?c=ca8&t=0.5"
+
+  Query params:
+    c=<court_id>   select this court (default ca8)
+    drill=1        activate "View districts" / "View feeders"
+    t=<0..1>       FREEZE the vertex morph at this fraction (implies drill=1)
+    hover=<label>  hover+pin the judge icon with this label
+    majority=1     switch to the majority arc
+    w=<px>         override the widget CONTAINER width (a narrow column in a desktop page).
+                   NOT the mobile layout: that switches on a VIEWPORT media query
+                   (max-width: 640px), so shoot it with `--size 380x760` and no w param.
+
+  The morph is time-based, so `t` works by stubbing performance.now() BEFORE the module
+  loads: the widget reads one clock (nowMs()), so pinning it pins the animation.
+-->
+<div class="wrap"><div id="court-tracker-root"></div></div>
+<script>
+  const P = new URLSearchParams(location.search);
+  window.__frozen = P.has("t");
+  if (window.__frozen) {
+    // Freeze the widget's clock at the requested fraction of the morph duration (620ms).
+    let now = 0;
+    performance.now = () => now;
+    window.__setT = (frac) => { now = 620 * frac; };
+  }
+</script>
+<script type="module">
+const P = new URLSearchParams(location.search);
+const root = document.getElementById("court-tracker-root");
+if (P.get("w")) root.style.maxWidth = P.get("w") + "px";
+if (P.get("css")) {   // arbitrary CSS override, for A/B bisection from shoot.mjs et al.
+  const s = document.createElement("style");
+  s.textContent = P.get("css");
+  document.head.append(s);
+}
+
+const { mount } = await import("../embed/court-tracker.js");
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+const click = (n) => n && n.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+const hoverIt = (n) => {
+  n.dispatchEvent(new MouseEvent("mouseenter", { bubbles: true }));
+  n.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+};
+
+await mount(root);
+await wait(1000);
+
+click([...root.querySelectorAll(".ctt-selector-item")]
+  .find((i) => i.getAttribute("data-court-id") === (P.get("c") || "ca8")));
+await wait(600);
+
+if (P.get("majority")) { click([...root.querySelectorAll(".ctt-toggle")].find((b) => b.textContent.trim() === "Majority")); await wait(600); }
+if (P.get("hovershape")) {   // hover a map shape and LEAVE it hovered, so screenshots catch it
+  // fall back to the seat block: cafc has no geometry, so its block is its only target
+  const n = root.querySelector(`path[data-court-id="${P.get("hovershape")}"][data-layer="circuit"]`)
+         || root.querySelector(`path[data-court-id="${P.get("hovershape")}"]`)
+         || root.querySelector(`.ctt-block[data-court-id="${P.get("hovershape")}"]`);
+  if (n) n.dispatchEvent(new MouseEvent("mouseenter", { bubbles: true }));
+  await wait(200);
+}
+if (P.get("stow")) { click(root.querySelector(".ctt-pane-stow")); await wait(600); }
+if (P.get("affil")) {
+  const b = [...root.querySelectorAll(".ctt-affil-opt")].find((o) => o.getAttribute("data-affil") === P.get("affil"));
+  click(b); await wait(300);
+}
+if (P.get("hover")) {
+  const ic = [...root.querySelectorAll(".ctt-judge")]
+    .find((n) => n.querySelector(".ctt-judge-label")?.textContent === P.get("hover"));
+  if (ic) { hoverIt(ic); click(ic); await wait(400); }
+}
+if (P.get("perf")) {                       // count real frames + long frames during the morph
+  const fr = []; let last = performance.now(); let run = true;
+  (function tick(){ const n = performance.now(); fr.push(n - last); last = n; if (run) requestAnimationFrame(tick); })();
+  click(root.querySelector(".ctt-drill"));
+  await wait(1500); run = false;
+  const during = fr.slice(3);
+  window.__perf = { frames: during.length,
+    median: +during.slice().sort((a,b)=>a-b)[during.length>>1].toFixed(2),
+    worst: +Math.max(...during).toFixed(2),
+    over32ms: during.filter((d)=>d>32).length };
+}
+if (P.has("t") || P.get("drill")) {
+  click(root.querySelector(".ctt-drill"));
+  if (window.__frozen) {
+    // drillIn awaits a fetch before it captures its start time, so the clock must only be
+    // advanced once the morph layer exists — otherwise t0 == the frozen now and t is 0.
+    for (let i = 0; i < 400 && !root.querySelector(".ctt-morph-layer"); i++) await wait(5);
+    window.__setT(parseFloat(P.get("t")));   // rAF keeps repainting at this fixed t
+    await wait(600);
+  } else {
+    await wait(1600);
+  }
+}
+if (P.get("c2")) {   // after drill=1: select a district/feeder from the repopulated selector
+  click([...root.querySelectorAll(".ctt-selector-item")]
+    .find((i) => i.getAttribute("data-court-id") === P.get("c2")));
+  await wait(600);
+  if (P.get("majority")) {   // c2's pane opens in timeline mode; re-apply the majority toggle
+    click([...root.querySelectorAll(".ctt-toggle")].find((b) => b.textContent.trim() === "Majority"));
+    await wait(600);
+  }
+}
+if (P.get("back")) {                       // exercise the reverse morph (local -> national)
+  click(root.querySelector(".ctt-selector-back"));
+  await wait(1600);
+}
+// diagnostics for --dump-dom
+const layer = (sel) => { const n = root.querySelector(sel); return n ? getComputedStyle(n).opacity : "absent"; };
+document.body.setAttribute("data-diag", JSON.stringify({
+  national: layer(".ctt-national-layer"), local: layer(".ctt-local-layer"),
+  morph: layer(".ctt-morph-layer"), layers: root.querySelectorAll(".ctt-svg-layer").length,
+}));
+document.title = "ready";
+</script>
+</body>
+</html>

@@ -1,0 +1,59 @@
+{
+  "schema": "court-tracker/manifest@1",
+  "version": "a74234fe0362",
+  "generated": "2026-08-28T07:21:07Z",
+  "last_appointment": "2026-06-18",
+  "counts": {
+    "courts": 110,
+    "circuits": 13,
+    "districts": 94,
+    "specialized": 2,
+    "judges": 1490,
+    "photo_thumbs": 2391
+  },
+  "files": {
+    "courts": "data/courts.json",
+    "judges": {
+      "ca1": "data/judges/ca1.json",
+      "ca10": "data/judges/ca10.json",
+      "ca11": "data/judges/ca11.json",
+      "ca2": "data/judges/ca2.json",
+      "ca3": "data/judges/ca3.json",
+      "ca4": "data/judges/ca4.json",
+      "ca5": "data/judges/ca5.json",
+      "ca6": "data/judges/ca6.json",
+      "ca7": "data/judges/ca7.json",
+      "ca8": "data/judges/ca8.json",
+      "ca9": "data/judges/ca9.json",
+      "cadc": "data/judges/cadc.json",
+      "cafc": "data/judges/cafc.json",
+      "scotus": "data/judges/scotus.json"
+    },
+    "circuit_justices": "data/circuit_justices.json",
+    "seat_blocks": "data/seat_blocks.json",
+    "appointments": "data/appointments.json",
+    "president_photos": "data/president_photos.json",
+    "geo": {
+      "national": "assets/geo/national.svg",
+      "circuits": {
+        "ca1": "assets/geo/circuits/ca1.svg",
+        "ca10": "assets/geo/circuits/ca10.svg",
+        "ca11": "assets/geo/circuits/ca11.svg",
+        "ca2": "assets/geo/circuits/ca2.svg",
+        "ca3": "assets/geo/circuits/ca3.svg",
+        "ca4": "assets/geo/circuits/ca4.svg",
+        "ca5": "assets/geo/circuits/ca5.svg",
+        "ca6": "assets/geo/circuits/ca6.svg",
+        "ca7": "assets/geo/circuits/ca7.svg",
+        "ca8": "assets/geo/circuits/ca8.svg",
+        "ca9": "assets/geo/circuits/ca9.svg",
+        "cadc": "assets/geo/circuits/cadc.svg"
+      }
+    }
+  },
+  "sources": {
+    "courts_csv": true,
+    "judges_csv": true,
+    "circuit_justices_csv": true
+  }
+}

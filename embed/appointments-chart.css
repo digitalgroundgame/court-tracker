@@ -1,0 +1,191 @@
+/* appointments-chart.css — beeswarm of federal judicial appointments through presidential
+   terms. Separate widget from the tracker: all selectors prefixed `cta-`, lives entirely
+   inside #appointments-chart-root, fixed outer height so the host page never reflows. */
+
+.cta-root {
+  --cta-bg: #f7f8fa;
+  --cta-panel: #ffffff;
+  --cta-ink: #1b1f24;
+  --cta-muted: #5b6470;
+  --cta-line: #d8dde4;
+  --cta-accent: #2f6feb;
+  --cta-rep: #d1343f;
+  --cta-dem: #2f6feb;
+  --cta-rep-senior: #c28b92;
+  --cta-dem-senior: #8CA3C9;
+  --cta-departed: #16181c;
+  --cta-neutral: #9aa3ad;
+  --cta-band-rep: #f9e9e9;
+  --cta-band-dem: #e8eef9;
+
+  box-sizing: border-box;
+  position: relative;
+  width: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
+  height: 560px;
+  display: flex;
+  flex-direction: column;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  color: var(--cta-ink);
+  background: var(--cta-bg);
+  border: 1px solid var(--cta-line);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.cta-root *, .cta-root *::before, .cta-root *::after { box-sizing: border-box; }
+
+.cta-header {
+  flex: 0 0 auto; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+  padding: 10px 14px; border-bottom: 1px solid var(--cta-line); background: var(--cta-panel);
+}
+.cta-title { font-size: 15px; font-weight: 650; }
+.cta-subtitle { font-size: 12px; color: var(--cta-muted); }
+
+.cta-controls {
+  flex: 0 0 auto; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 8px 14px; border-bottom: 1px solid var(--cta-line); background: var(--cta-panel);
+  font-size: 12px;
+}
+.cta-controls-label { color: var(--cta-muted); }
+.cta-toggle {
+  border: 1px solid var(--cta-line); background: transparent; color: inherit; font: inherit;
+  font-size: 12px; padding: 4px 10px; cursor: pointer;
+}
+.cta-toggle.cta-is-active { background: var(--cta-accent); color: #fff; border-color: var(--cta-accent); }
+.cta-mark-switch { display: inline-flex; }
+.cta-mark-opt { border-radius: 0; margin-left: -1px; }
+.cta-mark-opt:first-of-type { border-radius: 6px 0 0 6px; margin-left: 0; }
+.cta-mark-opt:last-of-type { border-radius: 0 6px 6px 0; }
+.cta-span { display: inline-flex; align-items: center; gap: 6px; }
+.cta-span-arrow { padding: 2px 8px; border-radius: 6px; font-size: 14px; line-height: 1.2; }
+.cta-span-slider { position: relative; width: 230px; height: 30px; }
+.cta-span-slider input[type="range"] { width: 100%; margin: 0; position: absolute; top: 2px; left: 0; }
+/* Tick bars CROSS the slider track (drawn above it, click-through), one per discrete stop;
+   the year numbers sit below, centre-aligned to their bar. The scale is non-linear in
+   years — linear in stops. */
+.cta-span-marks { position: absolute; top: 3px; height: 14px; left: 0; right: 0; pointer-events: none; }
+.cta-span-marks span { position: absolute; top: 0; width: 1px; height: 100%; background: #aab3bf; }
+.cta-span-ticks { position: absolute; bottom: 0; left: 0; right: 0; height: 11px; font-size: 9px; color: var(--cta-muted); pointer-events: none; }
+.cta-span-ticks span { position: absolute; transform: translateX(-50%); }
+.cta-span-val { min-width: 3.5em; }
+
+.cta-body { flex: 1 1 auto; display: flex; min-height: 0; }
+.cta-chart-wrap {
+  flex: 1 1 auto; min-width: 0; position: relative; background: var(--cta-panel);
+  container-type: inline-size; container-name: cta-chart;
+}
+.cta-chart { position: absolute; inset: 0; width: 100%; height: 100%; cursor: grab; touch-action: pan-y; }
+.cta-chart.cta-dragging { cursor: grabbing; }
+
+.cta-band-rep { fill: var(--cta-band-rep); }
+.cta-band-dem { fill: var(--cta-band-dem); }
+.cta-band-label { font-size: 11px; fill: var(--cta-muted); }
+.cta-band-pres-ring { stroke-width: 1.3; }
+.cta-band-pres-ring.cta-rep { stroke: var(--cta-rep); }
+.cta-band-pres-ring.cta-dem { stroke: var(--cta-dem); }
+.cta-president-line { stroke: #8b95a3; stroke-width: 1; stroke-dasharray: 4 4; }
+.cta-axis { stroke: var(--cta-line); stroke-width: 1; }
+.cta-tick-year { stroke: #c3cad4; stroke-width: 1; }
+.cta-tick-month { stroke: #e3e8ee; stroke-width: 1; }
+.cta-tick-label { font-size: 11px; fill: var(--cta-muted); }
+
+.cta-dot { stroke: rgba(255,255,255,0.7); stroke-width: 0.6; cursor: pointer; }
+.cta-dot.cta-active-Republican { fill: var(--cta-rep); }
+.cta-dot.cta-active-Democratic { fill: var(--cta-dem); }
+.cta-dot.cta-senior-Republican { fill: var(--cta-rep-senior); }
+.cta-dot.cta-senior-Democratic { fill: var(--cta-dem-senior); }
+.cta-dot.cta-departed { fill: var(--cta-departed); }
+.cta-dot.cta-neutral { fill: var(--cta-neutral); }
+/* SCOTUS photo dots: ring colored like a plain dot would be; former = black ring + gray photo */
+.cta-scotus-ring { fill: none; stroke-width: 2.5; }
+.cta-scotus-ring.cta-active-Republican { stroke: var(--cta-rep); }
+.cta-scotus-ring.cta-active-Democratic { stroke: var(--cta-dem); }
+.cta-scotus-ring.cta-departed { stroke: #000; }
+.cta-scotus-photo.cta-gray { filter: saturate(0) opacity(0.85); }
+
+/* Same-person group highlight (hover) + pinned selection */
+.cta-dot-hl { stroke: #ffcf33; stroke-width: 2.5; fill: none; pointer-events: none; }
+/* While a mark mode is active, a marked dot is the SAME yellow as this hover ring — JS
+   (highlightPerson) inserts this thin black ring between the dot and the ring so the two
+   stay visually distinct; absent (and the outer ring sits closer in) when not marking. */
+.cta-dot-hl-border { stroke: #000; stroke-width: 1; fill: none; pointer-events: none; }
+
+/* Affiliation marking: the active mark mode turns reported dots YELLOW — grayed/darker
+   yellow for seniors; SCOTUS photo dots get a yellow ring instead. A judge reported for
+   BOTH carries both classes. */
+.cta-root[data-mark="fedsoc"] .cta-dot.cta-aff-fedsoc,
+.cta-root[data-mark="acs"] .cta-dot.cta-aff-acs { fill: #e8b400; }
+.cta-root[data-mark="fedsoc"] .cta-dot.cta-aff-fedsoc.cta-sen,
+.cta-root[data-mark="acs"] .cta-dot.cta-aff-acs.cta-sen { fill: #ad9440; }
+.cta-root[data-mark="fedsoc"] .cta-scotus-ring.cta-aff-fedsoc,
+.cta-root[data-mark="acs"] .cta-scotus-ring.cta-aff-acs { stroke: #e8b400; }
+/* affiliation caveat: pinned to the docked panel's bottom, visible only while marking */
+.cta-explain-btn {
+  margin-left: auto; border: 0; background: transparent; color: var(--cta-muted);
+  font: inherit; font-size: 12px; font-style: italic; cursor: pointer; text-decoration: underline dotted;
+}
+.cta-explain-btn:hover { color: var(--cta-accent); }
+/* explainer overlay: display-only, all input passes through to the chart */
+.cta-explainer { position: absolute; inset: 0; pointer-events: none; z-index: 4; }
+.cta-explainer-svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.cta-explainer-arrow { fill: none; stroke: #243040; stroke-width: 1.8; }
+.cta-explainer-box {
+  position: absolute; max-width: 210px; background: rgba(255,255,255,0.96);
+  border: 1px solid #b9c1cc; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+  padding: 7px 9px; font-size: 11px; line-height: 1.4; color: var(--cta-ink);
+}
+.cta-explainer-intro { max-width: 250px; }
+.cta-explainer-nobg { background: transparent; border: 0; box-shadow: none; }
+.cta-caveat { display: none; font-size: 10px; font-style: italic; color: var(--cta-muted); margin-top: auto; padding-top: 8px; }
+.cta-root[data-mark="fedsoc"] .cta-caveat, .cta-root[data-mark="acs"] .cta-caveat { display: block; }
+
+/* docked detail panel (same interaction contract as the tracker's) */
+.cta-detail {
+  flex: 0 0 232px; width: 232px; border-left: 1px solid var(--cta-line);
+  background: var(--cta-panel); padding: 10px 12px; font-size: 12px; line-height: 1.45;
+  overflow-y: auto; position: relative; display: flex; flex-direction: column;
+}
+.cta-detail-content { flex: 1 1 auto; }
+.cta-detail.cta-pinned { box-shadow: inset 0 0 0 1px var(--cta-accent); }
+/* (×) unpin — visible only while pinned (keyboard also unpins; clicks elsewhere never do).
+   Prominent round button, same treatment as the tracker's pane controls. */
+.cta-detail-close {
+  display: none; position: absolute; top: 6px; right: 8px; z-index: 3;
+  border: 1px solid #b9c1cc; background: var(--cta-panel); color: var(--cta-ink);
+  cursor: pointer; width: 28px; height: 28px; border-radius: 50%; font-size: 17px; line-height: 1;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.10);
+}
+.cta-detail-close:hover { background: var(--cta-bg); border-color: var(--cta-accent); color: var(--cta-accent); }
+.cta-detail.cta-pinned .cta-detail-close { display: block; }
+.cta-detail > div { margin: 2px 0; }
+.cta-detail-name { font-size: 14px; font-weight: 650; margin-bottom: 4px; }
+/* At-a-glance court: the short name (E.D. Ky. / 4th Cir. / SCOTUS) bold-italic and larger
+   (but below the judge's name), with the full court name on its own following line. */
+.cta-detail-court { font-size: 13px; font-weight: 700; font-style: italic; }
+.cta-detail-courtname { color: var(--cta-muted); }
+.cta-detail-hint { color: var(--cta-muted); font-style: italic; text-align: center; padding: 18px 4px; }
+.cta-detail-photo {
+  width: 72px; height: 72px; border-radius: 50%; margin: 2px auto 8px; overflow: hidden;
+  border: 3px solid var(--cta-neutral); background: #e8ebf0; display: flex;
+  align-items: center; justify-content: center; font-size: 22px; font-weight: 650; color: #5c6775;
+}
+.cta-detail-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.cta-detail-photo.cta-rep { border-color: var(--cta-rep); }
+.cta-detail-photo.cta-dem { border-color: var(--cta-dem); }
+.cta-detail-photo.cta-black { border-color: #000; }
+.cta-detail-photo.cta-gray img { filter: saturate(0) opacity(0.85); }
+.cta-reorg-line { font-style: italic; color: var(--cta-muted); }
+.cta-affil-line { font-style: italic; color: var(--cta-muted); }
+.cta-photo-credit { margin-top: 4px; font-size: 10px; color: var(--cta-muted); }
+.cta-tag { font-size: 10px; font-weight: 600; background: #eef1f5; color: var(--cta-muted); border-radius: 4px; padding: 1px 5px; vertical-align: middle; }
+
+.cta-status { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center; color: var(--cta-muted); font-size: 13px; padding: 16px; }
+
+/* mobile: panel below the chart */
+@media (max-width: 640px) {
+  .cta-root { height: 680px; }
+  .cta-body { flex-direction: column; }
+  .cta-chart-wrap { flex: 1 1 auto; min-height: 0; }
+  .cta-detail { flex: 0 0 200px; width: auto; border-left: 0; border-top: 1px solid var(--cta-line); }
+}

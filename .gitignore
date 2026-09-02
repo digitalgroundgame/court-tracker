@@ -1,0 +1,25 @@
+# Dependencies (restore with `npm install`)
+node_modules/
+
+# Pipeline resumability cache — raw API/web responses + pre-crop photo
+# originals. Not source of truth, not read by the app; regenerate by
+# re-running the collect/enrich scripts (see CLAUDE.md, DATA_SOURCES.md).
+data/cache/
+
+# Staging output of scripts/qgis_export.py — duplicates assets/geo/, which
+# is the actual consumed geometry.
+data/out/
+
+# DevTools performance traces from freeze-hunting sessions (see PROGRESS.md).
+traces/
+
+# Python bytecode cache
+__pycache__/
+*.pyc
+
+# OS/editor cruft
+.DS_Store
+*.swp
+
+# Claude Code runtime lock state (ephemeral, per-session)
+.claude/scheduled_tasks.lock

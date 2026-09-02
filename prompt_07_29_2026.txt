@@ -1,0 +1,60 @@
+
+include, in < Timeline | Majority >, a new Change option to make < Timeline | Majority | Change >. it should change the info pane view to a streamgraph, which then appears in several quick stages: where the individual streams are revealed (as polygons, fading in and sliding into their target position on the screen) going from inner->outer, as per tracing the timeline backwards but broken up into two more-current-at-center-and-older-at-periphery partisan color-sides of the above-below party-sorted streams (let's test both (1) alternating shades of red or blue per half, and (2) decreasingly gray/less vibrant shades of blue or red per half). each streak should be separated by a line. set at the beginning of the graph view should be a vertical black bar which spans the height of the "graph window." it has a notable thickness and very flat arrow heads whose points track the zeroline. clicking and dragging the bar causes it to shift horizontally to whereever the user puts it (within the graph view limits). associated with the bar and moving with it, should be icons of the appointing presidents (stacked in the sorting described before, and centered to the current vertical-bar segment of their stream in the streamgraph; but then pushed apart by an icon overlap buffer/threshold), and a number for the number of judges they had on the court whose view is currently selected (as indicated in the selector bar), at the time along the timeline x-axis where the vertical bar is placed. those icons and their text should get a yellow outline and the number text bolded (only one set at a time), with an on-hover activation occuring for them and the stream polygon which corresponds to the president icon.
+
+if any of the details of this seem incomplete, please ask questions so i can clarify.
+
+i'd also like to make some other, more minor changes:
+
+1. there is an aliasing problem in both interactives where the profile pictures of judges do not scale down correctly, and they look strange at that reduced size due to aliasing. whereas, when i shrink the picture opened in a new tab, it looks fine at the smaller size.
+
+2. in the info pane in the map interactive (for the Majority view only), i would like to change the current "count senior judges in the majority" option to a "Seniors: < Hide | Show | Include >", to do exactly those things (with Hide as the starting behavior/option, concealing senior judges on the Majority view; Show showing them in the outer ring arrangement only, and Include including them with the active judges).
+
+3. having implemented a president icon system to handle the "Change" view option request, on the timeline interactive, i would like a president's icon to appear to the right of their name and to the left of their appointment numbers, with the text being aligned vertically to align with the horizontal diameter of the icon.
+
+
+--------------------------------------------------------------------------------
+
+
+alright, this is a nice first version, but there are several problems/needed changes to note:
+
+1. the "hover a judge for details" docked tooltip should not show up or take space in the Change view of the tooltip.
+
+2. the icon change was somewhat counterproductive. intentionally applying a blur makes the photos worse. i'd like the aliasing which occurs, perhaps as a result of downsizing or perhaps as a result of the way the image is being shown (i'm not sure what causes it), to be solved without causing other problems.
+
+3. the hitbox for the draggable bar should be a bit wider, symmetrically. in addition to clicking and dragging the bar, when a part of the streamgraph view is clicked, it should snap the bar to that x-position.
+
+4. the icons and numbers in the new Change view are too small, and overlap with the draggable bar too much (they should be moved more to the left, and numbers put on the left side of the icon instead of the right). the icons in the timeline interactive are also too small.
+
+5. the stream polygons are too jagged. i believe some of this is avoidable when working with small counts, and some of it is also caused by the "more-current-at-center-and-older-at-periphery" arrangement. i'd like to flip this on its head and try that out.
+
+6. currently, it looks like the Change view has a separate buffer box mechanic for D/R icons; the bumping of icons should occur regardless of party. furthermore, the icon location is not properly aligned with the stream.
+
+7. in the Change view of the info pane, the Mark: < None | FedSoc | ACS > option should not show up.
+
+8. there is currently a problem with the individual stream polygons. first, their on-hover black outlining is inconsistent, and appears to get disrupted by the adjacent polygons. furthermore, parts of the polygons which represent "0 judges of thickness during this time" should not be part of the geometry, as it is unnecessary complexity that we don't want an outline appearing for.
+
+9. the timeline shown should scale (along the x-axis range) to exclude portions of time on the oldest/latest edge of the range, which consecutively have zero judges of thickness from any presidents.
+
+10. there should be dashed lines in the background with plain-text president labels, like in the judicial appointments timeline, with the red/blue pastel background colors. no need for year labels for now.
+
+
+--------------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
