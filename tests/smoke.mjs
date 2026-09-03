@@ -79,9 +79,9 @@ console.log("mount + national view");
 await mod.mount(root);
 await sleep(30);
 const allItems = root.querySelectorAll(".ctt-selector .ctt-selector-item");
-assert(allItems.length === 14, `selector lists SCOTUS + 13 circuits (got ${allItems.length})`);
-assert(allItems[0].getAttribute("data-court-id") === "scotus", "SCOTUS is the first selector entry");
-const circuitItems = [...allItems].filter((i) => i.getAttribute("data-court-id") !== "scotus");
+assert(allItems.length === 14, `selector lists Summary + 13 circuits (got ${allItems.length})`);
+assert(allItems[0].getAttribute("data-court-id") === "summary", "Summary is the first selector entry");
+const circuitItems = [...allItems].filter((i) => i.getAttribute("data-court-id") !== "summary");
 assert(root.querySelector(".ctt-svg-layer svg"), "national SVG injected");
 const g = root.querySelector(".ctt-svg-layer svg g");
 assert(/scale\(1,-1\) translate\(0, -?\d/.test(g.getAttribute("transform")) && !g.getAttribute("transform").includes("--"),
@@ -410,7 +410,7 @@ assert(root.querySelectorAll(".ctt-judge-stage .ctt-judge").length >= 7, "moed j
 assert(!root.querySelector(".ctt-judge-stage .ctt-justice"), "district pane has NO circuit justice");
 click(back);
 await sleep(30);
-assert(root.querySelectorAll(".ctt-selector .ctt-selector-item").length === 14, `back to national: SCOTUS + 13 circuits again`);
+assert(root.querySelectorAll(".ctt-selector .ctt-selector-item").length === 14, `back to national: Summary + 13 circuits again`);
 // Drill-out reverses the same morph, then restores the national layer.
 assert(root.querySelector(".ctt-morph-layer"), "back also morphs (local -> national), not a cut");
 await waitFor(() => !root.querySelector(".ctt-morph-layer"), 2000);
@@ -881,10 +881,10 @@ console.log("chief star scope (2026-07-19): court's own chief only, never the Ci
 click(root.querySelector('.ctt-selector-item[data-court-id="ca4"]')); await sleep(60);
 assert(!root.querySelector(".ctt-justice .ctt-chief-badge"),
   "Roberts as 4th-Circuit Justice carries NO chief star (he is not that court's chief)");
-click(root.querySelector('.ctt-selector-item[data-court-id="scotus"]')); await sleep(60);
+click(root.querySelector('.ctt-selector-item[data-court-id="summary"]')); await sleep(60);
 assert(root.querySelector(".ctt-judge-stage .ctt-chief-badge"),
-  "on the SCOTUS bench itself the Chief Justice's star still shows");
-click(root.querySelector('.ctt-selector-item[data-court-id="scotus"]')); await sleep(30);  // deselect
+  "on the SCOTUS bench itself (Summary tab, default sub-view) the Chief Justice's star still shows");
+click(root.querySelector('.ctt-selector-item[data-court-id="summary"]')); await sleep(30);  // deselect
 
 console.log("justice label uses the SURNAME, not a generational suffix (2026-07-19)");
 click(root.querySelector('.ctt-selector-item[data-court-id="ca3"]')); await sleep(60);
@@ -906,10 +906,21 @@ assert(root.querySelector(".ctt-pane").classList.contains("ctt-is-open"),
   "the edge tab still brings the pane back up");
 click(natBlock("ca2")); await sleep(20);   // deselect -> clean state
 
-console.log("SCOTUS entry + pane (operator ask, 2026-07-18)");
-click(root.querySelector('.ctt-selector-item[data-court-id="scotus"]')); await sleep(60);
-assert(/Supreme Court/.test(root.querySelector(".ctt-pane-title").textContent), "SCOTUS pane opens");
-const scMeta = root.querySelector(".ctt-pane-meta").textContent;
+console.log("Summary pane (operator ask, 2026-09-03 — replaces the old lone SCOTUS entry)");
+click(root.querySelector('.ctt-selector-item[data-court-id="summary"]')); await sleep(60);
+assert(root.querySelector(".ctt-pane-title").textContent === "Summary", "Summary pane opens");
+assert(/Supreme Court.*Courts of Appeals.*District Courts/.test(root.querySelector(".ctt-pane-meta").textContent),
+  "Summary pane meta names all three sections");
+const summarySwitch = root.querySelector(".ctt-summary-switch");
+assert(summarySwitch, "Summary sub-tab switch exists");
+const summaryTabs = [...summarySwitch.querySelectorAll(".ctt-mode-opt")].map((b) => b.textContent);
+assert(JSON.stringify(summaryTabs) === JSON.stringify(["SCOTUS", "Appellate", "District"]),
+  `Summary sub-tabs are SCOTUS|Appellate|District in order (got ${JSON.stringify(summaryTabs)})`);
+assert(summarySwitch.querySelector(".ctt-mode-opt.ctt-is-active").textContent === "SCOTUS",
+  "SCOTUS is the default Summary sub-tab");
+assert(/Supreme Court of the United States/.test(root.querySelector(".ctt-summary-subtitle").textContent),
+  "SCOTUS sub-view names the court");
+const scMeta = root.querySelector(".ctt-summary-content .ctt-pane-meta").textContent;
 assert(/9 authorized · 9 active · 0 vacant/.test(scMeta) && !/senior/.test(scMeta),
   `SCOTUS meta has no senior figure: "${scMeta}"`);
 const scIcons = root.querySelectorAll(".ctt-judge-stage .ctt-judge");
@@ -917,14 +928,56 @@ assert(scIcons.length === 9, `nine justices rendered (${scIcons.length})`);
 assert(!root.querySelector(".ctt-judge-stage .ctt-justice"),
   "justices are ordinary party-ringed icons, not purple Circuit-Justice styling");
 assert([...scIcons].some((n) => n.querySelector(".ctt-chief-badge")), "the Chief Justice is badged");
-click(toggle("Timeline")); await sleep(20);
+assert(!["Timeline", "Majority", "Change"].some((label) => toggle(label)),
+  "Timeline/Majority/Change do not exist at all for Summary > SCOTUS (operator: eliminated)");
 assert(!root.querySelector(".ctt-majority-note") && !root.querySelector(".ctt-always-note"),
-  "SCOTUS pane has NO majority/senior note in timeline mode");
-click([...root.querySelectorAll(".ctt-toggle")].find((b) => b.textContent === "Majority")); await sleep(20);
-assert(!root.querySelector(".ctt-majority-note") && !root.querySelector(".ctt-always-note"),
-  "SCOTUS pane has NO note in majority mode either (operator: majority over the nine needs no explainer)");
-assert(root.querySelector(".ctt-majority-count"), "SCOTUS majority arc still shows the x/y count");
-click(toggle("Timeline")); await sleep(20);
+  "Summary > SCOTUS has no majority/senior note (same rule as the old direct SCOTUS pane)");
+assert(root.querySelector(".ctt-majority-count"), "Summary > SCOTUS shows the x/y majority count");
+
+console.log("Summary > SCOTUS: doubled icons + split double-ring geometry (operator ask)");
+const scaleTx = [...scIcons].find((n) => /scale\(2\)/.test(n.style.transform));
+assert(scaleTx, "at least one justice icon carries a 2x scale transform");
+// jsdom lays nothing out (clientWidth/Height are always 0), which makes the arc geometry
+// FULLY DETERMINISTIC (majorityDims/majorityStageHeight fall back to their fixed constants) —
+// exploit that to assert the exact ring split rather than just "something rendered".
+const cx = 300, cy = 292; // w=600 fallback -> cx=w/2=300; H=360 fallback -> cy=H-68=292
+const dist = (n) => {
+  const m = /translate\(([-\d.]+)px, ([-\d.]+)px\)/.exec(n.style.transform);
+  const x = +m[1] + 26, y = +m[2] + 26;           // ICON=26 half-footprint added back
+  return { r: Math.hypot(x - cx, y - cy), y };
+};
+const radii = [...scIcons].map(dist).map((d) => Math.round(d.r));
+const uniqRadii = [...new Set(radii)].sort((a, b) => a - b);
+assert(uniqRadii.length === 2, `exactly 2 distinct ring radii (got ${JSON.stringify(uniqRadii)})`);
+const innerCount = radii.filter((r) => r === uniqRadii[0]).length;
+const outerCount = radii.filter((r) => r === uniqRadii[1]).length;
+assert(innerCount === 3 && outerCount === 6,
+  `3 inner + 6 outer seats (got inner=${innerCount}, outer=${outerCount})`);
+// A seat anchored exactly at 180°/0° (the standard, un-raised endpoint) sits exactly ON the
+// horizontal (y === cy, since sin(0)=0). The inner ring's endpoints are raised 15° off that —
+// so NONE of its 3 seats should land on the horizontal, while the outer ring's genuine 180°/0°
+// endpoints (unraised, per spec) still should.
+const onHorizon = (y) => Math.abs(y - cy) < 1;
+const innerYs = [...scIcons].map(dist).filter((d) => Math.round(d.r) === uniqRadii[0]).map((d) => d.y);
+const outerYs = [...scIcons].map(dist).filter((d) => Math.round(d.r) === uniqRadii[1]).map((d) => d.y);
+assert(innerYs.every((y) => !onHorizon(y)), "no inner-ring seat sits on the horizontal (all raised off 180°/0°)");
+assert(outerYs.filter(onHorizon).length === 2, "outer ring's two endpoint seats sit exactly on the horizontal (standard, unraised)");
+
+console.log("Summary > Appellate: blank placeholder (operator: come back to it later)");
+click(toggle("Appellate")); await sleep(20);
+assert(/Coming soon/.test(root.querySelector(".ctt-summary-content").textContent), "Appellate shows a placeholder");
+assert(!root.querySelector(".ctt-judge-stage"), "no SCOTUS bench lingers under Appellate");
+
+console.log("Summary > District: static cartogram preview (no map deployment yet)");
+click(toggle("District")); await sleep(60);
+const clusters = root.querySelectorAll(".ctt-district-cluster");
+assert(clusters.length === 12, `cartogram renders all 12 geographic circuits (got ${clusters.length})`);
+assert(root.querySelectorAll(".ctt-district-sq").length > 0, "cartogram renders district squares");
+assert(root.querySelectorAll(".ctt-district-sq.ctt-sq-rep, .ctt-district-sq.ctt-sq-dem").length > 0,
+  "cartogram squares reuse the map's own R/D palette classes");
+
+click(toggle("SCOTUS")); await sleep(20);   // back to the default sub-view for a clean state
+click(root.querySelector('.ctt-selector-item[data-court-id="summary"]')); await sleep(20);  // deselect
 
 console.log("appointments beeswarm widget (separate module, session aj)");
 {

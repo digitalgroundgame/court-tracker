@@ -10,7 +10,117 @@
 tracker (Phase-4 tail items open, PLUS a brand-new third pane view — "Change", built session
 (aw), operator review round addressed session (ax)) and the appointments beeswarm
 (feature-complete first version, operator refinement rounds ongoing; see sessions ai→at, aw).
-**Last updated:** 2026-09-01
+**Last updated:** 2026-09-03
+
+> **SESSION (bs), 2026-09-03 — Summary tab (SCOTUS ring-split + Appellate stub + District
+> cartogram preview); a NEW GitHub push-every-session protocol also lands this session.**
+> Two things happened, unrelated in substance: (1) the operator updated `CLAUDE.md` §7 with a
+> new step 6 (session (br), which this session's read of the files picked up) — commit + push
+> to `origin/main` is now part of finishing every session, same footing as updating this file,
+> done without being asked. This entry is the first one written under that protocol; the
+> commit/push happens right after this file is saved, per the new rule. (2) The bulk of the
+> session: the operator's own earlier feature proposal (embedding the district-block assembly
+> directly on the main map view) turned out too large for a fixed on-map position once the real
+> scale of the cartogram became clear (see the 2026-09-01 sessions (bi)-(bq) building the
+> standalone tool that produces it) — so the operator redesigned it as a new **Summary** tab:
+> the old lone "Supreme Court" selector entry is replaced by one "Summary" destination with its
+> own SCOTUS | Appellate | District sub-tab (default SCOTUS).
+> - **Data relocated + wired into the pipeline first**, per the operator's own instruction
+>   ("move the file into a location consistent with the data categorization standards"):
+>   `district_arrangement_US_shape.json` (repo root, the finished 12-circuit cartogram export
+>   from the district-block-builder tool) → `data/district_arrangement.json`. Documented as
+>   **Table F** in `docs/CODEBOOK.md`. `scripts/build_assets.py` now passes it through into the
+>   manifest (`files.district_arrangement`, folded into the version hash like every other
+>   asset) and runs a **drift check** (`check_district_arrangement_drift`) comparing the
+>   export's frozen `cell_colors` composition per district against LIVE `seat_blocks.json`
+>   counts — WARNS (doesn't fail the build) when they no longer match, rather than either
+>   silently going stale or guessing at a "fix": the export genuinely lacks the per-cell
+>   click-order/reading-order state that determined which SPECIFIC block got which color (only
+>   `circuit-linked@2`, the tool's intermediate per-circuit format, has that), so recomputing
+>   colors here without it would just reshuffle them within a district, not actually refresh
+>   them. Verified the check fires correctly on a synthetic mismatch and stays silent on the
+>   current (accurate) data.
+> - **Selector bar**: `addSummaryButton()` replaces the old `addSelectorGroup(sel, "Supreme
+>   Court", ...)` call — one larger, bolder button (`.ctt-summary-btn`), same
+>   `.ctt-selector-item` mechanics (`highlightSelector`/`deselect` needed zero special-casing,
+>   since they already operate generically on `data-court-id`). New `selectSummary()` mirrors
+>   `selectCourt()` for the `"summary"` sentinel (not a real `courts.csv` row).
+> - **SCOTUS sub-view**: reuses the EXACT same bench-building/hover/pin machinery every other
+>   court's Majority view already has (`buildBenchModel`, `renderJudgeIcons`, the docked
+>   `S.ui.detail` panel, `onIconHover`/`onIconClick`) — no SCOTUS-specific reimplementation of
+>   any of that. What's genuinely new: (a) Timeline/Change are gone entirely for this view (no
+>   mode switch renders at all — operator: "eliminating Timeline and Change"), permanently
+>   pinned to majority mode; (b) a fixed **6 outer + 3 inner** two-ring split (`layoutScotusRing`)
+>   instead of the general `planRings` N-seat algorithm every other court's Majority view uses —
+>   deliberately a separate function, since SCOTUS is always exactly 9 authorized seats, never a
+>   computed ring count; (c) the inner ring's first/last seats are raised 15° off the horizontal
+>   (165°/15° instead of 180°/0°) while the middle stays at 90°, per the operator's exact spec;
+>   fill order is the SAME algorithm as every other court (`innerArcSeats`: R | vacancies | D,
+>   oldest→newest within party, then protractor/angle order across all rings, ties inner-first);
+>   (d) icons render bigger ("since it is SCOTUS").
+>   - **Icon-doubling implementation detail worth knowing**: `place(node, cx, cy, show, scale)`
+>     gained a 4th param appending `scale(${scale})` to the existing translate transform — and
+>     needed NO change to the existing `cx - ICON` centering math, because CSS composes
+>     `translate(...) scale(...)` around the box's own default transform-origin (its center),
+>     unaffected by the translate itself. Verified this analytically before relying on it, then
+>     confirmed visually.
+>   - **Responsive scale, not a fixed 2x — a real bug caught and fixed via mobile
+>     screenshot, not just desktop review.** A first pass hard-coded `scale=2` with the ring
+>     radii clamped only by the stage's available width/height — this fixed an EARLIER bug
+>     (icons overflowing past the mobile viewport edge, radii previously had a `Math.max(100,
+>     ...)` floor that ignored how narrow the stage was) but traded it for a second, equally
+>     broken failure mode: at ~380px mobile width, 6 full-size doubled icons spanning 180°
+>     physically overlapped each other, since capping the RADIUS alone does nothing to stop
+>     fixed-size icons from touching once they're packed closer together. Fixed properly by
+>     solving for the largest scale (≤2x, ≥1x) at which the outer ring's own minimum
+>     non-overlap radius (6 icons at 36° apart need chord ≥ ~1.05×diameter) still fits the
+>     stage's clearance — desktop (plenty of room) still resolves to exactly scale=2 with the
+>     original generous radii (screenshot-diffed as pixel-identical to the pre-fix desktop
+>     render); mobile now shrinks smoothly instead of either clipping or overlapping.
+> - **Appellate sub-view**: an explicit "Coming soon." placeholder — operator: "leave it blank
+>   and come back to it later." Nothing else built for it.
+> - **District sub-view — SCOPE NOTE, read before touching this again.** The operator's full
+>   spec for this sub-view is a large, self-contained feature: a "liftable" cartogram that can
+>   be deployed onto the actual map (shrinking into a fixed on-map position via a "Set upon
+>   map" button that flips the summary pane up while the assembly visually migrates), a
+>   dedicated docked per-district detail viewer + click-to-pin (distinct from the judge-detail
+>   panel), +/- resize controls, free drag-repositioning on the map, a circuit-scoped fixed
+>   sub-assembly that stays present through a district drill-in (excluding cadc/cafc), and a
+>   hover-triggered blue tint on the corresponding district's actual map SHAPE (not just the
+>   cartogram block). **None of that is built this session** — it is comparable in scope to the
+>   ENTIRE district-block-builder tool (sessions (bi)-(bq), ~9 sessions to reach its current
+>   four-stage state), and building it well needs its own dedicated, tested pass rather than a
+>   bolt-on here. What IS built: `renderSummaryDistrict()` — a **static preview** of the
+>   assembled cartogram inside the Summary pane, lazy-loaded once (`loadDistrictArrangement()`,
+>   cached in `S.districtArrangement`), rendered as one shared SVG with each circuit's matrix
+>   placed at its saved `offset` (screenshot-confirmed: renders the full recognizable US-shaped
+>   outline). Colors reuse the map's own established `.ctt-sq-rep`/`.ctt-sq-dem`/`.ctt-sq-other`/
+>   `.ctt-sq-vacant` classes directly (not a second palette). **Hover-grow IS implemented and
+>   matches CLAUDE.md's "district court-square synced block growing on-hover" requirement
+>   literally**: `wireDistrictCartogramHover()` grows every block sharing a `data-district-id`
+>   together (CSS `transform: scale(1.35)`, `transform-box: fill-box` so it scales around each
+>   square's own center in SVG space) and shows a tooltip with the district's name AND its LIVE
+>   `seat_blocks.json` composition (never the frozen export data — screenshot-verified: C.D.
+>   Cal.'s 28-block cluster grows as one cohesive shape, tooltip reads "9 R · 19 D" matching
+>   current data, not whatever the export happened to freeze). This static-preview pane is
+>   exactly the content the future "Set upon map" feature will need to lift FROM — building it
+>   now was not wasted groundwork.
+> - **Tested**: extended `tests/smoke.mjs` in place of the now-removed direct-SCOTUS-selector
+>   assertions (that selector item no longer exists) — new coverage includes exact ring-split
+>   geometry (3 inner/6 outer by radius, confirmed via jsdom's fully-deterministic fallback
+>   layout constants: w=600→cx=300, H=360→cy=292, so radii/angles are exact, not approximate),
+>   the 15° raise (no inner-ring seat sits exactly on the horizontal; the outer ring's two true
+>   180°/0° endpoints do), the 2x scale transform, the Appellate placeholder, and the District
+>   cartogram (12 circuit clusters, R/D squares present). All prior suites
+>   (`tests/browser-checks.mjs`, `tests/stress.mjs`) still pass unmodified. Screenshot-verified
+>   desktop (SCOTUS/Appellate/District all three) and mobile 380px (SCOTUS, before AND after
+>   the responsive-scale fix — the mobile screenshot is what caught the overlap bug in the
+>   first place; caught, fixed, and re-verified in the same session rather than shipped and
+>   left for a later mobile pass, unlike most of this project's other mobile-layout work).
+> - Next: the District "lift onto the map" deployment mechanic (see the scope note above) is
+>   the natural next large piece — the static preview built this session is its starting point,
+>   not a detour from it. Also unchanged from earlier sessions: nothing about the
+>   district-block-builder TOOL itself needs further work right now.
 
 > **SESSION (bq), 2026-09-01 — root-caused + fixed the float-noise bug in snapped offsets.**
 > Operator report: exported arrangement data had ugly near-integer values like
@@ -1058,6 +1168,33 @@ Prove the whole app shell and asset schema on one circuit with hand-authored sam
 - Next: ...
 - Blockers: ...
 -->
+
+### 2026-09-03 (bs) — Summary tab (SCOTUS ring-split, Appellate stub, District cartogram preview)
+- Phase: 4. First session under the new (br) commit/push-every-session protocol. Replaced the
+  old lone "Supreme Court" selector entry with a "Summary" destination (SCOTUS | Appellate |
+  District sub-tabs, default SCOTUS) — the operator's own redesign after concluding the
+  district-block cartogram (built across sessions (bi)-(bq)) was too large to embed directly on
+  the main map view as first proposed.
+- Moved `district_arrangement_US_shape.json` → `data/district_arrangement.json` (CODEBOOK Table
+  F), wired into `build_assets.py`'s manifest with a live-composition drift check (warns, never
+  silently recomputes or fails).
+- SCOTUS sub-view: reuses the existing Majority-view bench/hover/pin machinery entirely, adds a
+  fixed 6-outer/3-inner double-ring layout (`layoutScotusRing`) with the inner ring's endpoints
+  raised 15° off horizontal, and 2x icons — Timeline/Change removed entirely for this view. The
+  icon scale is RESPONSIVE (targets 2x, shrinks only as far as the stage forces) after a mobile
+  screenshot caught 6 outer-ring icons physically overlapping at a naive fixed 2x; desktop is
+  screenshot-confirmed pixel-identical to the pre-fix render.
+- Appellate: explicit "Coming soon." placeholder per the operator's own instruction.
+- District: a static cartogram preview (not the full "lift onto the map" deployment feature,
+  which is out of scope this session — see the dated writeup above for why) with working
+  hover-grow-together and a tooltip showing LIVE seat_blocks composition, not the frozen export.
+- Extended `tests/smoke.mjs` with exact ring-geometry assertions (jsdom's deterministic layout
+  fallbacks make this precise, not approximate) plus Appellate/District coverage; all prior
+  suites (`browser-checks.mjs`, `stress.mjs`) pass unmodified. Desktop + mobile screenshot-
+  verified, including the mobile overlap bug caught and fixed in the same session.
+- Next: the District "lift onto the map" mechanic is the natural next large piece. Full detail
+  above CURRENT PHASE (search "(bs)").
+- Blockers: none.
 
 ### 2026-09-01 (br) — linked the repo to GitHub (`digitalgroundgame/court-tracker`, private) +
 ### auto-commit/push protocol

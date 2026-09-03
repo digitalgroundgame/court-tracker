@@ -33,6 +33,8 @@ COURTS_CSV = DATA / "courts.csv"
 JUDGES_CSV = DATA / "judges.csv"
 CIRCUIT_JUSTICES_CSV = DATA / "circuit_justices.csv"
 SEAT_BLOCKS_CSV = DATA / "seat_blocks.csv"   # operator-tuned map placement (see docs/CODEBOOK.md)
+# Operator-authored via tools/district-block-builder.html — see docs/CODEBOOK.md Table F.
+DISTRICT_ARRANGEMENT_JSON = DATA / "district_arrangement.json"
 PRESIDENT_PHOTOS_CSV = DATA / "president_photos.csv"  # scripts/collect_president_photos.py
 PHOTO_THUMBS_FILE = DATA / "cache" / "photo_thumbs.json"  # scripts/cache_photos.py output
 
@@ -234,6 +236,40 @@ def validate(courts: list[dict], judges: list[dict], justices: list[dict],
     return errors
 
 
+def check_district_arrangement_drift(arrangement: dict, blocks: dict) -> list[str]:
+    """The arrangement export FREEZES cell_colors at tool-export time (CODEBOOK.md Table F) —
+    it cannot be safely recomputed here: the tool's per-cell click-order/reading-order state
+    that determined WHICH block got WHICH color isn't in this file (only the resolved color and
+    the durable district ownership are), so overwriting cell_colors without that state would
+    silently reshuffle colors within a district rather than genuinely refresh them. Instead,
+    warn (not fail the build) when a district's live R/D/vacant COUNTS (seat_blocks.json, the
+    actual source of truth) no longer match what the frozen export shows — signals a
+    re-export from tools/district-block-builder.html is due, without guessing at a fix.
+    """
+    warnings: list[str] = []
+    for circuit in arrangement.get("circuits", []):
+        counts: dict[str, dict[str, int]] = {}
+        for key, did in circuit.get("cell_district", {}).items():
+            color = circuit.get("cell_colors", {}).get(key)
+            if not color:
+                continue
+            c = counts.setdefault(did, {"r": 0, "d": 0, "o": 0, "vacant": 0})
+            c[color] = c.get(color, 0) + 1
+        for did, c in sorted(counts.items()):
+            live = blocks.get(did)
+            if not live:
+                warnings.append(f"district_arrangement: {did!r} (circuit {circuit.get('circuit_id')}) "
+                                 f"is not in seat_blocks.json — dropped court, or a code mismatch?")
+                continue
+            live_counts = {"r": live.get("r", 0), "d": live.get("d", 0), "o": live.get("o", 0),
+                           "vacant": live.get("vacancies", 0)}
+            if c != live_counts:
+                warnings.append(f"district_arrangement: {did!r} frozen colors {c} no longer match "
+                                 f"live seat_blocks {live_counts} — re-export from "
+                                 f"tools/district-block-builder.html to refresh")
+    return warnings
+
+
 def circuit_of(court: dict, by_id: dict) -> str | None:
     """The circuit a court's judges bundle under (circuit=self; else parent).
     SCOTUS bundles under itself — its own lazy-loaded judges/scotus.json."""
@@ -354,6 +390,19 @@ def main() -> int:
         appts_file = "data/appointments.json"
         payloads.append(data)
 
+    # district_arrangement.json — operator-authored national district-block cartogram
+    # (tools/district-block-builder.html). Passed through unchanged (position/matrix/district
+    # ownership are durable human input); a live composition drift check WARNS rather than
+    # silently going stale or failing the build — see check_district_arrangement_drift().
+    district_arrangement_file = None
+    if DISTRICT_ARRANGEMENT_JSON.exists() and blocks:
+        arrangement = json.loads(DISTRICT_ARRANGEMENT_JSON.read_text())
+        for w in check_district_arrangement_drift(arrangement, blocks):
+            print(f"[build_assets] WARNING: {w}", file=sys.stderr)
+        data = DISTRICT_ARRANGEMENT_JSON.read_bytes()
+        district_arrangement_file = "data/district_arrangement.json"
+        payloads.append(data)
+
     # circuit_justices.json — small, separately loaded.
     justices_file = None
     if justices:
@@ -387,6 +436,8 @@ def main() -> int:
         files["circuit_justices"] = justices_file
     if blocks_file:
         files["seat_blocks"] = blocks_file
+    if district_arrangement_file:
+        files["district_arrangement"] = district_arrangement_file
     if appts_file:
         files["appointments"] = appts_file
     if pres_photos_file:

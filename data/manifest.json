@@ -1,7 +1,7 @@
 {
   "schema": "court-tracker/manifest@1",
-  "version": "a74234fe0362",
-  "generated": "2026-08-28T07:21:07Z",
+  "version": "125f70716945",
+  "generated": "2026-09-03T11:23:54Z",
   "last_appointment": "2026-06-18",
   "counts": {
     "courts": 110,
@@ -31,6 +31,7 @@
     },
     "circuit_justices": "data/circuit_justices.json",
     "seat_blocks": "data/seat_blocks.json",
+    "district_arrangement": "data/district_arrangement.json",
     "appointments": "data/appointments.json",
     "president_photos": "data/president_photos.json",
     "geo": {
