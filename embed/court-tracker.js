@@ -831,11 +831,107 @@ const DISTRICT_CARTOGRAM_PX = 6.5;
 const DISTRICT_CARTOGRAM_GAP = 0.30;
 const DISTRICT_CARTOGRAM_PITCH = DISTRICT_CARTOGRAM_PX * (1 + DISTRICT_CARTOGRAM_GAP);
 
-function renderSummaryDistrict(container) {
-  const wrap = el("div", "ctt-district-cartogram-wrap");
+/** Pure builder shared by the Summary > District preview, the on-map deployed overlay, and the
+ *  circuit-drill-in fixed sub-assembly — one code path for the actual block SVG so those three
+ *  presentations can never visually drift apart. `filterCircuitId` renders just one circuit's
+ *  cluster (used by the drill-in sub-assembly); omitted, it renders every circuit. Returns null
+ *  bbox (and an empty svg) if there's nothing to draw, e.g. a circuit with no arrangement data. */
+function buildDistrictCartogramSVG(circuits, filterCircuitId) {
+  const use = filterCircuitId ? circuits.filter((c) => c.circuit_id === filterCircuitId) : circuits;
   const svg = svgEl("svg", { class: "ctt-district-cartogram" });
-  wrap.append(svg);
-  container.append(wrap);
+  if (!use.length) return { svg, bbox: null };
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const c of use) {
+    const rows = c.matrix.length, cols = c.matrix[0].length;
+    x0 = Math.min(x0, c.offset[0]); y0 = Math.min(y0, c.offset[1]);
+    x1 = Math.max(x1, c.offset[0] + cols * DISTRICT_CARTOGRAM_PITCH);
+    y1 = Math.max(y1, c.offset[1] + rows * DISTRICT_CARTOGRAM_PITCH);
+  }
+  const pad = DISTRICT_CARTOGRAM_PITCH * 2;
+  const W = (x1 - x0) + pad * 2, H = (y1 - y0) + pad * 2;
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  const originX = x0 - pad, originY = y0 - pad;
+
+  for (const c of use) {
+    const g = svgEl("g", { class: "ctt-district-cluster", "data-circuit-id": c.circuit_id });
+    const rows = c.matrix.length, cols = c.matrix[0].length;
+    g.setAttribute("transform", `translate(${c.offset[0] - originX} ${c.offset[1] - originY})`);
+    for (let r = 0; r < rows; r++) {
+      for (let col = 0; col < cols; col++) {
+        if (!c.matrix[r][col]) continue;
+        const key = `${r},${col}`;
+        const did = c.cell_district?.[key];
+        const colorKey = c.cell_colors?.[key];
+        // district-block-builder.html's export keys are r/d/o/vacant; the map's OWN
+        // seat-block squares (renderSeatBlocks/seatSquares) use the fuller class names below —
+        // reuse those directly rather than a second palette that could drift from them.
+        const sqClass = { r: "ctt-sq-rep", d: "ctt-sq-dem", o: "ctt-sq-other", vacant: "ctt-sq-vacant" }[colorKey];
+        const rect = svgEl("rect", {
+          class: "ctt-district-sq" + (sqClass ? ` ${sqClass}` : ""),
+          x: col * DISTRICT_CARTOGRAM_PITCH, y: r * DISTRICT_CARTOGRAM_PITCH,
+          width: DISTRICT_CARTOGRAM_PX, height: DISTRICT_CARTOGRAM_PX,
+        });
+        if (did) rect.setAttribute("data-district-id", did);
+        g.append(rect);
+      }
+    }
+    svg.append(g);
+  }
+  return { svg, bbox: { W, H } };
+}
+
+/** Empty state for the district docked panel (mirrors resetDetail()'s judge-panel hint). */
+function resetDistrictDetail(box, content) {
+  box.classList.remove("ctt-pinned");
+  content.innerHTML = `<div class="ctt-detail-hint">Hover over a district for details.<br>Click to pin.</div>`;
+}
+/** Fills the district docked panel for one district court. `onJump` wires the "Jump to court"
+ *  button — drills into the district's own circuit and opens ITS info pane, exactly as if the
+ *  operator had picked it from that circuit's own drill-in selector bar (operator spec). */
+function showDistrictDetail(content, did, onJump) {
+  const court = S.courts.get(did);
+  const b = S.seatBlocks?.[did];
+  content.innerHTML = "";
+  const name = el("div", "ctt-detail-name");
+  name.textContent = court?.court_name || did;
+  content.append(name);
+  if (b) {
+    const comp = el("div");
+    comp.innerHTML = `<span class="ctt-dot ctt-rep"></span>${b.r} Republican-appointed` +
+      (b.o ? `<br><span class="ctt-dot"></span>${b.o} other` : "") +
+      `<br><span class="ctt-dot ctt-dem"></span>${b.d} Democratic-appointed` +
+      (b.vacancies ? `<br>${b.vacancies} vacant` : "");
+    content.append(comp);
+  }
+  const jump = el("button", "ctt-toggle ctt-district-jump", { type: "button" });
+  jump.textContent = "Jump to this court →";
+  jump.addEventListener("click", () => onJump(did));
+  content.append(jump);
+}
+
+/** Click a block to jump straight to that district's own info pane: drill into its parent
+ *  circuit, then select it — the same end state as picking it by hand from that circuit's own
+ *  drill-in selector bar (operator spec, since a district's own pop-down pane is where its full
+ *  judge roster/majority view lives — the cartogram itself never duplicates that). */
+async function jumpToDistrictCourt(did) {
+  const court = S.courts.get(did);
+  if (!court?.parent_id) return;
+  deselect();
+  await drillIn(court.parent_id);
+  await selectCourt(did);
+}
+
+function renderSummaryDistrict(container) {
+  const layout = el("div", "ctt-district-layout");
+  const wrap = el("div", "ctt-district-cartogram-wrap");
+  const detailBox = el("div", "ctt-detail ctt-district-detail");
+  const detailContent = el("div", "ctt-detail-content");
+  const detailClose = el("button", "ctt-detail-close", { type: "button", "aria-label": "Close detail" });
+  detailClose.textContent = "×";
+  detailBox.append(detailClose, detailContent);
+  layout.append(wrap, detailBox);
+  container.append(layout);
+  resetDistrictDetail(detailBox, detailContent);
   const tip = S.ui.tooltip;
 
   loadDistrictArrangement().then((arrangement) => {
@@ -844,54 +940,39 @@ function renderSummaryDistrict(container) {
     if (!circuits.length) {
       const note = el("div", "ctt-summary-placeholder");
       note.textContent = "No district cartogram data available yet.";
-      wrap.replaceWith(note);
+      layout.replaceWith(note);
       return;
     }
-    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-    for (const c of circuits) {
-      const rows = c.matrix.length, cols = c.matrix[0].length;
-      x0 = Math.min(x0, c.offset[0]); y0 = Math.min(y0, c.offset[1]);
-      x1 = Math.max(x1, c.offset[0] + cols * DISTRICT_CARTOGRAM_PITCH);
-      y1 = Math.max(y1, c.offset[1] + rows * DISTRICT_CARTOGRAM_PITCH);
-    }
-    const pad = DISTRICT_CARTOGRAM_PITCH * 2;
-    const W = (x1 - x0) + pad * 2, H = (y1 - y0) + pad * 2;
-    svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
-    const originX = x0 - pad, originY = y0 - pad;
+    const { svg } = buildDistrictCartogramSVG(circuits);
+    wrap.append(svg);
 
-    for (const c of circuits) {
-      const g = svgEl("g", { class: "ctt-district-cluster", "data-circuit-id": c.circuit_id });
-      const rows = c.matrix.length, cols = c.matrix[0].length;
-      const gx = c.offset[0] - originX, gy = c.offset[1] - originY;
-      g.setAttribute("transform", `translate(${gx} ${gy})`);
-      for (let r = 0; r < rows; r++) {
-        for (let col = 0; col < cols; col++) {
-          if (!c.matrix[r][col]) continue;
-          const key = `${r},${col}`;
-          const did = c.cell_district?.[key];
-          const colorKey = c.cell_colors?.[key];
-          // district-block-builder.html's export keys are r/d/o/vacant; the map's OWN
-          // seat-block squares (renderSeatBlocks/seatSquares) use the fuller class names below —
-          // reuse those directly rather than a second palette that could drift from them.
-          const sqClass = { r: "ctt-sq-rep", d: "ctt-sq-dem", o: "ctt-sq-other", vacant: "ctt-sq-vacant" }[colorKey];
-          const rect = svgEl("rect", {
-            class: "ctt-district-sq" + (sqClass ? ` ${sqClass}` : ""),
-            x: col * DISTRICT_CARTOGRAM_PITCH, y: r * DISTRICT_CARTOGRAM_PITCH,
-            width: DISTRICT_CARTOGRAM_PX, height: DISTRICT_CARTOGRAM_PX,
-          });
-          if (did) rect.setAttribute("data-district-id", did);
-          g.append(rect);
-        }
-      }
-      svg.append(g);
-    }
-    wireDistrictCartogramHover(svg, tip);
+    let pinned = null;
+    detailClose.addEventListener("click", () => {
+      pinned = null;
+      detailBox.classList.remove("ctt-pinned");
+      resetDistrictDetail(detailBox, detailContent);
+    });
+    wireDistrictCartogramHover(svg, tip, (did) => {
+      if (pinned) return;                     // a pinned panel stays put until dismissed
+      if (did) showDistrictDetail(detailContent, did, jumpToDistrictCourt);
+      else resetDistrictDetail(detailBox, detailContent);
+    });
+    // Click-to-pin — only in Summary > District (operator spec: this and the docked viewer are
+    // the two things that do NOT exist once the assembly is deployed onto the map).
+    svg.addEventListener("click", (e) => {
+      const sq = e.target.closest && e.target.closest(".ctt-district-sq");
+      const did = sq?.getAttribute("data-district-id");
+      if (!did) return;
+      pinned = did;
+      detailBox.classList.add("ctt-pinned");
+      showDistrictDetail(detailContent, did, jumpToDistrictCourt);
+    });
   }).catch((err) => {
     if (!container.isConnected || S.summaryView !== "district") return;
     console.error("[court-tracker] district cartogram load failed:", err);
     const note = el("div", "ctt-summary-placeholder");
     note.textContent = "Could not load the district cartogram.";
-    wrap.replaceWith(note);
+    layout.replaceWith(note);
   });
 }
 
@@ -920,17 +1001,24 @@ function animateDistrictSquare(sq, target) {
   step();
 }
 
-function wireDistrictCartogramHover(svg, tip) {
+// Deliberately its OWN constant, not the map's BLOCK_SCALE_HOVER: an initial pass matched the
+// map's 1.17x exactly (operator's first-look report: "grows too much" compared to the map), but
+// after actually testing it live the operator preferred the bigger growth back — the district
+// cartogram's blocks, unlike the map's own seat blocks, often sit with real gaps between
+// same-district cells (the block-builder tool's trimmed layout doesn't guarantee adjacency), so
+// a bigger scale fills those gaps into one cohesive shape instead of reading as scattered
+// separately-growing squares, which matters more here than it does on the map. Kept as its own
+// named constant (rather than just reverting inline) so the two contexts can keep tuning apart
+// without one accidentally dragging the other along.
+const DISTRICT_SQ_SCALE_HOVER = 1.35;
+function wireDistrictCartogramHover(svg, tip, onHover) {
   let hoveredId = null;
   const setHover = (did) => {
     if (did === hoveredId) return;
     hoveredId = did;
-    // Same growth factor as the map's own seat-block hover (BLOCK_SCALE_HOVER) — an earlier
-    // draft used a much bigger 1.35x, which read as noticeably more aggressive growth than the
-    // national map's own blocks (operator report); this matches it exactly instead of
-    // reinventing an independent value.
     svg.querySelectorAll(".ctt-district-sq").forEach((sq) =>
-      animateDistrictSquare(sq, did && sq.getAttribute("data-district-id") === did ? BLOCK_SCALE_HOVER : 1));
+      animateDistrictSquare(sq, did && sq.getAttribute("data-district-id") === did ? DISTRICT_SQ_SCALE_HOVER : 1));
+    onHover?.(did);
   };
   svg.addEventListener("pointermove", (e) => {
     const sq = e.target.closest && e.target.closest(".ctt-district-sq");

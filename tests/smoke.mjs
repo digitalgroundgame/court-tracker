@@ -976,14 +976,35 @@ assert(root.querySelectorAll(".ctt-district-sq").length > 0, "cartogram renders 
 assert(root.querySelectorAll(".ctt-district-sq.ctt-sq-rep, .ctt-district-sq.ctt-sq-dem").length > 0,
   "cartogram squares reuse the map's own R/D palette classes");
 
+console.log("Summary > District: docked detail panel + click-to-pin (operator spec)");
+const districtDetail = root.querySelector(".ctt-district-detail");
+assert(districtDetail, "District has its own docked detail panel");
+assert(/Hover over a district/.test(districtDetail.textContent), "starts with the usage hint");
+const someSq = root.querySelector(".ctt-district-sq[data-district-id]");
+// wireDistrictCartogramHover listens for pointermove (not mouseenter, the generic hover()
+// helper's event) — the event TYPE is what addEventListener matches on, so a plain MouseEvent
+// constructed with that type works fine even without full jsdom PointerEvent support.
+someSq.dispatchEvent(new window.MouseEvent("pointermove", { bubbles: true, clientX: 1, clientY: 1 }));
+assert(districtDetail.querySelector(".ctt-detail-name"), "hovering a block fills the district panel with a name row");
+click(someSq);
+assert(districtDetail.classList.contains("ctt-pinned"), "clicking a block pins the district panel");
+assert(districtDetail.querySelector(".ctt-district-jump"), "pinned panel shows a Jump-to-court button");
+click(districtDetail.querySelector(".ctt-detail-close"));
+assert(!districtDetail.classList.contains("ctt-pinned"), "close button unpins the district panel");
+assert(/Hover over a district/.test(districtDetail.textContent), "unpinning resets to the usage hint");
+
 console.log("stray docked-detail-panel bug (operator report, 2026-09-04): fixed");
-assert(root.querySelector(".ctt-detail").style.display === "none",
+// :not(.ctt-district-detail) disambiguates the shared judge-detail node from District's own
+// (separate) docked panel, added later the same session — both carry the .ctt-detail class for
+// shared styling, so a bare query is ambiguous now that both can exist at once.
+const judgeDetailSel = ".ctt-detail:not(.ctt-district-detail)";
+assert(root.querySelector(judgeDetailSel).style.display === "none",
   "docked judge-detail panel is hidden while District is showing (it has no per-district judge to detail)");
 click(root.querySelector('.ctt-selector-item[data-court-id="summary"]')); await sleep(20);   // close WHILE on District
 click(root.querySelector('.ctt-selector-item[data-court-id="summary"]')); await sleep(60);   // reopen — S.summaryView persisted as "district"
 assert(root.querySelector(".ctt-summary-switch .ctt-mode-opt.ctt-is-active").textContent === "District Courts",
   "reopened Summary defaults back into the persisted District sub-view");
-assert(root.querySelector(".ctt-detail").style.display === "none",
+assert(root.querySelector(judgeDetailSel).style.display === "none",
   "reopening straight into District (never passing through SCOTUS first) does NOT leave the docked detail panel visible");
 
 click(toggle("Supreme Court")); await sleep(20);   // back to the default sub-view for a clean state
