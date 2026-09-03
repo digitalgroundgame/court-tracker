@@ -230,7 +230,19 @@
 
 .ctt-pane-head { margin-bottom: 8px; display: flex; align-items: flex-start; gap: 10px; padding-right: 84px; }
 .ctt-pane-headtext { flex: 1 1 auto; min-width: 0; }
-.ctt-pane-title { font-size: 16px; font-weight: 650; }
+.ctt-pane-title { font-size: 16px; font-weight: 650; line-height: 1.25; }
+/* Reserve room for the WORST CASE line count ("U.S. District Court for the ..." wraps to 2 or 3
+   lines on desktop) so nothing below this label shifts position depending on how long the
+   selected court's own name happens to be (operator report, 2026-09-07) — a shorter, 2-line name
+   simply carries unused space below it in the box rather than shrinking it; the label stays
+   top-aligned (plain block flow, nothing centers it) so it always occupies the TOP lines of that
+   reserved space, never the bottom. Scoped to DISTRICT courts only (see the JS-side comment on
+   where this class gets added) — every other court level's name fits on one line already, and an
+   earlier unscoped attempt reserving 3 lines everywhere pushed CFC's own pane into an unwanted
+   scrollbar. Mobile's own 1/2-line range (its title area isn't sharing width with the docked
+   detail column, so the same text wraps less) gets its own reservation in the mobile media query
+   below. */
+.ctt-pane-title--district { min-height: 3.75em; }
 .ctt-pane-meta { font-size: 12px; color: var(--ctt-muted); margin-top: 2px; }
 /* Circuit Justice chip slot in the header (timeline view) */
 .ctt-justice-slot { flex: 0 0 auto; }
@@ -247,6 +259,14 @@
    toggle row on ordinary (non-Summary) court panes, an unrelated layout chain this 1px comparison
    doesn't apply to. */
 .ctt-summary-content > .ctt-pane-controls { margin: 6px 0 5px; }
+/* Caption filling the space the deploy button vacated when it moved to the right (operator ask,
+   2026-09-07) — grows to take whatever room the now-fixed-width button doesn't need. */
+.ctt-district-controls-caption { flex: 1 1 auto; min-width: 0; font-size: 12px; color: var(--ctt-muted); }
+/* Right-aligned, and matches the docked detail panel's own 232px width (.ctt-district-detail)
+   so the two visually line up as one column (operator ask, 2026-09-07). margin-left:auto pushes
+   just this one child right within .ctt-pane-controls's row, without touching that shared class's
+   own layout (it's also the ordinary-court majority-toggle row elsewhere). */
+.ctt-district-deploy-btn { margin-left: auto; flex: 0 0 232px; width: 232px; text-align: center; }
 .ctt-toggle, .ctt-drill {
   border: 1px solid var(--ctt-line); background: var(--ctt-panel); color: inherit; font: inherit;
   font-size: 13px; padding: 5px 12px; border-radius: 6px; cursor: pointer;
@@ -366,6 +386,12 @@
    a sticky hover or an explicit pin (operator correction, 2026-09-05) — no separate lighter
    "just hovering" style anymore. */
 .ctt-district-row-active { background: #eaf1fd; font-weight: 700; }
+/* Circuit-wide Total row (operator ask, 2026-09-07) — sits right below the pinned/hovered row.
+   Bolded text + heavier (2px, not the ordinary 1px --ctt-line) rules flanking it above AND below
+   so it visually reads as a distinct summary rather than just another row in the list;
+   border-collapse (see .ctt-district-table) merges each of those with its neighbor's own border
+   into one line, so this alone is enough — no separate rule needed on the rows next to it. */
+.ctt-district-row-total td { font-weight: 700; border-top: 2px solid var(--ctt-ink); border-bottom: 2px solid var(--ctt-ink); }
 /* Count comes BEFORE the swatch (operator preference — reversed from the block-builder tool's
    own swatch-then-count order). Square, not the circular .ctt-dot used elsewhere in this file —
    operator specifically asked for the block-builder tool's SQUARE swatch style. */
@@ -397,15 +423,15 @@
 .ctt-district-flyover .ctt-district-cartogram { width: 100%; height: 100%; display: block; }
 /* Fixed to the VIEWPORT's own corner (not the draggable assembly — see the buildShell comment
    on districtCornerControls) so dragging the assembly, including partially past the bottom edge
-   on purpose, never carries its controls out of reach (operator ask, 2026-09-06). Bottom-LEFT
-   deliberately: the assembly itself defaults to bottom-RIGHT (defaultDistrictMapState), and the
-   map's own seat blocks already cluster in the northeast (see that function's own comment) — the
-   southwest corner is the one spot that stays clear of both by default. z-index above the
+   on purpose, never carries its controls out of reach (operator ask, 2026-09-06). Top-right
+   (operator ask, 2026-09-07 — moved from an earlier bottom-left choice): z-index above the
    assembly's own (3) so the controls stay clickable if a drag/resize brings the two into visual
    overlap anyway. National view only, and hidden whenever the pane is open — see
-   renderDistrictCornerControls. */
+   renderDistrictCornerControls. Buttons render −/+/× in DOM order (see there) so × lands
+   right-most, i.e. furthest from the map content, matching the pane-close (×)'s own corner
+   convention elsewhere in the app. */
 .ctt-district-corner-controls {
-  position: absolute; left: 16px; bottom: 16px; z-index: 4; display: flex; gap: 4px;
+  position: absolute; right: 16px; top: 16px; z-index: 4; display: flex; gap: 4px;
 }
 /* "fill color-transparent but dark circle and button label colors" (operator spec) — distinct
    from .ctt-pane-close's solid-fill style; these read as an overlay chrome, not pane chrome. */
@@ -417,11 +443,12 @@
 .ctt-district-overlay-btn:hover { background: rgba(27,31,36,0.08); }
 
 /* Circuit-drill-in fixed sub-assembly (operator spec): that circuit's own districts only,
-   present regardless of the national deployment state. Anchored top-left of the local map —
-   deliberately not draggable/resizable (unlike the deployed national assembly, this is a fixed
-   reference view tied to the circuit you're looking at, not a moved/customized object). */
+   present regardless of the national deployment state. Anchored bottom-left of the local map
+   (moved from top-left, operator ask 2026-09-07) — deliberately not draggable/resizable (unlike
+   the deployed national assembly, this is a fixed reference view tied to the circuit you're
+   looking at, not a moved/customized object). */
 .ctt-district-subassembly {
-  position: absolute; top: 12px; left: 12px; width: 130px; z-index: 3;
+  position: absolute; bottom: 12px; left: 12px; width: 130px; z-index: 3;
   filter: drop-shadow(0 2px 6px rgba(0,0,0,0.18)); pointer-events: none;
 }
 .ctt-district-subassembly .ctt-district-cartogram { width: 100%; height: auto; display: block; }
@@ -597,4 +624,5 @@
   .ctt-stage-row { display: block; }
   .ctt-detail { width: auto; margin-top: 10px; }
   .ctt-district-layout { display: block; }
+  .ctt-pane-title--district { min-height: 2.5em; }   /* mobile: 1-2 lines instead of desktop's 2-3 */
 }

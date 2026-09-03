@@ -10,7 +10,67 @@
 tracker (Phase-4 tail items open, PLUS a brand-new third pane view — "Change", built session
 (aw), operator review round addressed session (ax)) and the appointments beeswarm
 (feature-complete first version, operator refinement rounds ongoing; see sessions ai→at, aw).
-**Last updated:** 2026-09-06
+**Last updated:** 2026-09-07
+
+> **SESSION (ca), 2026-09-07 — Six more operator reports: pane-title stability, an Appellate
+> rename, deploy-button layout, a hover-growth scale reduction, a circuit Total row, and a
+> severe hidden bug (hover was growing EVERY district in the deployed assembly at once).**
+> Bug 13's core issue was the significant one — see its own writeup below.
+> - **Pane-title stability, scoped correctly on the SECOND attempt.** "U.S. District Court for
+>   the ..." wraps to 2 or 3 lines depending on the specific district, and since `.ctt-pane-title`
+>   had no reserved height, everything below it (controls, judge stage) shifted position between
+>   selections. Fixed with `min-height: 3.75em` (3 line-heights) — but the FIRST attempt applied
+>   this to the bare `.ctt-pane-title` class shared by every court level, which pushed CFC's own
+>   pane (a short, single-line title that never needed the extra room) into a NEW vertical
+>   scrollbar — caught by `browser-checks.mjs`, not eyeballed. Rescoped to a `.ctt-pane-title--
+>   district` modifier class, added by JS only when `court.court_level === "district"`, leaving
+>   every other court level's title untouched. Mobile gets its own 2.5em (1-2 lines) reservation.
+> - **Renamed Summary > "Courts of Appeals" to "Appellate Courts"**, matching "District Courts"'s
+>   own naming convention (operator ask).
+> - **District controls row restyled**: the "Set upon map" button moved to the right, sized to
+>   match the docked detail panel's own 232px width (`margin-left:auto` + `flex:0 0 232px`,
+>   scoped to `.ctt-district-deploy-btn` so the shared `.ctt-pane-controls` class elsewhere is
+>   untouched), its label flanked by down arrows (`▼ Set upon map ▼` / `▼ Remove from map ▼`,
+>   via a small `districtDeployBtnLabel()` helper so both the initial render and every later
+>   `setDistrictOnMap` re-render agree); the vacated left space now reads "Party of District
+>   Court Appointments, Arranged by Circuit".
+> - **Hover-growth scale reduced (1.35 → 1.15)**: now that (bz)'s non-scaling-stroke fix closes
+>   the cartogram's gutter by a fixed SCREEN-pixel amount regardless of zoom, the scale no longer
+>   needs to be large enough to close the gap geometrically — its only job now is the visual
+>   "grow" feel, so it came back down close to the map's own 1.17x after the operator inspected
+>   it closely across the Summary preview, the on-map overlay, and the (much smaller) sub-assembly.
+> - **Circuit Total row**: `renderDistrictCircuitTable()` now inserts a bolded `Total` row summing
+>   R/D/vacant across every district in the circuit, directly below the pinned/hovered row,
+>   flanked by heavier (2px, not the ordinary 1px) separator lines (`border-collapse` merges each
+>   with its neighbor's own border into one line, so styling the Total row alone is enough).
+> - **Bug 13, the real one: hovering ONE district grew every district in the assembly at once.**
+>   Root cause, found by adding temporary instrumentation rather than guessing: `grow = (hoveredId
+>   && sqDid === hoveredId) || (isPinned && isPinned(sqDid))` evaluates to `undefined`, not
+>   `false`, whenever `isPinned` isn't a function (the plain on-map/sub-assembly wiring, which
+>   passes no 4th `opts` arg) — `&&`/`||` return operand VALUES, not coerced booleans.
+>   `classList.toggle(name, undefined)` is spec'd to behave as a NORMAL toggle (flip current
+>   state) rather than force-remove when its second argument is `undefined`, so on the very first
+>   hover, every non-hovered square's ABSENT class flipped to PRESENT. `animateDistrictSquare`'s
+>   own ternary never had this problem (real values, 1 or the scale constant) — only the
+>   *separate* grown-class bookkeeping (added session bz, for the seam-closing stroke) was wrong,
+>   which is why the SCALE itself stayed correctly isolated to one district even while the CLASS
+>   (and thus the seam-closing stroke) spread to all of them. Fixed with `!!(...)`. Added a
+>   permanent regression test in BOTH `smoke.mjs` and `browser-checks.mjs` given the severity.
+>   Bundled with this fix (from the same bug report): the drill-in sub-assembly moved from
+>   top-left to bottom-left, and its hover now also ties to the real district shape's standard
+>   blue highlight (previously only the deployed national assembly had this — fixed by making
+>   `highlightDistrictOnMap` use `currentSVG()` instead of a hardcoded `S.ui.nationalSVG`, since
+>   the sub-assembly's real shapes live on the LOCAL circuit SVG, not the hidden national one);
+>   the fixed corner controls moved from bottom-left to top-right, with × reordered to be the
+>   right-most of the three.
+> - **Tested**: extended `tests/smoke.mjs` (Total row sums, arrow-flanked label, scale-constant
+>   bounds, the growth-isolation regression, corner-button order) and `tests/browser-checks.mjs`
+>   (pane-title height parity + the CFC-scrollbar guard, deploy-button alignment, corner/sub-
+>   assembly position, the growth-isolation regression again in a real browser) — several of this
+>   session's own claims are CSS-VALUE assertions jsdom structurally can't check (this harness
+>   never loads court-tracker.css at all), so those live in browser-checks.mjs only, per this
+>   project's existing jsdom/real-browser split. `smoke.mjs`/`browser-checks.mjs`/`stress.mjs`
+>   (12 cycles) all pass.
 
 > **SESSION (bz), 2026-09-06 — Five more operator reports against the District feature: pane
 > stacking, hover-growth seam artifacting, a 1px Summary height mismatch, fixed-frame map
@@ -1604,6 +1664,34 @@ Prove the whole app shell and asset schema on one circuit with hand-authored sam
 - Next: ...
 - Blockers: ...
 -->
+
+### 2026-09-07 (ca) — Pane-title stability, Appellate rename, deploy-button layout, growth-scale reduction, circuit Total row, and a severe hidden bug (hover grew every district at once)
+- Phase: 4, continuing (bz). Pane-title min-height fix scoped to `.ctt-pane-title--district`
+  (JS adds it only for `court_level === "district"`) after an unscoped first attempt regressed
+  CFC's pane into a scrollbar — caught by browser-checks.mjs, fixed by rescoping.
+- Renamed Summary > "Courts of Appeals" to "Appellate Courts" (matches "District Courts").
+- District controls row: deploy button moved right, width-matched to the docked panel (232px),
+  label flanked by down arrows; left space now reads "Party of District Court Appointments,
+  Arranged by Circuit".
+- DISTRICT_SQ_SCALE_HOVER reduced 1.35 -> 1.15 now that (bz)'s non-scaling stroke (not the scale)
+  closes the cartogram's seam regardless of zoom.
+- Circuit Total row added to renderDistrictCircuitTable(): bolded, sums R/D/vacant across the
+  circuit, flanked by heavier 2px separator lines, sits directly below the pinned/hovered row.
+- Bug 13, the real one: hovering ONE district grew every district in the deployed assembly at
+  once. Root cause: `grow = (hoveredId && ...) || (isPinned && isPinned(sqDid))` evaluates to
+  `undefined`, not `false`, when isPinned isn't a function — classList.toggle(name, undefined)
+  behaves as a plain toggle (flip current state) rather than force-remove, so every non-hovered
+  square's absent class flipped to present on the first hover. Fixed with `!!(...)`; added
+  permanent regression tests in both smoke.mjs and browser-checks.mjs given the severity. Also
+  from this report: drill-in sub-assembly moved top-left -> bottom-left and its hover now ties to
+  the real district shape's blue highlight too (highlightDistrictOnMap now uses currentSVG(),
+  not a hardcoded S.ui.nationalSVG); fixed corner controls moved bottom-left -> top-right with ×
+  reordered to be right-most.
+- Verified: extended tests/smoke.mjs and tests/browser-checks.mjs (several claims are CSS-value
+  assertions jsdom can't check at all, since this harness never loads court-tracker.css — those
+  live in browser-checks.mjs only). smoke.mjs/browser-checks.mjs/stress.mjs (12 cycles) all pass.
+- Next: no open item from this bug report. Resume the Phase-4 tail list above as the next task.
+- Blockers: none.
 
 ### 2026-09-06 (bz) — Five more District bug reports: pane stacking, hover-seam artifacting, 1px Summary height mismatch, fixed-frame controls + D button + persisted zoom, docked-panel order
 - Phase: 4, continuing (by). Pane-covers-the-map: `.ctt-district-overlay`/`.ctt-district-subassembly`

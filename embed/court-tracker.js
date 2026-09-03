@@ -556,7 +556,12 @@ function renderPane(court) {
   const headText = el("div", "ctt-pane-headtext");
   const justiceSlot = el("div", "ctt-justice-slot");
   head.append(headText, justiceSlot);
-  const h = el("div", "ctt-pane-title");
+  // The reserved multi-line height (see .ctt-pane-title--district's own CSS comment) is scoped
+  // to district courts ONLY — "U.S. District Court for the ..." is the one name pattern long
+  // enough to actually reach 2-3 lines; every other court level's name fits on one line already,
+  // and reserving 3 lines' worth of room for them anyway pushed some panes (CFC's) into an
+  // unwanted scrollbar (caught by tests/browser-checks.mjs after an initial unscoped attempt).
+  const h = el("div", "ctt-pane-title" + (court.court_level === "district" ? " ctt-pane-title--district" : ""));
   h.textContent = court.court_name;
   const meta = el("div", "ctt-pane-meta");
   if (court.tenure_type === "fixed_term") {
@@ -764,11 +769,11 @@ function renderSummaryPane() {
   // Larger-than-usual segmented control (operator ask, enlarged further 2026-09-04) — same
   // visual family as the pane's Timeline|Majority|Change switch (.ctt-toggle/.ctt-mode-opt),
   // sized up via .ctt-summary-switch. Labels are the full section names — this doubles as the
-  // pane's own heading, so the separate "Summary" title + "Supreme Court · Courts of Appeals ·
+  // pane's own heading, so the separate "Summary" title + "Supreme Court · Appellate Courts ·
   // District Courts" subtitle line above it were removed as redundant (operator ask; the
   // "Summary" selector-bar entry itself is unchanged).
   const subWrap = el("div", "ctt-mode-switch ctt-summary-switch", { role: "group", "aria-label": "Summary section" });
-  const tabs = [["scotus", "Supreme Court"], ["appellate", "Courts of Appeals"], ["district", "District Courts"]];
+  const tabs = [["scotus", "Supreme Court"], ["appellate", "Appellate Courts"], ["district", "District Courts"]];
   const btns = {};
   const setView = (view) => {
     S.summaryView = view;
@@ -950,7 +955,16 @@ function renderDistrictCircuitTable(content, circuitId, targetDid) {
   let districts = districtsForCircuit(circuitId);
   const target = districts.find((d) => d.court_id === targetDid);
   if (target) districts = [target, ...districts.filter((d) => d.court_id !== targetDid)];
-  for (const d of districts) {
+  // Total row (operator ask, 2026-09-07): sums each column across every district in the
+  // circuit, immediately below the pinned/hovered row at the top — CSS (.ctt-district-row-total)
+  // bolds it and flanks it with heavier separator lines so it reads as a distinct summary, not
+  // just another row in the list.
+  const totals = districts.reduce((acc, d) => {
+    const b = S.seatBlocks?.[d.court_id] || {};
+    acc.r += b.r ?? 0; acc.d += b.d ?? 0; acc.vacancies += b.vacancies ?? 0;
+    return acc;
+  }, { r: 0, d: 0, vacancies: 0 });
+  districts.forEach((d, i) => {
     const tr = el("tr", "ctt-district-row" + (d.court_id === targetDid ? " ctt-district-row-active" : ""));
     const b = S.seatBlocks?.[d.court_id] || {};
     tr.innerHTML = `<td>${d.short_name}</td>` +
@@ -958,7 +972,15 @@ function renderDistrictCircuitTable(content, circuitId, targetDid) {
       `<td>${b.d ?? 0}<span class="ctt-district-swatch ctt-district-swatch-dem"></span></td>` +
       `<td>${b.vacancies ?? 0}<span class="ctt-district-swatch ctt-district-swatch-vacant"></span></td>`;
     tbody.append(tr);
-  }
+    if (i === 0) {
+      const totalRow = el("tr", "ctt-district-row-total");
+      totalRow.innerHTML = `<td>Total</td>` +
+        `<td>${totals.r}<span class="ctt-district-swatch ctt-district-swatch-rep"></span></td>` +
+        `<td>${totals.d}<span class="ctt-district-swatch ctt-district-swatch-dem"></span></td>` +
+        `<td>${totals.vacancies}<span class="ctt-district-swatch ctt-district-swatch-vacant"></span></td>`;
+      tbody.append(totalRow);
+    }
+  });
   table.append(tbody);
   wrap.append(table);
   content.append(wrap);
@@ -1115,7 +1137,7 @@ function renderDistrictCornerControls() {
     const plus = el("button", "ctt-district-overlay-btn", { type: "button", "aria-label": "Grow" });
     plus.textContent = "+";
     plus.addEventListener("click", () => resizeDistrictOverlay(DISTRICT_OVERLAY_ZOOM_STEP));
-    box.append(remove, minus, plus);
+    box.append(minus, plus, remove);   // × last/right-most (operator ask, 2026-09-07)
   } else {
     const deploy = el("button", "ctt-district-overlay-btn", { type: "button", "aria-label": "Deploy district blocks to the map", title: "Deploy district blocks to the map" });
     deploy.textContent = "D";
@@ -1156,7 +1178,7 @@ function setDistrictOnMap(on) {
   updateDistrictOverlayVisibility();   // also re-renders the corner controls and clears any
                                         // stuck map-shape highlight when hiding — see there
   const btn = S.ui.paneBody.querySelector(".ctt-district-deploy-btn");
-  if (btn) btn.textContent = on ? "Remove from map" : "Set upon map";
+  if (btn) btn.textContent = districtDeployBtnLabel();
 }
 
 /** "Set upon map": always replaces whatever was previously deployed (operator confirmed) —
@@ -1165,8 +1187,11 @@ function setDistrictOnMap(on) {
  *  corresponding cartogram block is hovered — the shape lives in the CURRENT national SVG
  *  (districts are real, if visually subordinate, shapes there per CLAUDE.md §5's national-view
  *  layering), a different DOM entirely from the cartogram overlay hovering it. */
+// currentSVG() (not always S.ui.nationalSVG): the drill-in sub-assembly reuses this too now
+// (operator ask, 2026-09-07), and its real district shapes live on the LOCAL circuit SVG, which
+// is a different element than the (hidden, in circuit view) national one.
 function highlightDistrictOnMap(did) {
-  const svg = S.ui.nationalSVG;
+  const svg = currentSVG();
   if (!svg) return;
   svg.querySelectorAll(".ctt-shape-district-hover").forEach((s) => s.classList.remove("ctt-shape-district-hover"));
   if (!did) return;
@@ -1296,15 +1321,30 @@ function renderDistrictSubassembly(circuitId) {
     updateDistrictSubassemblyVisibility();   // apply the CURRENT pane state right away — this
                                               // mounts asynchronously, after togglePane's own
                                               // hook already ran for this drill-in
-    wireDistrictCartogramHover(svg, S.ui.tooltip);
+    // highlightDistrictOnMap tints the real district shape "standard blue" while its cartogram
+    // block is hovered — the deployed national assembly already gets this; the drill-in
+    // sub-assembly was missing it (operator report, 2026-09-07).
+    wireDistrictCartogramHover(svg, S.ui.tooltip, highlightDistrictOnMap);
   });
+}
+
+// "▼ Set upon map ▼" / "▼ Remove from map ▼" (operator ask, 2026-09-07) — the flanking arrows
+// point down at the cartogram/deployed assembly the button acts on, sitting right below it.
+function districtDeployBtnLabel() {
+  const label = S.districtOnMap ? "Remove from map" : "Set upon map";
+  return `▼ ${label} ▼`;
 }
 
 function renderSummaryDistrict(container) {
   const controls = el("div", "ctt-pane-controls");
+  // Left-aligned caption filling the space the deploy button vacated when it moved to the
+  // right (operator ask, 2026-09-07) — describes what the cartogram itself encodes, since
+  // nothing else in this header does.
+  const caption = el("div", "ctt-district-controls-caption");
+  caption.textContent = "Party of District Court Appointments, Arranged by Circuit";
   const deployBtn = el("button", "ctt-toggle ctt-district-deploy-btn", { type: "button" });
-  deployBtn.textContent = S.districtOnMap ? "Remove from map" : "Set upon map";
-  controls.append(deployBtn);
+  deployBtn.textContent = districtDeployBtnLabel();
+  controls.append(caption, deployBtn);
   container.append(controls);
 
   const layout = el("div", "ctt-district-layout");
@@ -1412,16 +1452,17 @@ function animateDistrictSquare(sq, target) {
   step();
 }
 
-// Deliberately its OWN constant, not the map's BLOCK_SCALE_HOVER: an initial pass matched the
-// map's 1.17x exactly (operator's first-look report: "grows too much" compared to the map), but
-// after actually testing it live the operator preferred the bigger growth back — the district
-// cartogram's blocks, unlike the map's own seat blocks, often sit with real gaps between
-// same-district cells (the block-builder tool's trimmed layout doesn't guarantee adjacency), so
-// a bigger scale fills those gaps into one cohesive shape instead of reading as scattered
-// separately-growing squares, which matters more here than it does on the map. Kept as its own
-// named constant (rather than just reverting inline) so the two contexts can keep tuning apart
-// without one accidentally dragging the other along.
-const DISTRICT_SQ_SCALE_HOVER = 1.35;
+// Deliberately its own constant, not the map's BLOCK_SCALE_HOVER (1.17) — history: this was
+// pushed up to 1.35 specifically to let the SCALE ITSELF close the gutter between adjacent
+// same-district cells (the block-builder tool's trimmed layout doesn't guarantee adjacency).
+// That's no longer the scale's job — the non-scaling `.ctt-district-sq-grown` stroke (see its
+// own CSS comment) now closes the seam by a fixed SCREEN-pixel amount regardless of zoom, which
+// is also strictly more robust than the scale ever was (the scale's fixed VIEWBOX-unit margin
+// still shrank away at small render sizes; see the 2026-09-06 session log). With seam-closing no
+// longer riding on it, the scale went back down close to the map's own feel — operator report,
+// 2026-09-07: "the on-hover box growing is now too much" once inspected closely across the
+// Summary preview, the on-map overlay, and the (much smaller) drill-in sub-assembly.
+const DISTRICT_SQ_SCALE_HOVER = 1.15;
 /** `isPinned(did)` (optional — only the Summary preview passes one) makes a pinned district's
  *  blocks STAY grown even after the cursor leaves, until explicitly unpinned (operator ask,
  *  2026-09-05: this was the missing half of "sticky" — the docked panel's CONTENT already
@@ -1447,7 +1488,17 @@ function wireDistrictCartogramHover(svg, tip, onHover, opts = {}) {
   const applyGrowth = () => {
     svg.querySelectorAll(".ctt-district-sq").forEach((sq) => {
       const sqDid = sq.getAttribute("data-district-id");
-      const grow = (hoveredId && sqDid === hoveredId) || (isPinned && isPinned(sqDid));
+      // !! matters: without isPinned (the plain on-map/sub-assembly wiring, no 4th opts arg),
+      // `isPinned && isPinned(sqDid)` evaluates to `undefined`, not `false` — && / || return
+      // operand VALUES, not coerced booleans. classList.toggle(name, force) treats an explicit
+      // `undefined` force as "no force argument at all" (a normal flip-current-state toggle),
+      // NOT as force-remove — so every non-hovered square's ABSENT class flipped to PRESENT on
+      // its very first evaluation, growing every district in the whole assembly at once (root
+      // cause of the operator's "growing squares of multiple district groups" report,
+      // 2026-09-07). animateDistrictSquare's own ternary never had this problem (its two
+      // branches are real values, 1 or the scale constant), which is why growth *itself* was
+      // never wrong — only the (separate) grown-class bookkeeping was.
+      const grow = !!((hoveredId && sqDid === hoveredId) || (isPinned && isPinned(sqDid)));
       animateDistrictSquare(sq, grow ? DISTRICT_SQ_SCALE_HOVER : 1);
       // See the .ctt-district-sq-grown CSS comment: the scale alone only closes the cartogram's
       // gutter with a fixed VIEWBOX-unit margin, which shrinks right along with everything else
@@ -3296,5 +3347,5 @@ export const _dev = {
   S, renderSeatBlocks, refreshSeatBlocks, viewBoxOf, flipConst, shapeAnchor, BLOCK_PX, drillIn, drillOut,
   buildStreamModel, valueAt, ensureChangeData, dayNum, isoOfDayNum, PRESIDENCIES, initials, surname,
   selectSummary, layoutScotusRing, deployDistrictOverlayAnimated, deployDistrictOverlay,
-  defaultDistrictMapState, DISTRICT_ZOOM_STORAGE_KEY,
+  defaultDistrictMapState, DISTRICT_ZOOM_STORAGE_KEY, DISTRICT_SQ_SCALE_HOVER,
 };
