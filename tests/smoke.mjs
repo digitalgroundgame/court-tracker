@@ -27,6 +27,7 @@ globalThis.requestAnimationFrame = (fn) => setTimeout(fn, 0);
 globalThis.cancelAnimationFrame = (id) => clearTimeout(id);
 globalThis.CSS = window.CSS || { escape: (s) => s };
 if (!globalThis.CSS.escape) globalThis.CSS.escape = (s) => s;
+globalThis.localStorage = window.localStorage;   // for the district-overlay zoom-persistence test
 
 // Map the module's import.meta.url-relative fetches back to files on disk.
 globalThis.fetch = async (u) => {
@@ -1093,32 +1094,58 @@ assert(overlay.style.display !== "none", "overlay becomes visible after deployin
 assert(deployBtn.textContent === "Remove from map", "Summary's own button flips label once deployed");
 assert(overlay.querySelectorAll(".ctt-district-cluster").length === 12,
   "deployed overlay renders all 12 geographic circuits, same as the Summary preview");
-assert(overlay.querySelectorAll(".ctt-district-overlay-btn").length === 3,
-  "deployed overlay shows all 3 controls (toggle + resize +/-) while visible");
 // Default placement: fully within the viewport's own bounds (jsdom's 0-everything layout means
 // this checks the ARITHMETIC, not a real screen position — see NOMINAL_MAP_PX fallbacks).
 assert(mod._dev.S.districtMapState.left >= 0 && mod._dev.S.districtMapState.top >= 0,
   `default position is non-negative (got ${JSON.stringify(mod._dev.S.districtMapState)})`);
 
-console.log("on-map show/hide toggle (buttons [1]/[2]) preserves position — no full undeploy");
+console.log("fixed-frame corner controls (operator ask, 2026-09-06): live OUTSIDE the draggable assembly");
+const cornerControls = root.querySelector(".ctt-district-corner-controls");
+assert(cornerControls, "the fixed corner-controls box exists");
+assert(!overlay.contains(cornerControls), "...and is NOT a descendant of the draggable assembly itself");
+assert(cornerControls.querySelectorAll(".ctt-district-overlay-btn").length === 3,
+  "shows all 3 controls (remove + resize +/-) while the assembly is deployed and visible");
+
+console.log("on-map remove (×) preserves position — no full undeploy — and leaves a D button to redeploy");
 const savedState = { ...mod._dev.S.districtMapState };
-click(overlay.querySelector(".ctt-district-overlay-btn"));   // the toggle is always the first control
-assert(overlay.style.display === "none", "clicking the on-map toggle hides the overlay");
+click([...cornerControls.querySelectorAll(".ctt-district-overlay-btn")].find((b) => b.textContent === "×"));
+assert(overlay.style.display === "none", "clicking × hides the (SVG-only) overlay");
 assert(deployBtn.textContent === "Set upon map", "Summary's button reflects the hide");
 assert(JSON.stringify(mod._dev.S.districtMapState) === JSON.stringify(savedState),
   "hiding does NOT discard the remembered position/size (only visibility toggles)");
-assert(overlay.querySelectorAll(".ctt-district-overlay-btn").length === 1,
-  "only the toggle-back-on button remains while hidden — resize +/- are gone (operator spec)");
-click(deployBtn);   // "Set upon map" again — re-show via the Summary button this time
-assert(overlay.style.display !== "none", "re-deploying from Summary shows it again");
+const dButtons = cornerControls.querySelectorAll(".ctt-district-overlay-btn");
+assert(dButtons.length === 1 && dButtons[0].textContent === "D",
+  "removed: the corner controls collapse to a single D (deploy) button — resize +/- are gone too");
+click(dButtons[0]);   // re-show via the fixed D button, NOT Summary's own button this time
+assert(overlay.style.display !== "none", "the D button re-shows the assembly exactly where it was");
+assert(JSON.stringify(mod._dev.S.districtMapState) === JSON.stringify(savedState),
+  "...at the SAME remembered position/size, not a fresh default");
 
-console.log("resize +/- (operator spec)");
+console.log("resize +/- (operator spec) persists the zoom across a page reload (operator ask, 2026-09-06)");
 const widthBefore = mod._dev.S.districtMapState.width;
-click([...overlay.querySelectorAll(".ctt-district-overlay-btn")].find((b) => b.textContent === "+"));
+click([...cornerControls.querySelectorAll(".ctt-district-overlay-btn")].find((b) => b.textContent === "+"));
 assert(mod._dev.S.districtMapState.width > widthBefore, `+ grows the overlay (${widthBefore} -> ${mod._dev.S.districtMapState.width})`);
 const widthAfterGrow = mod._dev.S.districtMapState.width;
-click([...overlay.querySelectorAll(".ctt-district-overlay-btn")].find((b) => b.textContent === "−"));
+assert(+localStorage.getItem(mod._dev.DISTRICT_ZOOM_STORAGE_KEY) === widthAfterGrow,
+  "growing persists the new width to localStorage immediately (not just in memory)");
+click([...cornerControls.querySelectorAll(".ctt-district-overlay-btn")].find((b) => b.textContent === "−"));
 assert(mod._dev.S.districtMapState.width < widthAfterGrow, "− shrinks the overlay back down");
+assert(+localStorage.getItem(mod._dev.DISTRICT_ZOOM_STORAGE_KEY) === mod._dev.S.districtMapState.width,
+  "...and shrinking updates the persisted value too");
+// A FRESH default computation (as "Set upon map" or the D button would use) picks up the
+// persisted zoom instead of the hardcoded 280 default — position is never persisted (only zoom),
+// so this is checked via width alone.
+const freshState = mod._dev.defaultDistrictMapState(0.6);
+assert(freshState.width === mod._dev.S.districtMapState.width,
+  `a fresh deploy would reuse the persisted zoom (got ${freshState.width}, want ${mod._dev.S.districtMapState.width})`);
+
+console.log("corner controls are covered by the pane / hidden outside national view, same as the assembly itself");
+click(root.querySelector('.ctt-selector-item[data-court-id="ca9"]')); await sleep(60);
+assert(cornerControls.style.display === "none", "opening a court's pane also hides the fixed corner controls");
+click(root.querySelector('.ctt-drill')); await sleep(60);   // drills in AND closes the pane
+assert(cornerControls.style.display === "none", "drilling into a circuit hides the corner controls too (national view only)");
+await mod._dev.drillOut(); await sleep(60);
+assert(cornerControls.style.display !== "none", "...and they're back once national view + a closed pane both hold again");
 
 console.log("hover-highlight of the real district shape (operator spec: 'standard blue')");
 const someOverlaySq = overlay.querySelector(".ctt-district-sq[data-district-id]");

@@ -12,6 +12,74 @@ tracker (Phase-4 tail items open, PLUS a brand-new third pane view — "Change",
 (feature-complete first version, operator refinement rounds ongoing; see sessions ai→at, aw).
 **Last updated:** 2026-09-06
 
+> **SESSION (bz), 2026-09-06 — Five more operator reports against the District feature: pane
+> stacking, hover-growth seam artifacting, a 1px Summary height mismatch, fixed-frame map
+> controls with a persisted zoom + a "D" redeploy button, and docked-panel element order.**
+> Operator used the (by)-fixed feature further and found five more issues, none overlapping (by).
+> - **Assembly/sub-assembly must actually GO AWAY under an open pane, not just be covered by
+>   it.** Root cause: `.ctt-district-overlay` (and the drill-in `.ctt-district-subassembly`)
+>   carry their own `z-index` (for the drag/resize chrome), which put them ABOVE `.ctt-pane`'s
+>   default (`auto`) stacking regardless of DOM order — the buildShell comment claiming "both are
+>   position:absolute with no z-index, so DOM order IS stacking order" was simply wrong. Rather
+>   than fight z-index layering, `togglePane()` now explicitly hides both (`display:none`)
+>   whenever the pane opens, via two small helpers (`updateDistrictOverlayVisibility()`,
+>   `updateDistrictSubassemblyVisibility()`) that recompute on every pane toggle, drill-in, and
+>   drill-out. The deploy "pull out" flyover is untouched — it's a separate, short-lived element
+>   this rule never applies to, and by the time the real overlay reappears the pane it flew out
+>   of is already closed.
+> - **Hover-growth "faint light traces" — a real, measured sub-pixel seam, not eyeballing.**
+>   Measured actual `getBoundingClientRect` overlap between adjacent same-district cells at
+>   `DISTRICT_SQ_SCALE_HOVER`: a comfortable −0.325px in the roomy Summary preview, but only
+>   −0.15px in the on-map deployed overlay (280px wide for the whole country's cartogram) — a
+>   fixed VIEWBOX-unit margin that shrinks right along with the cartogram's own render scale, so
+>   it stops reliably covering the seam once the container gets small enough. Fixed by giving
+>   grown cells a `stroke` matching their own fill, `vector-effect: non-scaling-stroke` (the same
+>   "must stay constant on screen regardless of zoom" pattern CLAUDE.md already documents) — pads
+>   the shape by a fixed SCREEN pixel amount instead of a fixed viewBox-unit one, closing the
+>   seam regardless of how small the cartogram renders.
+> - **1px Summary height mismatch, root-caused, not eyeballed either.** SCOTUS's header
+>   (subtitle + meta) and District's (`.ctt-pane-controls`, for "Set upon map") measured 41px vs.
+>   42px of cumulative margin+height before both correctly hit the SAME fixed bottom edge —
+>   `.ctt-stage-row` and `.ctt-district-layout` started 1px apart as a result. Shaved 1px off
+>   `.ctt-pane-controls`' bottom margin, scoped to `.ctt-summary-content > .ctt-pane-controls`
+>   only (it's also the ordinary-court majority-toggle row elsewhere, an unrelated layout chain).
+>   Verified both panels now measure IDENTICAL top AND bottom in real Chrome.
+> - **Fixed-frame map controls, a "D" redeploy button, and a remembered zoom.** The ×/−/+
+>   controls moved out of `.ctt-district-overlay` (where they dragged/resized WITH the assembly,
+>   hard to hit reliably) into a new always-present `.ctt-district-corner-controls` div anchored
+>   to the viewport's own bottom-LEFT corner (deliberately not the assembly's own bottom-right
+>   default, nor the seat blocks' northeast clustering — see `defaultDistrictMapState`'s own
+>   comment). This box now renders from the very first national-view load, not just after a
+>   deploy: when the assembly isn't currently shown (never deployed, or removed via ×) it shows
+>   a single "D" button instead, which redeploys in place (if `S.districtMapState` survived a
+>   plain removal) or loads the arrangement and deploys fresh (if Summary > District was never
+>   opened this session) — no more requiring a trip back to Summary just to get the assembly back
+>   on screen. The assembly's own partial-bottom-clip dragging (`sizeDistrictOverlay`'s existing
+>   `vh - 40` clamp — drag it mostly off-screen, keep some of it visible, never lose it entirely)
+>   needed no change; decoupling the controls is what makes that clipping actually usable, since
+>   the controls no longer clip along with whatever portion of the assembly is dragged off-frame.
+>   Zoom (width only, never position — "Set upon map" already always resets position fresh)
+>   persists across page reloads via a try/catch-guarded `localStorage` read/write, the first use
+>   of localStorage in this codebase; `defaultDistrictMapState` reads it back as the base width
+>   instead of a hardcoded 280, still subject to the same viewport-fit clamps.
+> - **Docked-panel element order (table on top, name + Jump button anchored at the bottom).**
+>   Pure DOM-order change in `showDistrictDetail()` — table first, name and button after — which
+>   falls out of the SAME flex-column mechanics (by)'s bug-1 fix already put in place
+>   (`.ctt-district-detail > .ctt-detail-content`, table wrap `flex:1 1 auto`/`min-height:0`,
+>   everything else `flex:0 0 auto`) purely because the table is now the FIRST (and only
+>   flexible) child. Verified directly: forcing an artificially long, multi-line court name grows
+>   the name's own height and correspondingly SHRINKS the table wrap's height to match — the
+>   "cutoff flexes with the name's line count" requirement, confirmed by measurement, not assumed
+>   from the CSS.
+> - **Tested**: extended `tests/smoke.mjs` for the corner-controls/D-button/zoom-persistence
+>   flow (added `globalThis.localStorage` to the jsdom harness — the first test in this suite to
+>   need it) and the pane-covers-the-assembly rule; `smoke.mjs`/`browser-checks.mjs`/`stress.mjs`
+>   (12 cycles) all pass. All five fixes additionally confirmed with real `getBoundingClientRect`/
+>   computed-style measurements in headless Chrome (throwaway scripts, not checked in) — the
+>   seam-closing and height-alignment fixes in particular were root-caused from ACTUAL measured
+>   numbers, not visual guesses, matching this project's own established discipline for exactly
+>   this class of bug.
+
 > **SESSION (by), 2026-09-06 — Two (bx) bug reports fixed: table growth was pushing the whole
 > pane into an outer scrollbar instead of clipping internally; hover stickiness/row-highlighting
 > didn't actually match the judge-detail panel's documented contract.** Operator used the
@@ -1536,6 +1604,36 @@ Prove the whole app shell and asset schema on one circuit with hand-authored sam
 - Next: ...
 - Blockers: ...
 -->
+
+### 2026-09-06 (bz) — Five more District bug reports: pane stacking, hover-seam artifacting, 1px Summary height mismatch, fixed-frame controls + D button + persisted zoom, docked-panel order
+- Phase: 4, continuing (by). Pane-covers-the-map: `.ctt-district-overlay`/`.ctt-district-subassembly`
+  carry their own z-index (drag/resize chrome) which put them ABOVE `.ctt-pane`'s default stacking
+  regardless of DOM order — fixed by explicitly hiding both whenever the pane opens
+  (updateDistrictOverlayVisibility/updateDistrictSubassemblyVisibility, called from togglePane).
+- Hover-growth "faint light traces": measured real overlap between grown same-district cells —
+  a comfortable margin in the roomy Summary preview but only ~0.15px in the smaller on-map
+  overlay, since the closure margin is a fixed VIEWBOX-unit amount that shrinks with the
+  cartogram's own render scale. Fixed with a non-scaling stroke matching each cell's fill, which
+  pads by a fixed SCREEN-pixel amount instead, robust regardless of zoom.
+- 1px Summary height mismatch: SCOTUS's header (subtitle+meta) and District's (.ctt-pane-controls)
+  measured 41 vs 42px of cumulative margin before hitting the same fixed bottom edge. Shaved 1px
+  off .ctt-pane-controls' margin, scoped to Summary only. Both panels now measure identical top
+  AND bottom.
+- Fixed-frame map controls: ×/−/+ moved out of the draggable assembly into a new
+  .ctt-district-corner-controls div anchored to the viewport's own bottom-left corner, present
+  from national view's first load. Shows a "D" button when the assembly isn't currently shown,
+  which redeploys in place or loads+deploys fresh — no more requiring a trip back to Summary.
+  Zoom (width only, never position) now persists across page reloads via localStorage (first use
+  in this codebase), read back by defaultDistrictMapState as the base width.
+- Docked-panel order: table first (flexes/clips), name + Jump button anchored at the bottom —
+  pure DOM-order change in showDistrictDetail(), riding the same flex-column mechanics (by)
+  already put in place. Verified an artificially long multi-line name correspondingly shrinks the
+  table's own height.
+- Verified: extended tests/smoke.mjs (added localStorage to the jsdom harness); smoke.mjs/
+  browser-checks.mjs/stress.mjs (12 cycles) all pass. All five fixes additionally confirmed via
+  real getBoundingClientRect/computed-style measurement in headless Chrome.
+- Next: no open item from this bug report. Resume the Phase-4 tail list above as the next task.
+- Blockers: none.
 
 ### 2026-09-06 (by) — Two (bx) bug reports fixed: table-overflow scrollbar + hover stickiness/row-highlighting
 - Phase: 4, continuing (bx). Bug 1 (table growth pushed a whole-pane scrollbar instead of
