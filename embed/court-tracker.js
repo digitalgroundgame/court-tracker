@@ -1054,6 +1054,67 @@ function deployDistrictOverlay(circuits) {
   setDistrictOnMap(true);
 }
 
+const DISTRICT_FLYOVER_MS = 520;
+
+/** "The 'pull out of one interface and into another' effect should exist for DEPLOYING... it
+ *  should not exist when returning it" (operator spec) — this is the ONLY place that
+ *  animation lives; hide/show/redeploy elsewhere stay instant. Measures the cartogram's
+ *  on-screen rect as it sits INSIDE the Summary pane, closes the pane (so "the summary pane
+ *  flips up"), then flies an independent floating clone from that rect to the on-map target
+ *  rect — the real assembly visually appears to stay in place and migrate, rather than
+ *  vanishing with the pane and reappearing elsewhere. `sourceSvg` must be measured BEFORE
+ *  calling this (i.e. before anything closes/moves it). */
+function deployDistrictOverlayAnimated(circuits, sourceSvg) {
+  const startRect = sourceSvg.getBoundingClientRect();
+  deselect();   // "the summary pane flips up" — same close path as the × button
+  if (reducedMotion() || !startRect.width || !startRect.height) {
+    deployDistrictOverlay(circuits);
+    return;
+  }
+  const { svg: flySvg, bbox } = buildDistrictCartogramSVG(circuits);
+  const aspect = bbox ? bbox.H / bbox.W : 0.6;
+  const targetState = defaultDistrictMapState(aspect);
+  const vpRect = S.ui.viewport.getBoundingClientRect();
+  const targetRect = {
+    left: vpRect.left + targetState.left, top: vpRect.top + targetState.top,
+    width: targetState.width, height: targetState.width * aspect,
+  };
+
+  const fly = el("div", "ctt-district-flyover");
+  fly.append(flySvg);
+  document.body.append(fly);
+  // .ctt-sq-rep/-dem/-other read var(--ctt-rep) etc., defined on .ctt-root — this element is
+  // deliberately appended to document.body (same reason S.ui.tooltip already is: it must
+  // render above the whole widget including the pane, which .ctt-root's own stacking can't
+  // guarantee), so those custom properties don't cascade to it and the squares rendered solid
+  // BLACK (fill's initial value) the first time this ran. Copy just the 3 that matter —
+  // .ctt-sq-vacant's colors are hardcoded, not var()-based, so it was never affected.
+  const rootStyle = getComputedStyle(S.ui.root);
+  fly.style.setProperty("--ctt-rep", rootStyle.getPropertyValue("--ctt-rep"));
+  fly.style.setProperty("--ctt-dem", rootStyle.getPropertyValue("--ctt-dem"));
+  fly.style.setProperty("--ctt-other", rootStyle.getPropertyValue("--ctt-other"));
+  Object.assign(fly.style, {
+    left: `${startRect.left}px`, top: `${startRect.top}px`,
+    width: `${startRect.width}px`, height: `${startRect.height}px`, transition: "none",
+  });
+  void fly.offsetWidth;   // flush the start position before switching on the transition
+  fly.style.transition = `left ${DISTRICT_FLYOVER_MS}ms ease, top ${DISTRICT_FLYOVER_MS}ms ease, ` +
+    `width ${DISTRICT_FLYOVER_MS}ms ease, height ${DISTRICT_FLYOVER_MS}ms ease`;
+  requestAnimationFrame(() => Object.assign(fly.style, {
+    left: `${targetRect.left}px`, top: `${targetRect.top}px`,
+    width: `${targetRect.width}px`, height: `${targetRect.height}px`,
+  }));
+  let done = false;
+  const finish = () => {
+    if (done) return;               // transitionend AND the safety timeout can both fire
+    done = true;
+    fly.remove();
+    deployDistrictOverlay(circuits);   // the real persistent overlay takes over from here
+  };
+  fly.addEventListener("transitionend", finish, { once: true });
+  setTimeout(finish, DISTRICT_FLYOVER_MS + 150);   // safety net if transitionend never fires
+}
+
 /** Cursor click-drag repositioning (operator spec). Dragging from a control button must not
  *  also move the whole overlay — checked first and bailed, same guard shape as the map's own
  *  seat-block tuner drag in tools/tune-seat-blocks.html. */
@@ -1132,14 +1193,16 @@ function renderSummaryDistrict(container) {
       layout.replaceWith(note);
       return;
     }
-    // setDistrictOnMap()/deployDistrictOverlay() both already update this button's text
-    // themselves (via the .ctt-district-deploy-btn lookup) — one source of truth for the label.
-    deployBtn.addEventListener("click", () => {
-      if (S.districtOnMap) setDistrictOnMap(false);
-      else deployDistrictOverlay(circuits);
-    });
     const { svg } = buildDistrictCartogramSVG(circuits);
     wrap.append(svg);
+    // setDistrictOnMap()/deployDistrictOverlay() both already update this button's text
+    // themselves (via the .ctt-district-deploy-btn lookup) — one source of truth for the label.
+    // Deploying uses the animated "pull out" (needs `svg`'s CURRENT on-screen rect, measured
+    // before anything moves); hiding is instant (operator spec: no animation on the way back).
+    deployBtn.addEventListener("click", () => {
+      if (S.districtOnMap) setDistrictOnMap(false);
+      else deployDistrictOverlayAnimated(circuits, svg);
+    });
 
     let pinned = null;
     detailClose.addEventListener("click", () => {
@@ -3025,5 +3088,5 @@ export default mount;
 export const _dev = {
   S, renderSeatBlocks, refreshSeatBlocks, viewBoxOf, flipConst, shapeAnchor, BLOCK_PX, drillIn, drillOut,
   buildStreamModel, valueAt, ensureChangeData, dayNum, isoOfDayNum, PRESIDENCIES, initials, surname,
-  selectSummary, layoutScotusRing,
+  selectSummary, layoutScotusRing, deployDistrictOverlayAnimated, deployDistrictOverlay,
 };
