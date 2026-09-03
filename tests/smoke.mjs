@@ -1010,6 +1010,101 @@ assert(root.querySelector(judgeDetailSel).style.display === "none",
 click(toggle("Supreme Court")); await sleep(20);   // back to the default sub-view for a clean state
 click(root.querySelector('.ctt-selector-item[data-court-id="summary"]')); await sleep(20);  // deselect
 
+console.log("District 'Set upon map' deployment (operator spec, 2026-09-04)");
+click(root.querySelector('.ctt-selector-item[data-court-id="summary"]')); await sleep(60);
+click(toggle("District Courts")); await sleep(60);
+const overlay = root.querySelector(".ctt-district-overlay");
+assert(overlay.style.display === "none", "deployed overlay starts hidden (nothing deployed yet)");
+const deployBtn = root.querySelector(".ctt-district-deploy-btn");
+assert(deployBtn.textContent === "Set upon map", "deploy button starts as 'Set upon map'");
+click(deployBtn);
+assert(overlay.style.display !== "none", "overlay becomes visible after deploying");
+assert(deployBtn.textContent === "Remove from map", "Summary's own button flips label once deployed");
+assert(overlay.querySelectorAll(".ctt-district-cluster").length === 12,
+  "deployed overlay renders all 12 geographic circuits, same as the Summary preview");
+assert(overlay.querySelectorAll(".ctt-district-overlay-btn").length === 3,
+  "deployed overlay shows all 3 controls (toggle + resize +/-) while visible");
+// Default placement: fully within the viewport's own bounds (jsdom's 0-everything layout means
+// this checks the ARITHMETIC, not a real screen position — see NOMINAL_MAP_PX fallbacks).
+assert(mod._dev.S.districtMapState.left >= 0 && mod._dev.S.districtMapState.top >= 0,
+  `default position is non-negative (got ${JSON.stringify(mod._dev.S.districtMapState)})`);
+
+console.log("on-map show/hide toggle (buttons [1]/[2]) preserves position — no full undeploy");
+const savedState = { ...mod._dev.S.districtMapState };
+click(overlay.querySelector(".ctt-district-overlay-btn"));   // the toggle is always the first control
+assert(overlay.style.display === "none", "clicking the on-map toggle hides the overlay");
+assert(deployBtn.textContent === "Set upon map", "Summary's button reflects the hide");
+assert(JSON.stringify(mod._dev.S.districtMapState) === JSON.stringify(savedState),
+  "hiding does NOT discard the remembered position/size (only visibility toggles)");
+assert(overlay.querySelectorAll(".ctt-district-overlay-btn").length === 1,
+  "only the toggle-back-on button remains while hidden — resize +/- are gone (operator spec)");
+click(deployBtn);   // "Set upon map" again — re-show via the Summary button this time
+assert(overlay.style.display !== "none", "re-deploying from Summary shows it again");
+
+console.log("resize +/- (operator spec)");
+const widthBefore = mod._dev.S.districtMapState.width;
+click([...overlay.querySelectorAll(".ctt-district-overlay-btn")].find((b) => b.textContent === "+"));
+assert(mod._dev.S.districtMapState.width > widthBefore, `+ grows the overlay (${widthBefore} -> ${mod._dev.S.districtMapState.width})`);
+const widthAfterGrow = mod._dev.S.districtMapState.width;
+click([...overlay.querySelectorAll(".ctt-district-overlay-btn")].find((b) => b.textContent === "−"));
+assert(mod._dev.S.districtMapState.width < widthAfterGrow, "− shrinks the overlay back down");
+
+console.log("hover-highlight of the real district shape (operator spec: 'standard blue')");
+const someOverlaySq = overlay.querySelector(".ctt-district-sq[data-district-id]");
+const targetDid = someOverlaySq.getAttribute("data-district-id");
+someOverlaySq.dispatchEvent(new window.MouseEvent("pointermove", { bubbles: true, clientX: 1, clientY: 1 }));
+const litShape = root.querySelector(".ctt-shape-district-hover");
+assert(litShape && litShape.getAttribute("data-court-id") === targetDid,
+  `hovering a deployed block tints that district's REAL map shape (got ${litShape?.getAttribute("data-court-id")}, want ${targetDid})`);
+overlay.querySelector(".ctt-district-cartogram").dispatchEvent(new window.MouseEvent("pointerleave", { bubbles: true }));
+assert(!root.querySelector(".ctt-shape-district-hover"), "moving off the overlay clears the map-shape highlight");
+
+console.log("drag repositioning (operator spec)");
+const before = { ...mod._dev.S.districtMapState };
+overlay.dispatchEvent(new window.PointerEvent("pointerdown", { bubbles: true, clientX: 500, clientY: 500 }));
+window.dispatchEvent(new window.PointerEvent("pointermove", { clientX: 460, clientY: 470 }));
+window.dispatchEvent(new window.PointerEvent("pointerup", { clientX: 460, clientY: 470 }));
+assert(mod._dev.S.districtMapState.left === before.left - 40 || Math.abs(mod._dev.S.districtMapState.left - (before.left - 40)) < 1,
+  `dragging moves the overlay by the pointer delta (left ${before.left} -> ${mod._dev.S.districtMapState.left})`);
+
+console.log("redeploying always replaces (operator confirmed) — resets to a fresh default");
+overlay.dispatchEvent(new window.PointerEvent("pointerdown", { bubbles: true, clientX: 500, clientY: 500 }));
+window.dispatchEvent(new window.PointerEvent("pointermove", { clientX: 300, clientY: 300 }));
+window.dispatchEvent(new window.PointerEvent("pointerup", { clientX: 300, clientY: 300 }));
+const draggedState = { ...mod._dev.S.districtMapState };
+click(deployBtn);   // "Remove from map" — full round trip back to "Set upon map"
+click(deployBtn);   // fresh "Set upon map" click: should NOT reuse the dragged-to position
+assert(JSON.stringify(mod._dev.S.districtMapState) !== JSON.stringify(draggedState),
+  "a fresh 'Set upon map' does not resume a previous deployment's dragged position");
+
+console.log("circuit drill-in: national assembly hides, a fixed circuit-only sub-assembly shows");
+const ca8ItemForDrill = [...root.querySelectorAll(".ctt-selector-item")].find((i) => i.getAttribute("data-court-id") === "ca8");
+click(root.querySelector(".ctt-pane-close"));
+click(ca8ItemForDrill); await sleep(30);
+click(root.querySelector(".ctt-drill"));
+await waitFor(() => mod._dev.S.view === "circuit", 2000);
+await sleep(30);
+assert(overlay.style.display === "none", "national deployed assembly is hidden while drilled in");
+const sub = root.querySelector(".ctt-district-subassembly");
+assert(sub, "a circuit-scoped fixed sub-assembly appears on drill-in");
+await waitFor(() => sub.querySelectorAll(".ctt-district-cluster").length > 0, 1000);
+const subClusters = [...sub.querySelectorAll(".ctt-district-cluster")].map((g) => g.getAttribute("data-circuit-id"));
+assert(JSON.stringify(subClusters) === JSON.stringify(["ca8"]),
+  `sub-assembly renders ONLY the drilled-in circuit's own cluster (got ${JSON.stringify(subClusters)})`);
+click(root.querySelector(".ctt-selector-back"));
+await waitFor(() => mod._dev.S.view === "national", 2000);
+assert(!root.querySelector(".ctt-district-subassembly"), "sub-assembly is swept on drill-out");
+assert(overlay.style.display !== "none", "the national deployed assembly reappears back in national view");
+
+console.log("Federal Circuit has no district sub-assembly (no districts of its own)");
+click(root.querySelector('.ctt-selector-item[data-court-id="cafc"]'));   // opens cafc's own pane
+await sleep(30);
+click(root.querySelector(".ctt-drill"));   // "View feeders →" — actually drills into the feeder view
+await sleep(30);
+assert(!root.querySelector(".ctt-district-subassembly"), "cafc's feeder view shows no sub-assembly (it has no districts)");
+click(root.querySelector(".ctt-selector-back"));
+await sleep(30);
+
 console.log("appointments beeswarm widget (separate module, session aj)");
 {
   const chartRoot = document.createElement("div");
