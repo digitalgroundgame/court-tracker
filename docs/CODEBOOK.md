@@ -149,6 +149,34 @@ current widget.
 | `photo_url`, `photo_source`, `photo_license` | SCOTUS rows only (the beeswarm draws justices with photos). Sitting nine from judges.csv at collect time; former justices via `scripts/enrich_scotus_photos.py` (same license gate as all photos). |
 | `source`, `notes` | `fjc_bulk` / `fjc_html` (CFC) / `territorial_manual` (current-only, documented gap) |
 
+---
+
+## Table F — `district_arrangement.json`  (operator-authored; national district-block cartogram)
+
+Hand-built via the standalone `tools/district-block-builder.html` (Sampler → Editor → District
+linker → Arrangement stages; see `PROGRESS.md` sessions (bi)-(bq) for the tool's own build
+history). One entry per geographic circuit (12 — the 11 numbered circuits + D.C.; the Federal
+Circuit has no districts and never appears here), each a square-grid matrix hand-shaped to
+resemble that circuit's real boundary, positioned on a shared canvas so the 12 together roughly
+resemble the outline of the continental US. **Not yet consumed by `build_assets.py` or the live
+widget** — this is the raw tool export, checked in as source while the map-integration work
+(rendering it as a new national-view-only cartogram layer, per `CLAUDE.md`'s planned "Summary >
+District" feature) is still pending.
+
+| key | type | description |
+|---|---|---|
+| `schema` | string | `district-block/arrangement@1` — the tool's own export format tag. |
+| `circuits[].circuit_id` | string | FK → `courts.court_id`, always a circuit. |
+| `circuits[].offset` | `[x, y]` | This circuit's block cluster's position on the shared arrangement canvas, in the same fixed square-grid units the matrix itself uses (`PITCH` in the tool — centre-to-centre block spacing). Arbitrary, human-placed; no relation to real map projection units. |
+| `circuits[].matrix` | `number[][]` | 0/1 grid; 1 = a block exists at that row/col. Trimmed (no all-zero edge row/col). |
+| `circuits[].cell_colors` | `{"row,col": "r"\|"d"\|"o"\|"vacant"}` | **Frozen at export time** from that session's `seat_blocks.json` — do NOT treat as live truth. A future ingestion step must recompute colors from current judge data (same principle as `seat_blocks.json` itself: composition is always derived fresh, position/shape is the only durable human input) rather than trust this field going stale as appointments change. |
+| `circuits[].cell_district` | `{"row,col": court_id}` | Which district court owns each block — durable (doesn't change with judge composition), needed for the map's per-district hover-highlight behavior. |
+
+- **Re-tuning is data-only**, same as `seat_blocks.csv`: re-export from the tool, drop the file
+  in, no code changes — once a `build_assets.py` step exists to consume it.
+- If a circuit's real judge composition changes before that build step exists, `cell_colors`
+  here will silently be stale; there is no automatic refresh path yet.
+
 ## Validation rules (enforced in `build_assets.py`)
 - Every `judges.court_id` and `circuit_justices.circuit_id` exists in `courts.csv`.
 - `fedsoc_reported`/`acs_reported` true ⇒ corresponding `*_source` non-null.

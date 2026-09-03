@@ -74,7 +74,13 @@ const S = {
   appointmentsAll: null,      // data/appointments.json, lazy-loaded once for the Change view
   presidentPhotos: null,      // data/president_photos.json, lazy-loaded once
   streamColorScheme: "alt",   // 'alt' | 'fade' — Change view palette (operator A/B, CLAUDE ask)
+  summaryView: "scotus",      // 'scotus' | 'appellate' | 'district' — Summary pane sub-tab
+  districtArrangement: null,  // data/district_arrangement.json, lazy-loaded once (Summary > District)
 };
+// Sentinel selectedCourt value for the Summary pane — not a real courts.csv row (has_geography
+// doesn't apply; it's a fixed pane, never a map shape), so every place that reads S.selectedCourt
+// as a courts.json lookup must tolerate this not resolving to anything.
+const SUMMARY_ID = "summary";
 
 const PARTY_CLASS = { Republican: "ctt-rep", Democratic: "ctt-dem" };
 
@@ -321,8 +327,7 @@ function renderSelector() {
   const sel = S.ui.selector;
   sel.innerHTML = "";
   if (S.view === "national") {
-    addSelectorGroup(sel, "Supreme Court", [...S.courts.values()]
-      .filter((c) => c.court_level === "scotus"), (c) => selectCourt(c.court_id));
+    addSummaryButton(sel);
     addSelectorGroup(sel, "Circuits", [...S.courts.values()]
       .filter((c) => c.court_level === "circuit")
       .sort(byCircuitOrder), (c) => selectCourt(c.court_id));
@@ -350,6 +355,18 @@ function addSelectorGroup(sel, label, courts, onPick) {
     if (c.court_id === S.selectedCourt) item.classList.add("ctt-is-selected");
     sel.append(item);
   });
+}
+/** Replaces the old lone "Supreme Court" selector entry: a single, larger button opening the
+ *  Summary pane (SCOTUS | Appellate | District sub-tabs, default SCOTUS — operator ask). Larger
+ *  than a normal selector item so it reads as a distinct top-level destination, not a 14th
+ *  circuit in the list. */
+function addSummaryButton(sel) {
+  const btn = el("button", "ctt-selector-item ctt-summary-btn",
+    { type: "button", "data-court-id": SUMMARY_ID });
+  btn.textContent = "Summary";
+  btn.addEventListener("click", selectSummary);
+  if (S.selectedCourt === SUMMARY_ID) btn.classList.add("ctt-is-selected");
+  sel.append(btn);
 }
 function addBackButton(sel) {
   const back = el("button", "ctt-selector-back", { type: "button" });
@@ -445,6 +462,23 @@ async function selectCourt(courtId) {
   // so the justice's docked detail carries the full record, not the thin justices row.
   if (court.court_level === "circuit") await loadJudges("scotus");
   renderPane(court);
+  togglePane(true);
+}
+
+/** Summary pane: SCOTUS | Appellate | District sub-tabs (replaces the old lone SCOTUS
+ *  selector entry). Not a real court selection — no map shape, so highlightShape/clearShapeHighlight
+ *  are still called (consistent with selectCourt) purely to clear any PREVIOUSLY selected
+ *  court's shape highlight; neither matches anything for the "summary" sentinel itself. */
+async function selectSummary() {
+  if (S.selectedCourt === SUMMARY_ID && S.ui.pane.classList.contains("ctt-is-open")) {
+    deselect();
+    return;
+  }
+  S.selectedCourt = SUMMARY_ID;
+  highlightSelector(SUMMARY_ID);
+  highlightShape(SUMMARY_ID);
+  await loadJudges("scotus");
+  renderSummaryPane();
   togglePane(true);
 }
 
@@ -670,6 +704,218 @@ function renderPane(court) {
   // reflect current mode (persists across court selections, same as before this added a
   // third state — a fresh mount still starts at "timeline" per the S state default)
   setMode(S.paneMode);
+}
+
+// ---- Summary pane (SCOTUS | Appellate | District) -----------------------------
+// Replaces the old lone "Supreme Court" selector entry (operator ask, 2026-09-03): a single
+// "Summary" destination with its own 3-way sub-tab, defaulting to SCOTUS. Appellate is an
+// intentional placeholder (operator: "leave blank, come back to it later"). District renders
+// the operator-authored national cartogram (data/district_arrangement.json) statically, with
+// hover-grow-and-tint like the map's own seat blocks — the "lift onto the map" deployment
+// mechanic, the docked per-district detail viewer, and click-to-pin district info are a large,
+// separate feature not yet built (see PROGRESS.md); this is the pane content it will lift FROM.
+function renderSummaryPane() {
+  unpinDetail();
+  const body = S.ui.paneBody;
+  S.ui.pane.append(S.ui.detail);   // rescue the docked detail panel before the wipe (see renderPane)
+  body.innerHTML = "";
+
+  const head = el("div", "ctt-pane-head");
+  const headText = el("div", "ctt-pane-headtext");
+  const h = el("div", "ctt-pane-title");
+  h.textContent = "Summary";
+  const meta = el("div", "ctt-pane-meta");
+  meta.textContent = "Supreme Court · Courts of Appeals · District Courts";
+  headText.append(h, meta);
+  head.append(headText);
+  body.append(head);
+
+  const content = el("div", "ctt-summary-content");
+
+  // Larger-than-usual segmented control (operator ask) — same visual family as the pane's
+  // Timeline|Majority|Change switch (.ctt-toggle/.ctt-mode-opt), sized up via .ctt-summary-switch.
+  const subWrap = el("div", "ctt-mode-switch ctt-summary-switch", { role: "group", "aria-label": "Summary section" });
+  const tabs = [["scotus", "SCOTUS"], ["appellate", "Appellate"], ["district", "District"]];
+  const btns = {};
+  const setView = (view) => {
+    S.summaryView = view;
+    for (const [v, b] of Object.entries(btns)) b.classList.toggle("ctt-is-active", v === view);
+    renderSummaryContent(content);
+  };
+  for (const [v, label] of tabs) {
+    const b = el("button", "ctt-toggle ctt-mode-opt", { type: "button" });
+    b.textContent = label;
+    b.addEventListener("click", () => setView(v));
+    subWrap.append(b);
+    btns[v] = b;
+  }
+  body.append(subWrap, content);
+  setView(S.summaryView);   // persists across re-opens, same convention as S.paneMode
+}
+
+function renderSummaryContent(container) {
+  container.innerHTML = "";
+  if (S.summaryView === "scotus") renderSummaryScotus(container);
+  else if (S.summaryView === "appellate") renderSummaryAppellate(container);
+  else renderSummaryDistrict(container);
+}
+
+/** Summary > SCOTUS: the old direct SCOTUS pane's Majority view, permanently on (operator:
+ *  eliminate Timeline and Change here — there is nothing to switch between any more), with a
+ *  split double-ring layout (6 outer + 3 inner, see layoutScotusRing) and icons at 2x size
+ *  ("since it is SCOTUS"). Reuses the exact same bench-building/hover/pin machinery as every
+ *  other court's Majority view — buildBenchModel, renderJudgeIcons, the docked S.ui.detail
+ *  panel — so none of that needs a SCOTUS-specific reimplementation. */
+function renderSummaryScotus(container) {
+  const court = S.courts.get("scotus");
+  if (!court) return;   // manifest not loaded — selectSummary() always awaits loadJudges first
+  const judges = judgesForCourt("scotus", "scotus");
+  const active = judges.filter((j) => j.status === "active");
+  const senior = judges.filter((j) => j.status === "senior");   // always empty: 28 U.S.C. §371
+  const authorized = court.authorized_judgeships || 0;
+  const vacancies = Math.max(0, authorized - active.length);
+
+  const label = el("div", "ctt-summary-subtitle");
+  label.textContent = court.court_name;
+  const meta = el("div", "ctt-pane-meta");
+  // Same "no senior figure" rule as the old direct SCOTUS pane: a retired justice remains an
+  // Article III judge but does not sit, so seniors are never part of this meta line.
+  meta.textContent = `${authorized} authorized · ${active.length} active · ${vacancies} vacant`;
+  container.append(label, meta);
+
+  const stageRow = el("div", "ctt-stage-row");
+  const stageMain = el("div", "ctt-stage-main");
+  stageRow.append(stageMain, S.ui.detail);
+  const stage = el("div", "ctt-judge-stage ctt-scotus-stage");
+  stageMain.append(stage);
+  container.append(stageRow);
+  resetDetail();
+
+  const model = buildBenchModel(court, active, senior, vacancies, "scotus");
+  stage._model = model;
+  stage._court = court;
+  renderJudgeIcons(stage, model);
+  applyAffilMarks();
+
+  S.paneMode = "majority";
+  S.majorityMode = true;
+  layoutJudges();
+}
+
+function renderSummaryAppellate(container) {
+  const note = el("div", "ctt-summary-placeholder");
+  note.textContent = "Coming soon.";
+  container.append(note);
+}
+
+// ---- Summary > District: static cartogram (no map deployment yet) -------------
+async function loadDistrictArrangement() {
+  if (S.districtArrangement) return S.districtArrangement;
+  const path = S.manifest.files?.district_arrangement;
+  S.districtArrangement = path ? await fetchJSON(path) : { circuits: [] };
+  return S.districtArrangement;
+}
+
+// Same fixed layout constants the map's own seat blocks use (embed/court-tracker.js's
+// BLOCK_PX/BLOCK_GAP) so a block reads as the same "size" concept in both places, even though
+// this cartogram isn't on the map yet.
+const DISTRICT_CARTOGRAM_PX = 6.5;
+const DISTRICT_CARTOGRAM_GAP = 0.30;
+const DISTRICT_CARTOGRAM_PITCH = DISTRICT_CARTOGRAM_PX * (1 + DISTRICT_CARTOGRAM_GAP);
+
+function renderSummaryDistrict(container) {
+  const wrap = el("div", "ctt-district-cartogram-wrap");
+  const svg = svgEl("svg", { class: "ctt-district-cartogram" });
+  wrap.append(svg);
+  container.append(wrap);
+  const tip = S.ui.tooltip;
+
+  loadDistrictArrangement().then((arrangement) => {
+    if (!container.isConnected || S.summaryView !== "district") return;   // stale by the time it loads
+    const circuits = arrangement.circuits || [];
+    if (!circuits.length) {
+      const note = el("div", "ctt-summary-placeholder");
+      note.textContent = "No district cartogram data available yet.";
+      wrap.replaceWith(note);
+      return;
+    }
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const c of circuits) {
+      const rows = c.matrix.length, cols = c.matrix[0].length;
+      x0 = Math.min(x0, c.offset[0]); y0 = Math.min(y0, c.offset[1]);
+      x1 = Math.max(x1, c.offset[0] + cols * DISTRICT_CARTOGRAM_PITCH);
+      y1 = Math.max(y1, c.offset[1] + rows * DISTRICT_CARTOGRAM_PITCH);
+    }
+    const pad = DISTRICT_CARTOGRAM_PITCH * 2;
+    const W = (x1 - x0) + pad * 2, H = (y1 - y0) + pad * 2;
+    svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+    const originX = x0 - pad, originY = y0 - pad;
+
+    for (const c of circuits) {
+      const g = svgEl("g", { class: "ctt-district-cluster", "data-circuit-id": c.circuit_id });
+      const rows = c.matrix.length, cols = c.matrix[0].length;
+      const gx = c.offset[0] - originX, gy = c.offset[1] - originY;
+      g.setAttribute("transform", `translate(${gx} ${gy})`);
+      for (let r = 0; r < rows; r++) {
+        for (let col = 0; col < cols; col++) {
+          if (!c.matrix[r][col]) continue;
+          const key = `${r},${col}`;
+          const did = c.cell_district?.[key];
+          const colorKey = c.cell_colors?.[key];
+          // district-block-builder.html's export keys are r/d/o/vacant; the map's OWN
+          // seat-block squares (renderSeatBlocks/seatSquares) use the fuller class names below —
+          // reuse those directly rather than a second palette that could drift from them.
+          const sqClass = { r: "ctt-sq-rep", d: "ctt-sq-dem", o: "ctt-sq-other", vacant: "ctt-sq-vacant" }[colorKey];
+          const rect = svgEl("rect", {
+            class: "ctt-district-sq" + (sqClass ? ` ${sqClass}` : ""),
+            x: col * DISTRICT_CARTOGRAM_PITCH, y: r * DISTRICT_CARTOGRAM_PITCH,
+            width: DISTRICT_CARTOGRAM_PX, height: DISTRICT_CARTOGRAM_PX,
+          });
+          if (did) rect.setAttribute("data-district-id", did);
+          g.append(rect);
+        }
+      }
+      svg.append(g);
+    }
+    wireDistrictCartogramHover(svg, tip);
+  }).catch((err) => {
+    if (!container.isConnected || S.summaryView !== "district") return;
+    console.error("[court-tracker] district cartogram load failed:", err);
+    const note = el("div", "ctt-summary-placeholder");
+    note.textContent = "Could not load the district cartogram.";
+    wrap.replaceWith(note);
+  });
+}
+
+/** Hover grows every block belonging to the same district together (CLAUDE.md: "district
+ *  court-square synced block growing on-hover"), with a tooltip naming the court and its LIVE
+ *  composition (from seat_blocks, never the frozen cell_colors — see CODEBOOK.md Table F's
+ *  staleness note). Reuses the tooltip DOM node the map's own shape/block hover already owns. */
+function wireDistrictCartogramHover(svg, tip) {
+  let hoveredId = null;
+  const setHover = (did) => {
+    if (did === hoveredId) return;
+    hoveredId = did;
+    svg.querySelectorAll(".ctt-district-sq").forEach((sq) =>
+      sq.classList.toggle("ctt-district-sq-hover", !!did && sq.getAttribute("data-district-id") === did));
+  };
+  svg.addEventListener("pointermove", (e) => {
+    const sq = e.target.closest && e.target.closest(".ctt-district-sq");
+    const did = sq?.getAttribute("data-district-id") || null;
+    setHover(did);
+    if (did) {
+      const court = S.courts.get(did);
+      const b = S.seatBlocks?.[did];
+      const composition = b ? `${b.r} R · ${b.d} D${b.vacancies ? ` · ${b.vacancies} vacant` : ""}` : "";
+      tip.textContent = court ? `${court.court_name}${composition ? ` — ${composition}` : ""}` : did;
+      tip.style.display = "block";
+      tip.style.left = `${e.clientX + 14}px`;
+      tip.style.top = `${e.clientY + 14}px`;
+    } else {
+      tip.style.display = "none";
+    }
+  });
+  svg.addEventListener("pointerleave", () => { setHover(null); tip.style.display = "none"; });
 }
 
 // ---- bench model --------------------------------------------------------------
@@ -923,14 +1169,21 @@ function layoutJudges() {
   if (!S.majorityMode) {
     layoutTimeline(model, w, H);
     drawMajorityOverlay(stage, null);
+  } else if (stage.classList.contains("ctt-scotus-stage")) {
+    layoutScotusRing(model, w, H);
+    drawMajorityOverlay(stage, model);
   } else {
     layoutArc(model, w, H);
     drawMajorityOverlay(stage, model);
   }
 }
 
-function place(node, cx, cy, show) {
-  node.style.transform = `translate(${cx - ICON}px, ${cy - ICON}px)`;
+function place(node, cx, cy, show, scale = 1) {
+  // translate-then-scale composes around the box's OWN center (its default transform-origin),
+  // unaffected by the translate — so a scaled icon still lands centred at (cx,cy) with no
+  // change to the offset math below (verified: this is exactly why Summary > SCOTUS's 2x
+  // icons don't need a different ICON constant or re-centering logic).
+  node.style.transform = `translate(${cx - ICON}px, ${cy - ICON}px)` + (scale !== 1 ? ` scale(${scale})` : "");
   node.style.opacity = show ? "1" : "0";
   node.style.pointerEvents = show ? "" : "none";
 }
@@ -1037,6 +1290,59 @@ function layoutArc(model, w, H) {
 
   if (model._justiceNode) place(model._justiceNode, cx, cy - R0 * 0.3, true);
   model._arcRender = { cx, cy, radii, bandR, hasSeniorsBand };  // for the overlay
+}
+
+// Summary > SCOTUS's fixed double-ring layout (operator ask, 2026-09-03): unlike layoutArc's
+// general N-seat planRings() algorithm (shared by every other court's Majority view), SCOTUS is
+// always exactly 9 authorized seats, split 6 outer + 3 inner — never a computed ring count, so
+// this is deliberately its own small function rather than a planRings special case.
+const SCOTUS_ICON_SCALE_MAX = 2;      // icons target 2x normal size ("since it is SCOTUS")
+const SCOTUS_INNER_COUNT = 3, SCOTUS_OUTER_COUNT = 6;
+const SCOTUS_RAISE_DEG = 15;          // inner ring's first/last seats lift off 180°/0° by this much
+function layoutScotusRing(model, w, H) {
+  const { cx, cy } = majorityDims(w, H);   // cx/cy only — Rmax/R0 there assume 1x icons, not 2x
+  const m = Math.min(cx, cy);
+  // Icons TARGET 2x but shrink toward (never below) 1x only as far as the stage actually
+  // forces. A fixed 2x crowded the 6 outer-ring icons into each other on a ~380px mobile
+  // stage (screenshot-verified — 6 icons spanning 180° need real width for their SIZE, not
+  // just their radius); a hard cap on the RADII alone (kept scale fixed at 2x) fixed the
+  // earlier overflow-past-the-edge bug but traded it for icons overlapping EACH OTHER instead,
+  // an equally broken outcome. Solving for the largest scale at which the outer ring's own
+  // minimum non-overlap radius still fits inside the stage's clearance avoids both failure
+  // modes: 6 seats at 36° apart need radius R ≥ ~1.7×diameter to keep a small gap between
+  // neighbours (chord = 2R·sin18° ≥ 1.05×diameter); the stage caps R at m − halfIcon − 4; two
+  // linear equations in `scale`, solved directly below rather than iterated.
+  const scale = Math.min(SCOTUS_ICON_SCALE_MAX, Math.max(1, (m - 4) / (88.35 + 26)));
+  const halfIcon = ICON * scale;
+  const capR = Math.max(40, m - halfIcon - 4);
+  const minSafeR1 = 1.7 * (2 * halfIcon);   // the non-overlap floor derived above, at this scale
+  // Desired (generous) radii when there's room to spare — unchanged from the original
+  // desktop-tuned formula; the minSafeR1/capR clamps only bite once the stage gets tight.
+  const desiredR0 = Math.min(w * 0.22, capR * 0.6);
+  const desiredR1 = desiredR0 + ROW_GAP * scale + 10;
+  const R1 = Math.min(capR, Math.max(desiredR1, minSafeR1));
+  const R0 = Math.min(desiredR0, R1 * 0.56);   // inner ring's wider 75° gaps clear at this ratio
+  const radii = [R0, R1];
+
+  const raise = (SCOTUS_RAISE_DEG * Math.PI) / 180;
+  const innerAngles = [Math.PI - raise, Math.PI / 2, raise];         // 165°, 90°, 15°
+  const outerAngles = ringSlotAngles(SCOTUS_OUTER_COUNT, false);      // standard evenly-spaced, endpoints included
+  const slots = [
+    ...innerAngles.map((ang) => ({ r: R0, ang, ri: 0 })),
+    ...outerAngles.map((ang) => ({ r: R1, ang, ri: 1 })),
+  ];
+  slots.sort((a, b) => (b.ang - a.ang) || (a.ri - b.ri));   // same protractor/tie rule as orderedSlots()
+
+  const seats = innerArcSeats(model);   // R | vacancies | D, oldest→newest within party (#16's algorithm)
+  let vi = 0;
+  seats.forEach((seat, i) => {
+    const node = seat.vacancy ? model._vacancyNodes[vi++] : model._nodeByJudge.get(seat.judge);
+    const s = slots[i] || slots[slots.length - 1];
+    place(node, cx + s.r * Math.cos(s.ang), cy - s.r * Math.sin(s.ang), true, scale);
+    node.classList.add("ctt-in-arc");
+  });
+  // SCOTUS never has a Circuit Justice or seniors band (28 U.S.C. §371) — nothing else to place.
+  model._arcRender = { cx, cy, radii, bandR: 0, hasSeniorsBand: false };
 }
 
 function drawMajorityOverlay(stage, model) {
@@ -2324,6 +2630,7 @@ export async function mount(root) {
   S.majorityMode = false; S.paneMode = "timeline"; S.seniorMode = "hide";
   S.detailPinned = false; S.affilMark = "none";
   S.appointmentsAll = null; S.presidentPhotos = null;
+  S.summaryView = "scotus"; S.districtArrangement = null;
 
   const ui = buildShell(root);
   try {
@@ -2390,4 +2697,5 @@ export default mount;
 export const _dev = {
   S, renderSeatBlocks, refreshSeatBlocks, viewBoxOf, flipConst, shapeAnchor, BLOCK_PX, drillIn, drillOut,
   buildStreamModel, valueAt, ensureChangeData, dayNum, isoOfDayNum, PRESIDENCIES, initials, surname,
+  selectSummary, layoutScotusRing,
 };
