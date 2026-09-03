@@ -309,6 +309,17 @@
 .ctt-district-overlay.ctt-dragging { cursor: grabbing; }
 .ctt-district-overlay .ctt-district-cartogram { width: 100%; height: auto; display: block; pointer-events: none; }
 .ctt-district-overlay .ctt-district-sq { pointer-events: auto; }
+
+/* The deploy-only "pull out" animation (operator spec — never for returning). A short-lived,
+   position:fixed clone that flies from the Summary pane's on-screen rect to the on-map target
+   rect; removed the instant the transition ends, when the real .ctt-district-overlay takes
+   over. z-index above everything (including the pane, which is already closing underneath it)
+   so the migration reads as one continuous object, not something popping in behind the pane. */
+.ctt-district-flyover {
+  position: fixed; z-index: 20; pointer-events: none;
+  filter: drop-shadow(0 2px 6px rgba(0,0,0,0.18));
+}
+.ctt-district-flyover .ctt-district-cartogram { width: 100%; height: 100%; display: block; }
 .ctt-district-overlay-controls {
   position: absolute; top: -34px; right: 0; display: flex; gap: 4px;
 }

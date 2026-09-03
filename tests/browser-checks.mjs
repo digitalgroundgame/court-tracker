@@ -117,6 +117,31 @@ try {
   await ev(`document.querySelector('.ctt-drill').click()`); await sleep(1500);
   const tallCa1 = await ev(`document.querySelector(".ctt-pane").classList.contains("ctt-pane--tall")`);
   assert(!tallCa1, "ca1 (no note-bearing court in its district list) does NOT get the taller pane");
+  await ev(`document.querySelector('.ctt-selector-back')?.click()`); await sleep(600);
+
+  console.log("District 'Set upon map' pull-out animation: real colors, not solid black (jsdom can't test this — .ctt-district-flyover lives OUTSIDE .ctt-root, so its var(--ctt-rep) etc. only resolve with real computed-style inheritance)");
+  await ev(`document.querySelector('.ctt-selector-item[data-court-id="summary"]').click()`); await sleep(400);
+  await ev(`[...document.querySelectorAll('.ctt-mode-opt')].find(b=>b.textContent==='District Courts').click()`); await sleep(500);
+  await ev(`document.querySelector('.ctt-district-deploy-btn').click()`);
+  await sleep(120);   // mid-flight — the flyover should exist and already be animating
+  const flyMid = JSON.parse(await ev(`(() => {
+    const fly = document.querySelector('.ctt-district-flyover');
+    if (!fly) return JSON.stringify({ exists: false });
+    const sq = fly.querySelector('.ctt-district-sq.ctt-sq-rep, .ctt-district-sq.ctt-sq-dem');
+    return JSON.stringify({ exists: true, fill: sq && getComputedStyle(sq).fill, paneOpen: document.querySelector('.ctt-pane').classList.contains('ctt-is-open') });
+  })()`));
+  assert(flyMid.exists, "the flyover clone exists mid-animation");
+  assert(!flyMid.paneOpen, "the Summary pane has already closed while the flyover is still animating ('the summary pane flips up')");
+  assert(flyMid.fill && flyMid.fill !== "rgb(0, 0, 0)",
+    `flyover squares render their REAL red/blue/etc color, not solid black from a missing CSS var (got ${flyMid.fill})`);
+  await sleep(700);   // let the animation finish
+  const settled = JSON.parse(await ev(`(() => {
+    const fly = document.querySelector('.ctt-district-flyover');
+    const ov = document.querySelector('.ctt-district-overlay');
+    return JSON.stringify({ flyGone: !fly, overlayVisible: ov && getComputedStyle(ov).display !== 'none' });
+  })()`));
+  assert(settled.flyGone, "the flyover clone is removed once the animation settles");
+  assert(settled.overlayVisible, "the real persistent overlay is visible in its place");
 } catch (e) { console.log("*** ", e.message); failures++; }
 finally { try { ws && ws.close(); } catch {} chrome.kill(); }
 

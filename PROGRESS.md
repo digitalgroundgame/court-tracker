@@ -12,6 +12,52 @@ tracker (Phase-4 tail items open, PLUS a brand-new third pane view — "Change",
 (feature-complete first version, operator refinement rounds ongoing; see sessions ai→at, aw).
 **Last updated:** 2026-09-04
 
+> **SESSION (bw), 2026-09-04 — District phase, Milestone 3: the deploy-only "pull out"
+> animation. This closes out the Summary-tab initiative from (bs) — everything in the original
+> operator spec is now built.** The last explicitly-deferred piece from (bv): "the summary pane
+> flips up but allows the whole of the district court block... assembly to stay, then the
+> blocks move and shrink into a default position on the map," and — critically — this effect
+> exists ONLY for deploying, never for returning (hide/redeploy elsewhere stay instant, per (bv)).
+> - **Technique**: measure the cartogram `<svg>`'s live `getBoundingClientRect()` INSIDE the
+>   Summary pane before anything moves, close the pane (`deselect()` — same path as the ×
+>   button, giving "the summary pane flips up" for free), then animate an independent
+>   `position:fixed` floating clone (`.ctt-district-flyover`, freshly built via the same
+>   `buildDistrictCartogramSVG`) from that captured start rect to the computed on-map target
+>   rect via a CSS `left/top/width/height` transition. On `transitionend` (with a timeout safety
+>   net in case that never fires), the clone is removed and the real persistent
+>   `deployDistrictOverlay()` takes over — this is why the assembly reads as one continuous
+>   object migrating, rather than vanishing with the pane and reappearing elsewhere.
+>   `prefers-reduced-motion` skips straight to the instant deploy, same convention as every
+>   other animation in this codebase.
+> - **Real bug caught by screenshot, not by the code**: the flyover initially rendered every
+>   square solid BLACK instead of its real red/blue/other/vacant color. Root cause: `.ctt-sq-
+>   rep`/`-dem`/`-other` read `var(--ctt-rep)` etc., and those custom properties are defined on
+>   `.ctt-root` — but the flyover is deliberately appended to `document.body` (same reason
+>   `S.ui.tooltip` already is: it must paint above the ENTIRE widget including the pane, which
+>   `.ctt-root`'s own DOM-order-based stacking can't guarantee from outside it), so the
+>   properties don't cascade to it and `fill` silently fell back to its initial value (black).
+>   Fixed by copying the 3 needed custom properties onto the flyover's own inline style at
+>   creation time (`.ctt-sq-vacant`'s colors are hardcoded, not `var()`-based, so it was never
+>   affected) — a small, self-contained fix that avoids re-parenting into `.ctt-root` and
+>   re-litigating whether its `overflow:hidden` would clip a `position:fixed` descendant.
+> - **Tested where jsdom structurally cannot**: added a new `tests/browser-checks.mjs` block
+>   (not `smoke.mjs` — jsdom's `getBoundingClientRect()` is always zero, which already made the
+>   animation path self-skip in every existing jsdom test via its own zero-rect guard, so jsdom
+>   can't exercise this code path OR catch a computed-color regression in it) asserting: the
+>   flyover exists and is genuinely still animating while the pane has ALREADY closed; its
+>   squares' *computed* `fill` is a real color, explicitly not `rgb(0, 0, 0)` (this is the
+>   exact assertion shape that would have caught the black-square bug before it shipped); and
+>   the clone is cleanly removed with the real overlay visible in its place once settled.
+>   Screenshot-verified the mid-flight moment showing correctly-colored squares partway between
+>   the Summary pane's position and the final on-map corner. Separately verified
+>   `prefers-reduced-motion: reduce` skips the whole flyover and deploys instantly. All prior
+>   suites (`smoke.mjs`, `stress.mjs`) pass unmodified.
+> - **This closes the loop on the entire Summary-tab feature** first proposed in (bs): SCOTUS
+>   ring-split view, Appellate placeholder, and the full District cartogram (static preview +
+>   docked detail/pin + on-map deployment with drag/resize/hover-highlight/drill-in
+>   sub-assembly + this deploy animation) are all built and tested. Nothing from the original
+>   spec is still outstanding.
+
 > **SESSION (bv), 2026-09-04 — District phase, Milestone 2: "Set upon map" deployment — the
 > full mechanic, in one session.** Everything from the original (bs) spec that (bu) explicitly
 > deferred: the on-map overlay layer, the 3 control buttons, show/hide, resize, drag, real-shape
@@ -1348,6 +1394,27 @@ Prove the whole app shell and asset schema on one circuit with hand-authored sam
 - Next: ...
 - Blockers: ...
 -->
+
+### 2026-09-04 (bw) — District phase, Milestone 3: deploy-only "pull out" animation — DONE
+- Phase: 4, closing out the Summary-tab initiative from (bs). Built the last deferred piece:
+  clicking "Set upon map" measures the cartogram's live on-screen rect in the Summary pane,
+  closes the pane, then flies an independent floating clone to the on-map target rect before
+  the real persistent overlay takes over — reads as one continuous object migrating, not
+  vanishing and reappearing. Never animates on the way back (hide/redeploy stay instant, per
+  (bv)); respects prefers-reduced-motion.
+- Caught a real bug via screenshot: the flyover rendered solid black instead of real colors,
+  because it's appended to document.body (same reason S.ui.tooltip already is) and the
+  `.ctt-sq-rep`/-dem/-other CSS var(--ctt-rep) etc. custom properties, defined on .ctt-root,
+  don't cascade there. Fixed by copying the 3 needed properties onto the flyover's own inline
+  style rather than re-parenting.
+- Added a new tests/browser-checks.mjs block (jsdom structurally can't exercise this — its
+  zero-rect layout already makes the animation self-skip) asserting the flyover's genuine
+  mid-animation computed color is not rgb(0,0,0) — exactly the shape that would have caught
+  this bug before shipping. All prior suites pass unmodified.
+- This closes the entire Summary-tab feature from (bs): SCOTUS, Appellate, and District
+  (preview + deployment + this animation) are all built and tested. Nothing from the original
+  spec remains. Full detail above CURRENT PHASE (search "(bw)").
+- Blockers: none.
 
 ### 2026-09-04 (bv) — District phase, Milestone 2: full "Set upon map" deployment mechanic
 - Phase: 4, continuing (bs)/(bu) — the largest single piece of the Summary-tab initiative,
