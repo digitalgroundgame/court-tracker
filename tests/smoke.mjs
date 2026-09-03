@@ -908,16 +908,16 @@ click(natBlock("ca2")); await sleep(20);   // deselect -> clean state
 
 console.log("Summary pane (operator ask, 2026-09-03 — replaces the old lone SCOTUS entry)");
 click(root.querySelector('.ctt-selector-item[data-court-id="summary"]')); await sleep(60);
-assert(root.querySelector(".ctt-pane-title").textContent === "Summary", "Summary pane opens");
-assert(/Supreme Court.*Courts of Appeals.*District Courts/.test(root.querySelector(".ctt-pane-meta").textContent),
-  "Summary pane meta names all three sections");
+// No separate "Summary" title/subtitle inside the pane (operator ask, 2026-09-04: the
+// enlarged tab labels ARE the heading now) — the Summary selector-BAR entry is unaffected.
+assert(!root.querySelector(".ctt-pane-head"), "Summary pane has no separate title/meta header");
 const summarySwitch = root.querySelector(".ctt-summary-switch");
 assert(summarySwitch, "Summary sub-tab switch exists");
 const summaryTabs = [...summarySwitch.querySelectorAll(".ctt-mode-opt")].map((b) => b.textContent);
-assert(JSON.stringify(summaryTabs) === JSON.stringify(["SCOTUS", "Appellate", "District"]),
-  `Summary sub-tabs are SCOTUS|Appellate|District in order (got ${JSON.stringify(summaryTabs)})`);
-assert(summarySwitch.querySelector(".ctt-mode-opt.ctt-is-active").textContent === "SCOTUS",
-  "SCOTUS is the default Summary sub-tab");
+assert(JSON.stringify(summaryTabs) === JSON.stringify(["Supreme Court", "Courts of Appeals", "District Courts"]),
+  `Summary sub-tabs are the full section names, in order (got ${JSON.stringify(summaryTabs)})`);
+assert(summarySwitch.querySelector(".ctt-mode-opt.ctt-is-active").textContent === "Supreme Court",
+  "Supreme Court is the default Summary sub-tab");
 assert(/Supreme Court of the United States/.test(root.querySelector(".ctt-summary-subtitle").textContent),
   "SCOTUS sub-view names the court");
 const scMeta = root.querySelector(".ctt-summary-content .ctt-pane-meta").textContent;
@@ -964,19 +964,29 @@ assert(innerYs.every((y) => !onHorizon(y)), "no inner-ring seat sits on the hori
 assert(outerYs.filter(onHorizon).length === 2, "outer ring's two endpoint seats sit exactly on the horizontal (standard, unraised)");
 
 console.log("Summary > Appellate: blank placeholder (operator: come back to it later)");
-click(toggle("Appellate")); await sleep(20);
+click(toggle("Courts of Appeals")); await sleep(20);
 assert(/Coming soon/.test(root.querySelector(".ctt-summary-content").textContent), "Appellate shows a placeholder");
 assert(!root.querySelector(".ctt-judge-stage"), "no SCOTUS bench lingers under Appellate");
 
 console.log("Summary > District: static cartogram preview (no map deployment yet)");
-click(toggle("District")); await sleep(60);
+click(toggle("District Courts")); await sleep(60);
 const clusters = root.querySelectorAll(".ctt-district-cluster");
 assert(clusters.length === 12, `cartogram renders all 12 geographic circuits (got ${clusters.length})`);
 assert(root.querySelectorAll(".ctt-district-sq").length > 0, "cartogram renders district squares");
 assert(root.querySelectorAll(".ctt-district-sq.ctt-sq-rep, .ctt-district-sq.ctt-sq-dem").length > 0,
   "cartogram squares reuse the map's own R/D palette classes");
 
-click(toggle("SCOTUS")); await sleep(20);   // back to the default sub-view for a clean state
+console.log("stray docked-detail-panel bug (operator report, 2026-09-04): fixed");
+assert(root.querySelector(".ctt-detail").style.display === "none",
+  "docked judge-detail panel is hidden while District is showing (it has no per-district judge to detail)");
+click(root.querySelector('.ctt-selector-item[data-court-id="summary"]')); await sleep(20);   // close WHILE on District
+click(root.querySelector('.ctt-selector-item[data-court-id="summary"]')); await sleep(60);   // reopen — S.summaryView persisted as "district"
+assert(root.querySelector(".ctt-summary-switch .ctt-mode-opt.ctt-is-active").textContent === "District Courts",
+  "reopened Summary defaults back into the persisted District sub-view");
+assert(root.querySelector(".ctt-detail").style.display === "none",
+  "reopening straight into District (never passing through SCOTUS first) does NOT leave the docked detail panel visible");
+
+click(toggle("Supreme Court")); await sleep(20);   // back to the default sub-view for a clean state
 click(root.querySelector('.ctt-selector-item[data-court-id="summary"]')); await sleep(20);  // deselect
 
 console.log("appointments beeswarm widget (separate module, session aj)");
