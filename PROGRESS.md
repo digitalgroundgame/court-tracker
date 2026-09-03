@@ -10,7 +10,65 @@
 tracker (Phase-4 tail items open, PLUS a brand-new third pane view — "Change", built session
 (aw), operator review round addressed session (ax)) and the appointments beeswarm
 (feature-complete first version, operator refinement rounds ongoing; see sessions ai→at, aw).
-**Last updated:** 2026-09-03
+**Last updated:** 2026-09-04
+
+> **SESSION (bt), 2026-09-04 — Summary-tab operator feedback: 4 fixes, then on to the District
+> phase.** Operator used the (bs) Summary tab and returned 4 items.
+> 1. **Tab labels absorb the removed heading.** `[Supreme Court | Courts of Appeals | District
+>    Courts]` replace the old short `[SCOTUS | Appellate | District]` labels, and now double as
+>    the pane's own heading — the separate bold "Summary" title + "Supreme Court · Courts of
+>    Appeals · District Courts" subtitle line above the switch are both removed as redundant.
+>    The "Summary" entry in the left selector BAR is unchanged (only the pane-internal heading
+>    went away). The switch itself is enlarged further: 17px/650-weight labels, 14px vertical
+>    padding, and `flex:1 1 0` on each option so the three fill the full pane width evenly.
+> 2. **Ring geometry retuned.** `SCOTUS_RAISE_DEG` 15°→20°. Ring separation increased via a
+>    cleaner formula: the inner ring now sits at exactly **half** the outer ring's radius (was a
+>    0.56 ratio balanced against a `desiredR0` width-based formula) — 0.5 is both a rounder
+>    number and lands the actual gap ~13.5% wider (104px→118px at the jsdom-deterministic
+>    desktop fallback), inside the requested 10-15% window. Re-derived the inner ring's own
+>    non-overlap floor for the new 70° angular gap (20° raise instead of 15° narrows it from
+>    75°) so tight mobile viewports still can't force the two inner-most seats to touch.
+> 3. **Real bug, not just a display glitch: reopening Summary straight into a non-SCOTUS
+>    sub-view was DESTROYING the shared docked-detail DOM node, not just mis-positioning it.**
+>    `S.ui.detail` is one node reused across every court's pane. `renderSummaryScotus` correctly
+>    re-parents it into its own stage row; Appellate/District never touch it. The actual failure
+>    mode: `renderSummaryContent()`'s `container.innerHTML = ""` wipe, if `S.ui.detail` happened
+>    to be nested inside `container` from a PRIOR SCOTUS render, doesn't just hide it — it
+>    detaches it from the document entirely (a `.style.display` write on an already-detached
+>    node is a silent no-op, which is why "going to SCOTUS and back" looked like a fix: the
+>    round trip re-attaches the node, it just doesn't explain why it broke in the FIRST case,
+>    which is reopening the pane straight into a persisted non-SCOTUS `S.summaryView` with no
+>    SCOTUS visit in between). Fixed by rescuing `S.ui.detail` out to `S.ui.pane` BEFORE every
+>    wipe (the same pattern `renderSummaryPane`/`renderPane` already use at their own outer
+>    level, now also applied at this inner per-sub-view level) and hiding it by default
+>    immediately after. Added a real regression test: close the pane while on District, reopen
+>    (persisted sub-view), assert the panel is hidden and — the part that actually catches the
+>    detach bug — that `querySelector(".ctt-detail")` still finds it at all.
+> 4. **District cartogram hover: two real defects fixed now, two more explicitly deferred to
+>    the District phase itself (operator's own suggested ordering).** Fixed:
+>    (a) growth was `scale(1.35)`, visibly more aggressive than the map's own seat-block hover
+>    (`BLOCK_SCALE_HOVER = 1.17`) — now uses that exact constant instead of an independently
+>    invented value. (b) the "squares blur slightly and briefly" on hover was a CSS `transition:
+>    transform` on an SVG `<rect>` — this exact failure mode is **already documented and
+>    root-caused elsewhere in this very file** (`.ctt-sq`'s own comment: a transform transition
+>    on an SVG rect can't composite and re-rasterizes every frame; the map's own blocks moved to
+>    a JS `requestAnimationFrame`-driven scale specifically to kill this). Ported the identical
+>    technique (`animateDistrictSquare`, same 90ms ease-out, same `reducedMotion()` short-
+>    circuit) instead of re-deriving a fix from scratch. Verified in a real browser: the
+>    computed `transition-duration` is `0s`, and the transform value is visibly mid-ease at
+>    ~20ms in (not snapping straight to the end state). **Deferred to the District phase**
+>    (genuinely entangled with layout decisions that feature hasn't made yet, not just
+>    procrastination): shrinking the cartogram's overall on-screen size to leave room for a
+>    tooltip/future docked panel, and true responsive scaling for mobile width — both are
+>    "how much space does the assembly get" questions that only have real answers once the
+>    District pane's actual layout (docked viewer, canvas region) exists.
+> - **Tested:** jsdom (`tests/smoke.mjs`, updated: tab-label assertions, the new exact ring-gap
+>   value, the docked-detail regression), plus real-browser CDP verification for the hover scale
+>   value/timing/transition-absence and screenshots of the retuned tab switch, ring spacing, and
+>   hover-grow. All prior suites (`browser-checks.mjs`) pass unmodified.
+> - Next: the District "lift onto the map" feature itself — this session's remaining fixes
+>   directly feed its layout decisions (item 4's deferred half). See below for progress once
+>   that work starts.
 
 > **SESSION (bs), 2026-09-03 — Summary tab (SCOTUS ring-split + Appellate stub + District
 > cartogram preview); a NEW GitHub push-every-session protocol also lands this session.**
@@ -1168,6 +1226,26 @@ Prove the whole app shell and asset schema on one circuit with hand-authored sam
 - Next: ...
 - Blockers: ...
 -->
+
+### 2026-09-04 (bt) — Summary-tab feedback: 4 fixes (labels/sizing, ring tuning, real detach bug, hover scale+blur)
+- Phase: 4, continuing (bs). Operator feedback on the Summary tab: (1) tab labels now double
+  as the pane heading (Supreme Court | Courts of Appeals | District Courts), removed the
+  separate title/subtitle, enlarged the switch further; (2) SCOTUS ring raise 15°→20°, ring
+  gap widened ~13.5% via a cleaner 0.5 inner/outer radius ratio; (3) found and fixed a REAL bug
+  (not cosmetic) — reopening Summary straight into a persisted non-SCOTUS sub-view was
+  detaching the shared docked-detail DOM node from the document, not just mis-positioning it,
+  because a wipe inside `renderSummaryContent` didn't rescue it first; (4) district cartogram
+  hover now matches the map's own BLOCK_SCALE_HOVER (was a bigger, independently-invented
+  1.35x) and the "blur" was the exact CSS-transform-transition-on-SVG-rect bug this codebase
+  already root-caused and fixed once for the map's own blocks — ported that same JS-rAF
+  technique instead of re-deriving it. Two more sizing/mobile items from operator feedback #4
+  are deferred to the District phase itself, per the operator's own suggested ordering.
+- Verified via updated `tests/smoke.mjs` (new exact-value ring-gap assertion, a real detach-bug
+  regression test) plus real-browser CDP checks (hover scale value/timing, zero CSS transition
+  duration) and screenshots. All prior suites pass unmodified.
+- Next: the District "lift onto the map" feature itself. Full detail above CURRENT PHASE
+  (search "(bt)").
+- Blockers: none.
 
 ### 2026-09-03 (bs) — Summary tab (SCOTUS ring-split, Appellate stub, District cartogram preview)
 - Phase: 4. First session under the new (br) commit/push-every-session protocol. Replaced the

@@ -720,22 +720,16 @@ function renderSummaryPane() {
   S.ui.pane.append(S.ui.detail);   // rescue the docked detail panel before the wipe (see renderPane)
   body.innerHTML = "";
 
-  const head = el("div", "ctt-pane-head");
-  const headText = el("div", "ctt-pane-headtext");
-  const h = el("div", "ctt-pane-title");
-  h.textContent = "Summary";
-  const meta = el("div", "ctt-pane-meta");
-  meta.textContent = "Supreme Court · Courts of Appeals · District Courts";
-  headText.append(h, meta);
-  head.append(headText);
-  body.append(head);
-
   const content = el("div", "ctt-summary-content");
 
-  // Larger-than-usual segmented control (operator ask) — same visual family as the pane's
-  // Timeline|Majority|Change switch (.ctt-toggle/.ctt-mode-opt), sized up via .ctt-summary-switch.
+  // Larger-than-usual segmented control (operator ask, enlarged further 2026-09-04) — same
+  // visual family as the pane's Timeline|Majority|Change switch (.ctt-toggle/.ctt-mode-opt),
+  // sized up via .ctt-summary-switch. Labels are the full section names — this doubles as the
+  // pane's own heading, so the separate "Summary" title + "Supreme Court · Courts of Appeals ·
+  // District Courts" subtitle line above it were removed as redundant (operator ask; the
+  // "Summary" selector-bar entry itself is unchanged).
   const subWrap = el("div", "ctt-mode-switch ctt-summary-switch", { role: "group", "aria-label": "Summary section" });
-  const tabs = [["scotus", "SCOTUS"], ["appellate", "Appellate"], ["district", "District"]];
+  const tabs = [["scotus", "Supreme Court"], ["appellate", "Courts of Appeals"], ["district", "District Courts"]];
   const btns = {};
   const setView = (view) => {
     S.summaryView = view;
@@ -754,7 +748,21 @@ function renderSummaryPane() {
 }
 
 function renderSummaryContent(container) {
+  // S.ui.detail is a single shared node. If the PREVIOUS sub-view was SCOTUS, it's currently
+  // nested inside `container` (renderSummaryScotus's stageRow) — wiping container.innerHTML
+  // below would DETACH it from the document entirely, not just hide it (a plain
+  // `.style.display` set on an already-detached node is a silent no-op: querySelector can no
+  // longer find it anywhere, which looked like "the bug went away" but was actually the node
+  // vanishing rather than being correctly re-homed). Rescue it out to the pane root FIRST,
+  // same pattern renderSummaryPane/renderPane already use before their own wipes.
+  S.ui.pane.append(S.ui.detail);
   container.innerHTML = "";
+  // Appellate/District never claim it — hide it by DEFAULT, unconditionally, before
+  // dispatching, so it can never render as a stray docked box wherever it happens to sit (a
+  // bare child of .ctt-pane showed up in the pane's bottom-left corner — operator report,
+  // 2026-09-04, reproduced by opening Summary straight into Appellate/District). SCOTUS
+  // re-parents it into its own stageRow and un-hides it via resetDetail().
+  S.ui.detail.style.display = "none";
   if (S.summaryView === "scotus") renderSummaryScotus(container);
   else if (S.summaryView === "appellate") renderSummaryAppellate(container);
   else renderSummaryDistrict(container);
@@ -891,13 +899,38 @@ function renderSummaryDistrict(container) {
  *  court-square synced block growing on-hover"), with a tooltip naming the court and its LIVE
  *  composition (from seat_blocks, never the frozen cell_colors — see CODEBOOK.md Table F's
  *  staleness note). Reuses the tooltip DOM node the map's own shape/block hover already owns. */
+// Same technique + easing as the map's own animateBlockScale() (see the "Do not reintroduce a
+// transition on .ctt-sq transform" note in court-tracker.css): a CSS transform TRANSITION on an
+// SVG rect can't composite, and re-rasterizes every frame — that's the "squares blur slightly
+// and briefly" the operator reported (spotted on sight as the same class of bug this codebase
+// already root-caused once for the map's own seat blocks; the fix is the same). Per-rect inline
+// style writes on a requestAnimationFrame loop instead — no CSS transition anywhere in the path.
+function animateDistrictSquare(sq, target) {
+  const from = sq._sqScale ?? 1;
+  if (sq._sqAnim) { cancelAnimationFrame(sq._sqAnim); sq._sqAnim = null; }
+  const apply = (k) => { sq._sqScale = k; sq.style.transform = k === 1 ? "" : `scale(${k})`; };
+  if (from === target || reducedMotion()) { apply(target); return; }
+  const t0 = nowMs();
+  const step = () => {
+    const t = Math.min(1, (nowMs() - t0) / BLOCK_SCALE_MS);
+    const e = 1 - (1 - t) ** 3;                       // ease-out, matches the map's own feel
+    apply(t < 1 ? from + (target - from) * e : target);
+    sq._sqAnim = t < 1 ? requestAnimationFrame(step) : null;
+  };
+  step();
+}
+
 function wireDistrictCartogramHover(svg, tip) {
   let hoveredId = null;
   const setHover = (did) => {
     if (did === hoveredId) return;
     hoveredId = did;
+    // Same growth factor as the map's own seat-block hover (BLOCK_SCALE_HOVER) — an earlier
+    // draft used a much bigger 1.35x, which read as noticeably more aggressive growth than the
+    // national map's own blocks (operator report); this matches it exactly instead of
+    // reinventing an independent value.
     svg.querySelectorAll(".ctt-district-sq").forEach((sq) =>
-      sq.classList.toggle("ctt-district-sq-hover", !!did && sq.getAttribute("data-district-id") === did));
+      animateDistrictSquare(sq, did && sq.getAttribute("data-district-id") === did ? BLOCK_SCALE_HOVER : 1));
   };
   svg.addEventListener("pointermove", (e) => {
     const sq = e.target.closest && e.target.closest(".ctt-district-sq");
@@ -1298,7 +1331,7 @@ function layoutArc(model, w, H) {
 // this is deliberately its own small function rather than a planRings special case.
 const SCOTUS_ICON_SCALE_MAX = 2;      // icons target 2x normal size ("since it is SCOTUS")
 const SCOTUS_INNER_COUNT = 3, SCOTUS_OUTER_COUNT = 6;
-const SCOTUS_RAISE_DEG = 15;          // inner ring's first/last seats lift off 180°/0° by this much
+const SCOTUS_RAISE_DEG = 20;          // inner ring's first/last seats lift off 180°/0° by this much
 function layoutScotusRing(model, w, H) {
   const { cx, cy } = majorityDims(w, H);   // cx/cy only — Rmax/R0 there assume 1x icons, not 2x
   const m = Math.min(cx, cy);
@@ -1316,12 +1349,18 @@ function layoutScotusRing(model, w, H) {
   const halfIcon = ICON * scale;
   const capR = Math.max(40, m - halfIcon - 4);
   const minSafeR1 = 1.7 * (2 * halfIcon);   // the non-overlap floor derived above, at this scale
-  // Desired (generous) radii when there's room to spare — unchanged from the original
+  // Desired (generous) outer radius when there's room to spare — unchanged from the original
   // desktop-tuned formula; the minSafeR1/capR clamps only bite once the stage gets tight.
   const desiredR0 = Math.min(w * 0.22, capR * 0.6);
   const desiredR1 = desiredR0 + ROW_GAP * scale + 10;
   const R1 = Math.min(capR, Math.max(desiredR1, minSafeR1));
-  const R0 = Math.min(desiredR0, R1 * 0.56);   // inner ring's wider 75° gaps clear at this ratio
+  // Inner ring at HALF the outer radius (operator ask, 2026-09-04: "space the rings ~10-15%
+  // further apart" — 0.5 is both a clean round ratio and lands the gap ~13-15% wider than the
+  // old 0.56 ratio produced). At 20° raised endpoints the inner ring's tightest gap is 70°
+  // (was 75° at the old 15°), so its own non-overlap floor is slightly higher — enforced below
+  // rather than assumed, same as the outer ring's minSafeR1.
+  const minSafeR0 = 0.915 * (2 * halfIcon);
+  const R0 = Math.max(minSafeR0, Math.min(desiredR0, R1 * 0.5, R1 - 8));
   const radii = [R0, R1];
 
   const raise = (SCOTUS_RAISE_DEG * Math.PI) / 180;

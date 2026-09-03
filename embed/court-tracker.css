@@ -276,8 +276,10 @@
 .ctt-affil-opt:last-of-type, .ctt-mode-opt:last-of-type { border-radius: 0 6px 6px 0; }
 /* Summary pane: a larger-than-usual SCOTUS|Appellate|District switch (operator ask) — same
    segmented-control shape as .ctt-mode-switch, sized up. */
-.ctt-summary-switch { margin: 8px 0 10px; }
-.ctt-summary-switch .ctt-mode-opt { font-size: 15px; font-weight: 600; padding: 9px 20px; }
+.ctt-summary-switch { margin: 4px 0 14px; width: 100%; }
+.ctt-summary-switch .ctt-mode-opt {
+  font-size: 17px; font-weight: 650; padding: 14px 20px; flex: 1 1 0;
+}
 .ctt-summary-content { min-height: 200px; }
 .ctt-summary-subtitle { font-size: 15px; font-weight: 650; margin-bottom: 2px; }
 .ctt-summary-placeholder { color: var(--ctt-muted); font-size: 13px; padding: 24px 0; }
@@ -287,8 +289,11 @@
    inventing a second palette that could drift from it. */
 .ctt-district-cartogram-wrap { width: 100%; }
 .ctt-district-cartogram { width: 100%; height: auto; max-height: 60vh; display: block; }
-.ctt-district-sq { transition: transform 120ms ease; transform-box: fill-box; transform-origin: center; }
-.ctt-district-sq-hover { transform: scale(1.35); }
+/* Scale is applied via per-frame INLINE transforms in JS (animateDistrictSquare), NOT a CSS
+   transition — same rule as .ctt-sq above and for the same reason (a transform transition on
+   an SVG rect can't composite and re-rasterizes every frame, seen here as a brief blur on
+   hover — operator report). Do not add a `transition` property back. */
+.ctt-district-sq { transform-box: fill-box; transform-origin: center; }
 /* Seniors are only PARTIALLY desaturated so the appointing party is still readable (#5). */
 .ctt-senior .ctt-avatar { filter: saturate(0.4); opacity: 0.82; }
 .ctt-vacant .ctt-avatar-vacant {
