@@ -239,6 +239,14 @@
 .ctt-judge.ctt-justice-inhead .ctt-judge-label { margin: 0; text-align: left; max-width: 120px; }
 
 .ctt-pane-controls { display: flex; gap: 8px; align-items: center; margin: 6px 0; flex-wrap: wrap; }
+/* Summary > District's header block (.ctt-pane-controls, for the "Set upon map" button) measured
+   1px taller overall than Summary > SCOTUS's own header (.ctt-summary-subtitle + .ctt-pane-meta),
+   so the docked panel's flexed row started - and so measured - 1px off between the two Summary
+   sub-tabs despite both correctly sharing the same fixed bottom edge (operator report,
+   2026-09-06). Scoped to Summary specifically since .ctt-pane-controls is also the majority-mode
+   toggle row on ordinary (non-Summary) court panes, an unrelated layout chain this 1px comparison
+   doesn't apply to. */
+.ctt-summary-content > .ctt-pane-controls { margin: 6px 0 5px; }
 .ctt-toggle, .ctt-drill {
   border: 1px solid var(--ctt-line); background: var(--ctt-panel); color: inherit; font: inherit;
   font-size: 13px; padding: 5px 12px; border-radius: 6px; cursor: pointer;
@@ -343,7 +351,9 @@
    tools/district-block-builder.html's own District linker table: no header row, abbreviated
    names, a scrollable body so a large circuit (e.g. the 9th's 15 districts) clips instead of
    overflowing the docked panel. */
-.ctt-district-table-label { font-size: 13px; font-weight: 700; margin: 10px 0 4px; }
+/* No top margin: the table is the FIRST element in the docked panel now (operator ask,
+   2026-09-06 — table on top, name + Jump button anchored at the bottom below it). */
+.ctt-district-table-label { font-size: 13px; font-weight: 700; margin: 0 0 4px; }
 /* Scoped (not the bare class) so this outranks the sibling-default ".ctt-district-detail >
    .ctt-detail-content > *" rule above by specificity, same technique .ctt-pane-body > .ctt-stage-row
    already uses to outrank .ctt-pane-body > *. */
@@ -385,8 +395,17 @@
   filter: drop-shadow(0 2px 6px rgba(0,0,0,0.18));
 }
 .ctt-district-flyover .ctt-district-cartogram { width: 100%; height: 100%; display: block; }
-.ctt-district-overlay-controls {
-  position: absolute; top: -34px; right: 0; display: flex; gap: 4px;
+/* Fixed to the VIEWPORT's own corner (not the draggable assembly — see the buildShell comment
+   on districtCornerControls) so dragging the assembly, including partially past the bottom edge
+   on purpose, never carries its controls out of reach (operator ask, 2026-09-06). Bottom-LEFT
+   deliberately: the assembly itself defaults to bottom-RIGHT (defaultDistrictMapState), and the
+   map's own seat blocks already cluster in the northeast (see that function's own comment) — the
+   southwest corner is the one spot that stays clear of both by default. z-index above the
+   assembly's own (3) so the controls stay clickable if a drag/resize brings the two into visual
+   overlap anyway. National view only, and hidden whenever the pane is open — see
+   renderDistrictCornerControls. */
+.ctt-district-corner-controls {
+  position: absolute; left: 16px; bottom: 16px; z-index: 4; display: flex; gap: 4px;
 }
 /* "fill color-transparent but dark circle and button label colors" (operator spec) — distinct
    from .ctt-pane-close's solid-fill style; these read as an overlay chrome, not pane chrome. */
@@ -412,6 +431,23 @@
    an SVG rect can't composite and re-rasterizes every frame, seen here as a brief blur on
    hover — operator report). Do not add a `transition` property back. */
 .ctt-district-sq { transform-box: fill-box; transform-origin: center; }
+/* Growing same-district cells via transform:scale() around each rect's own center closes the
+   cartogram's built-in gutter almost exactly (DISTRICT_SQ_SCALE_HOVER is tuned so grown cells
+   overlap by a fraction of a viewBox unit) - but that margin is a fixed VIEWBOX-unit amount, so
+   it shrinks right along with everything else once the cartogram itself renders smaller (the
+   on-map deployed overlay's default ~280px width for the whole country, the drill-in
+   sub-assembly's 130px, or just a narrower host page) - at small enough scale it stops being
+   enough to fully cover the seam, showing as a hairline "faint light trace" of the page
+   background between cells that should read as one solid block (operator report, 2026-09-06).
+   A non-scaling stroke matching the cell's own fill pads the shape by a FIXED SCREEN-PIXEL
+   amount instead, regardless of the cartogram's current zoom - the same vector-effect technique
+   CLAUDE.md already documents for exactly this "must stay a constant width on screen" need. */
+.ctt-district-sq-grown.ctt-sq-rep { stroke: var(--ctt-rep); }
+.ctt-district-sq-grown.ctt-sq-dem { stroke: var(--ctt-dem); }
+.ctt-district-sq-grown.ctt-sq-other { stroke: var(--ctt-other); }
+.ctt-district-sq-grown.ctt-sq-rep, .ctt-district-sq-grown.ctt-sq-dem, .ctt-district-sq-grown.ctt-sq-other {
+  stroke-width: 1.5px; vector-effect: non-scaling-stroke;
+}
 /* Seniors are only PARTIALLY desaturated so the appointing party is still readable (#5). */
 .ctt-senior .ctt-avatar { filter: saturate(0.4); opacity: 0.82; }
 .ctt-vacant .ctt-avatar-vacant {
@@ -525,6 +561,9 @@
 .ctt-detail-photo.ctt-detail-senior { filter: saturate(0.4); opacity: 0.82; }
 .ctt-detail-hint { color: var(--ctt-muted); font-style: italic; text-align: center; padding: 18px 4px; }
 .ctt-detail-name { font-size: 14px; font-weight: 650; margin-bottom: 4px; }
+/* Spacing above the name now that the table sits above it (operator ask, 2026-09-06) — scoped to
+   the district panel only, so the shared judge-detail panel (name is its first element) is unaffected. */
+.ctt-district-detail > .ctt-detail-content > .ctt-detail-name { margin-top: 8px; }
 .ctt-detail a { color: var(--ctt-accent); }
 .ctt-affil { font-style: italic; color: var(--ctt-muted); }
 /* Required attribution for CC-licensed portraits — present but visually subordinate. */
