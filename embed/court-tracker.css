@@ -284,7 +284,19 @@
 .ctt-summary-switch .ctt-mode-opt {
   font-size: 17px; font-weight: 650; padding: 14px 20px; flex: 1 1 0;
 }
+/* Standardizes the docked-panel preview height across ALL Summary sub-tabs AND a regular
+   circuit/district court's own pane (operator ask, 2026-09-05: District's dock fell short of
+   the bottom, unlike SCOTUS's and an ordinary court pane's). Those other two docks reach the
+   bottom because their STAGE gets an explicit JS-computed height filling available room
+   (majorityStageHeight()) and .ctt-detail's own align-self:stretch matches it — but that
+   technique only works because .ctt-pane-body's DIRECT children get `flex:1 0 auto` (see the
+   .ctt-pane-body > .ctt-stage-row rule above). Summary's content sits ONE level deeper
+   (.ctt-pane-body > .ctt-summary-content > .ctt-stage-row/.ctt-district-layout), which that
+   selector never reached — propagate the same "fill leftover height" flex down through both
+   levels instead of just the outer one. */
+.ctt-pane-body > .ctt-summary-content { flex: 1 0 auto; display: flex; flex-direction: column; min-height: 0; }
 .ctt-summary-content { min-height: 200px; }
+.ctt-summary-content > .ctt-stage-row { flex: 1 0 auto; min-height: 0; }
 .ctt-summary-subtitle { font-size: 15px; font-weight: 650; margin-bottom: 2px; }
 .ctt-summary-placeholder { color: var(--ctt-muted); font-size: 13px; padding: 24px 0; }
 /* Summary > District: a static preview of the cartogram (no map deployment yet — see
@@ -292,12 +304,39 @@
    .ctt-sq-dem/.ctt-sq-other/.ctt-sq-vacant, defined above for renderSeatBlocks() — rather than
    inventing a second palette that could drift from it. */
 /* Cartogram + its docked per-district detail panel, side by side — same row shape as
-   .ctt-stage-row (bench + judge detail), stacking on mobile via the same media query. */
-.ctt-district-layout { display: flex; align-items: flex-start; gap: 14px; }
-.ctt-district-cartogram-wrap { flex: 1 1 auto; min-width: 0; }
-.ctt-district-cartogram { width: 100%; height: auto; max-height: 60vh; display: block; }
-.ctt-district-detail { flex: 0 0 232px; }
+   .ctt-stage-row (bench + judge detail), stacking on mobile via the same media query.
+   flex:1 0 auto here is the SAME fix as .ctt-summary-content above, one level deeper. */
+.ctt-district-layout { display: flex; align-items: flex-start; gap: 14px; flex: 1 0 auto; min-height: 0; }
+/* align-self:stretch (not the row's own flex-start) + a column flex with justify-content:center
+   is what actually centers the cartogram vertically (operator ask) — without stretch, the wrap
+   would only ever be as tall as the SVG itself, leaving no extra space to center within. */
+.ctt-district-cartogram-wrap {
+  flex: 1 1 auto; min-width: 0; align-self: stretch;
+  display: flex; flex-direction: column; justify-content: center; min-height: 0;
+}
+.ctt-district-cartogram { width: 100%; height: auto; max-height: 60vh; display: block; flex: 0 0 auto; }
+.ctt-district-detail { flex: 0 0 232px; display: flex; flex-direction: column; }
 .ctt-district-jump { display: block; width: 100%; margin-top: 8px; text-align: center; }
+/* The circuit-wide R/D/vacant table (operator ask, 2026-09-05) — same visual family as
+   tools/district-block-builder.html's own District linker table: no header row, abbreviated
+   names, a scrollable body so a large circuit (e.g. the 9th's 15 districts) clips instead of
+   overflowing the docked panel. */
+.ctt-district-table-label { font-size: 13px; font-weight: 700; margin: 10px 0 4px; }
+.ctt-district-table-wrap { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+.ctt-district-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.ctt-district-table td { padding: 3px 4px; border-bottom: 1px solid var(--ctt-line); white-space: nowrap; }
+.ctt-district-table td:first-child { width: 100%; white-space: normal; }
+/* Hover highlights the target row in place; pinning additionally bolds it (and the row is
+   reordered to the top in JS, not via CSS — see renderDistrictCircuitTable). */
+.ctt-district-row-hover { background: #f0f4fb; }
+.ctt-district-row-pinned { background: #eaf1fd; font-weight: 700; }
+/* Count comes BEFORE the swatch (operator preference — reversed from the block-builder tool's
+   own swatch-then-count order). Square, not the circular .ctt-dot used elsewhere in this file —
+   operator specifically asked for the block-builder tool's SQUARE swatch style. */
+.ctt-district-swatch { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-left: 5px; vertical-align: -1px; }
+.ctt-district-swatch-rep { background: var(--ctt-rep); }
+.ctt-district-swatch-dem { background: var(--ctt-dem); }
+.ctt-district-swatch-vacant { background: #f0f2f5; border: 1px solid #39414d; }
 
 /* "Set upon map" deployed cartogram — sits over the national map, positioned/sized via inline
    style (left/top/width) driven by S.districtMapState. Never rendered in circuit-local view

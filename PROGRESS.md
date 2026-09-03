@@ -10,7 +10,90 @@
 tracker (Phase-4 tail items open, PLUS a brand-new third pane view — "Change", built session
 (aw), operator review round addressed session (ax)) and the appointments beeswarm
 (feature-complete first version, operator refinement rounds ongoing; see sessions ai→at, aw).
-**Last updated:** 2026-09-04
+**Last updated:** 2026-09-05
+
+> **SESSION (bx), 2026-09-05 — Summary > District docked panel: circuit-wide table replaces
+> plain R/D/vacant text; sticky pin + click-elsewhere standardized to match the judge-detail
+> panel; dock-height/vertical-centering fix.** Operator feedback after using the finished
+> District feature from (bw).
+> - **New table, styled after `tools/district-block-builder.html`'s own District linker
+>   table.** The old `X Republican-appointed / Y Democratic-appointed / Z Vacant` text lines
+>   are gone. The "Jump to this court →" button moved up to sit right below the court name
+>   (was at the bottom). Below that: a bold `"Nth Cir. Districts"` label (just `court.short_name`
+>   from `courts.json` — no hand-rolled ordinal-suffix logic needed, `courts.csv` already has
+>   "1st Cir."/"D.C. Cir." etc.), then a **header-less** table (District | R | D | Vacant) for
+>   every district IN THAT DISTRICT'S OWN CIRCUIT, standard (alphabetical, matching the
+>   block-builder tool's own convention) order — new `districtsForCircuit()` /
+>   `renderDistrictCircuitTable()`. Swatches are the block-builder tool's SQUARE style (not this
+>   file's own circular `.ctt-dot`, which the operator explicitly didn't want here), but with
+>   the **count before the swatch** — the operator's one deliberate reversal from the source
+>   tool's own count-after-swatch convention. A large circuit's table (the 9th's 15 districts)
+>   scrolls locally inside its own `overflow-y:auto` wrapper rather than pushing the rest of the
+>   panel around, though empirically it fully fits without scrolling at normal desktop widths.
+>   The pinned district's row is REORDERED to the top and bolded/highlighted
+>   (`.ctt-district-row-pinned`); a merely-HOVERED (not pinned) row is highlighted in place with
+>   NO reorder and no bold (`.ctt-district-row-hover`) — a deliberate reading of the operator's
+>   spec, which only described the reorder+bold behavior for the pinned case: reordering rows
+>   under the cursor while just hovering across many blocks would be visually jarring in a way
+>   pinning (a deliberate, sticky action) is not.
+> - **Two real standardization gaps closed, matching the judge-detail panel exactly** (operator:
+>   "this tooltip dock has nonstandard behavior... those standards exist and should be copied"):
+>   (1) **sticky visual growth** — a pinned district's blocks now STAY enlarged after the cursor
+>   leaves, until explicitly unpinned; previously only the PANEL CONTENT survived hover-out (via
+>   the existing `pinned` check gating `onHover`), but the block's own scale reset back to 1
+>   unconditionally on `pointerleave`, since that lived in `wireDistrictCartogramHover` entirely
+>   outside the content-pinning logic. Fixed by making `wireDistrictCartogramHover` accept an
+>   `isPinned(did)` predicate and folding it into the SAME grow/shrink decision every square
+>   already makes on every hover change — "is this the hovered one OR the pinned one" — and
+>   exposing an `applyGrowth()` escape hatch so an EXTERNAL state change (clicking a NEW block
+>   while a DIFFERENT one is pinned) can force a full re-evaluation without needing setHover's
+>   own unchanged-hoveredId short-circuit to cooperate. (2) **click-elsewhere-to-close** — the
+>   district panel had no equivalent of the single global `document.addEventListener("mousedown",
+>   ...)` the judge-detail panel already relies on; extended that SAME listener (not a second
+>   one) to also check a new `S.districtDetailPinnedId` and call a new `unpinDistrictDetail()`.
+>   **This required promoting pin state from a local closure variable to module-level `S`
+>   state** — the existing local `let pinned` had no way for a document-wide listener to reach
+>   it. A useful side effect: since state now lives on `S` rather than being torn down and
+>   recreated every render, a pin now correctly SURVIVES switching Summary sub-tabs and back
+>   (screenshot- and test-verified) rather than silently resetting — arguably a THIRD fixed gap,
+>   not explicitly requested but a natural consequence of doing the promotion correctly.
+> - **Dock height + vertical centering, root-caused precisely, not patched superficially.**
+>   SCOTUS's and a regular court's own docked panel already "extend to the bottom" because their
+>   stage gets an explicit JS-computed height (`majorityStageHeight()`) filling available room,
+>   and `.ctt-detail`'s `align-self:stretch` matches it; the enabling CSS rule
+>   (`.ctt-pane-body > .ctt-stage-row { flex: 1 0 auto; }`) is a **direct-child selector**, and
+>   Summary's own content sits ONE level deeper (`.ctt-pane-body > .ctt-summary-content >
+>   .ctt-stage-row` for SCOTUS, `> .ctt-district-layout` for District) — so that rule silently
+>   never reached either Summary sub-tab's row, not just District's. Propagated the same
+>   "absorb leftover height" flex treatment down through BOTH levels
+>   (`.ctt-pane-body > .ctt-summary-content` AND `.ctt-summary-content > .ctt-stage-row` /
+>   `.ctt-district-layout`) rather than special-casing District alone — this is why SCOTUS's own
+>   dock height came out UNCHANGED (443px) when measured before/after, exactly as intended,
+>   while District's (previously short) now measures the same ballpark (442px) instead of
+>   whatever the cartogram's own natural aspect-ratio height happened to be. Vertical centering
+>   itself needed one more step beyond the height fix: `.ctt-district-cartogram-wrap` also
+>   needed `align-self: stretch` (to actually RECEIVE the row's now-larger height — without it,
+>   the wrap stays exactly as tall as the SVG, leaving nothing to center within) plus its own
+>   `flex-direction: column; justify-content: center`. Measured directly in a real browser
+>   (`getBoundingClientRect`, not eyeballed): 51.98px above the cartogram vs. 52px below —
+>   effectively pixel-perfect, though a first screenshot READ as top-heavy at a glance until the
+>   actual gap measurements settled it (a wide full-page screenshot at normal viewing scale is
+>   an unreliable way to judge a ~50px symmetric gap; the precise rect measurement is what
+>   actually confirmed the fix, and is the more trustworthy check to reach for next time a
+>   "is this really centered" question comes up).
+> - **Tested**: `tests/smoke.mjs` extended substantially — table structure (label text, full
+>   row count, no header, count-before-swatch markup order), pin reorder-to-top-and-bold vs.
+>   hover-highlight-in-place, sticky growth surviving `pointerleave`, click-elsewhere unpinning
+>   (via the same `mousedown`-on-`document.body` technique the existing judge-detail test
+>   already used — reused rather than reinvented), and pin-survives-sub-tab-switch. One test
+>   assertion needed a `sleep()` fix after initially failing for a a-real-reason-but-not-a-bug:
+>   checking `_sqScale` immediately after triggering an EASED shrink animation (matching the
+>   map's own 90ms block-scale feel) caught the animation mid-flight, not its settled value —
+>   same class of timing subtlety this test file has hit before with other eased properties.
+>   Real-browser CDP screenshots confirm the table, pin, and centering all render correctly;
+>   `browser-checks.mjs`/`stress.mjs` pass unmodified.
+> - Next: nothing outstanding from this round of feedback. The Summary-tab feature (from (bs)
+>   through (bx)) is feature-complete and polished per every operator round so far.
 
 > **SESSION (bw), 2026-09-04 — District phase, Milestone 3: the deploy-only "pull out"
 > animation. This closes out the Summary-tab initiative from (bs) — everything in the original
@@ -1394,6 +1477,32 @@ Prove the whole app shell and asset schema on one circuit with hand-authored sam
 - Next: ...
 - Blockers: ...
 -->
+
+### 2026-09-05 (bx) — Summary > District docked panel: table, sticky pin standardization, dock height
+- Phase: 4, continuing (bs)-(bw). Replaced the docked panel's plain R/D/vacant text with a
+  circuit-wide table (District | R | D | Vacant, no header, block-builder-tool square swatches
+  but count-before-swatch per operator preference, standard alphabetical order with the pinned
+  row reordered to top + bolded and a merely-hovered row highlighted in place without
+  reordering) and moved the Jump-to-court button up under the name.
+- Standardized two behaviors to match the judge-detail panel exactly: pinned blocks now stay
+  visually enlarged after the cursor leaves (was only true of the panel content, not the block
+  scale — wireDistrictCartogramHover now takes an isPinned predicate folded into its existing
+  grow/shrink decision), and clicking elsewhere now unpins (extended the SAME document-level
+  mousedown listener the judge panel already used, requiring pin state to move from a local
+  closure variable to module-level S.districtDetailPinnedId — which also means a pin now
+  survives switching Summary sub-tabs and back, a natural side effect of the promotion).
+- Root-caused the dock-height/vertical-centering gap: the CSS rule that lets SCOTUS's/a regular
+  court's dock reach the bottom is a direct-child selector that never reached either Summary
+  sub-tab's row, since Summary's content sits one level deeper. Propagated the same flex
+  treatment down through both levels rather than special-casing District, then added
+  align-self:stretch + justify-content:center on the cartogram wrap for the actual centering.
+  Verified via real getBoundingClientRect measurement (51.98px vs 52px gap) after a wide
+  screenshot initially read as off at a glance — the precise measurement, not the screenshot,
+  is what actually confirmed it.
+- Verified via substantially extended tests/smoke.mjs plus real-browser screenshots. Prior
+  suites (browser-checks.mjs, stress.mjs) pass unmodified.
+- Next: nothing outstanding from this round. Full detail above CURRENT PHASE (search "(bx)").
+- Blockers: none.
 
 ### 2026-09-04 (bw) — District phase, Milestone 3: deploy-only "pull out" animation — DONE
 - Phase: 4, closing out the Summary-tab initiative from (bs). Built the last deferred piece:

@@ -986,12 +986,60 @@ const someSq = root.querySelector(".ctt-district-sq[data-district-id]");
 // constructed with that type works fine even without full jsdom PointerEvent support.
 someSq.dispatchEvent(new window.MouseEvent("pointermove", { bubbles: true, clientX: 1, clientY: 1 }));
 assert(districtDetail.querySelector(".ctt-detail-name"), "hovering a block fills the district panel with a name row");
+assert(!districtDetail.querySelector(".ctt-detail-name").textContent.includes("Republican-appointed"),
+  "the old plain R/D/vacant count text is gone (replaced by the table)");
+
+console.log("Summary > District: circuit-wide table (operator ask, 2026-09-05)");
+const hoveredDid = someSq.getAttribute("data-district-id");
+const hoveredCourt = mod._dev.S.courts.get(hoveredDid);
+const circuitId = hoveredCourt.parent_id;
+const circuitCourt = mod._dev.S.courts.get(circuitId);
+const label = districtDetail.querySelector(".ctt-district-table-label");
+assert(label && label.textContent === `${circuitCourt.short_name} Districts`, `table label names the circuit (got "${label?.textContent}")`);
+const rows = [...districtDetail.querySelectorAll(".ctt-district-row")];
+const expectedCount = [...mod._dev.S.courts.values()].filter((c) => c.court_level === "district" && c.parent_id === circuitId).length;
+assert(rows.length === expectedCount, `table lists every district in the circuit (got ${rows.length}, want ${expectedCount})`);
+assert(!label.nextElementSibling.querySelector("thead"), "table has no header row (operator ask)");
+const hoveredRow = rows.find((tr) => tr.textContent.includes(hoveredCourt.short_name));
+assert(hoveredRow.classList.contains("ctt-district-row-hover"), "the hovered district's row is highlighted (not bolded/reordered — hover only)");
+const repCell = hoveredRow.querySelectorAll("td")[1];
+assert(/^\d+/.test(repCell.textContent) && repCell.querySelector(".ctt-district-swatch"),
+  `R column shows the COUNT before the swatch (operator preference) (cell: "${repCell.innerHTML}")`);
+assert(repCell.innerHTML.indexOf(repCell.textContent.trim()) < repCell.innerHTML.indexOf("ctt-district-swatch"),
+  "the number literally precedes the swatch span in markup order");
+
+console.log("Summary > District: pin reorders to top + bolds, sticky growth, click-elsewhere unpins");
 click(someSq);
 assert(districtDetail.classList.contains("ctt-pinned"), "clicking a block pins the district panel");
 assert(districtDetail.querySelector(".ctt-district-jump"), "pinned panel shows a Jump-to-court button");
-click(districtDetail.querySelector(".ctt-detail-close"));
-assert(!districtDetail.classList.contains("ctt-pinned"), "close button unpins the district panel");
-assert(/Hover over a district/.test(districtDetail.textContent), "unpinning resets to the usage hint");
+const rowsAfterPin = [...districtDetail.querySelectorAll(".ctt-district-row")];
+assert(rowsAfterPin[0].classList.contains("ctt-district-row-pinned"), "the pinned district's row is moved to the TOP");
+assert(rowsAfterPin[0].textContent.includes(hoveredCourt.short_name), "...and it's actually the district that was clicked");
+assert(mod._dev.S.districtDetailPinnedId === hoveredDid, "pin state lives on S (module-level), not a local closure var");
+someSq.dispatchEvent(new window.MouseEvent("pointerleave", { bubbles: true }));
+assert(someSq._sqScale > 1, "the pinned block's enlarged hover state survives the cursor leaving (sticky growth)");
+assert(districtDetail.classList.contains("ctt-pinned"), "the panel itself also stays pinned after the cursor leaves");
+// Standard behavior copied from the judge-detail panel: clicking anywhere else unpins it.
+// (mousedown, not click — that's the event type the document-level listener matches, same
+// technique the existing judge-detail "clicking off unpins" test already uses above.)
+window.document.body.dispatchEvent(new window.MouseEvent("mousedown", { bubbles: true }));
+assert(!districtDetail.classList.contains("ctt-pinned"), "clicking elsewhere unpins the district panel (standard, copied from the judge detail panel)");
+assert(mod._dev.S.districtDetailPinnedId === null, "S.districtDetailPinnedId clears on click-elsewhere unpin");
+await sleep(120);   // the shrink is an eased animation (matches the map's own block-scale feel), not instant
+assert(someSq._sqScale === 1, "clicking elsewhere also shrinks the formerly-pinned block back down");
+
+console.log("Summary > District: a pin survives switching Summary sub-tabs and back");
+click(someSq);   // re-pin
+click(toggle("Supreme Court")); await sleep(20);
+click(toggle("District Courts")); await sleep(20);
+const districtDetail2 = root.querySelector(".ctt-district-detail");
+assert(districtDetail2.classList.contains("ctt-pinned"), "reopening District still shows the pin (module-level state, not per-render)");
+assert([...districtDetail2.querySelectorAll(".ctt-district-row")][0].classList.contains("ctt-district-row-pinned"),
+  "...with the pinned row still reordered to the top");
+
+click(districtDetail2.querySelector(".ctt-detail-close"));
+assert(!districtDetail2.classList.contains("ctt-pinned"), "close button unpins the district panel");
+assert(/Hover over a district/.test(districtDetail2.textContent), "unpinning resets to the usage hint");
 
 console.log("stray docked-detail-panel bug (operator report, 2026-09-04): fixed");
 // :not(.ctt-district-detail) disambiguates the shared judge-detail node from District's own
