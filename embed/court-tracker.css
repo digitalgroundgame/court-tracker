@@ -287,8 +287,13 @@
    PROGRESS.md). Reuses the map's own seat-block palette classes directly — .ctt-sq-rep/
    .ctt-sq-dem/.ctt-sq-other/.ctt-sq-vacant, defined above for renderSeatBlocks() — rather than
    inventing a second palette that could drift from it. */
-.ctt-district-cartogram-wrap { width: 100%; }
+/* Cartogram + its docked per-district detail panel, side by side — same row shape as
+   .ctt-stage-row (bench + judge detail), stacking on mobile via the same media query. */
+.ctt-district-layout { display: flex; align-items: flex-start; gap: 14px; }
+.ctt-district-cartogram-wrap { flex: 1 1 auto; min-width: 0; }
 .ctt-district-cartogram { width: 100%; height: auto; max-height: 60vh; display: block; }
+.ctt-district-detail { flex: 0 0 232px; }
+.ctt-district-jump { display: block; width: 100%; margin-top: 8px; text-align: center; }
 /* Scale is applied via per-frame INLINE transforms in JS (animateDistrictSquare), NOT a CSS
    transition — same rule as .ctt-sq above and for the same reason (a transform transition on
    an SVG rect can't composite and re-rasterizes every frame, seen here as a brief blur on
@@ -439,4 +444,5 @@
      padding: the panel is in normal flow and can never cover the bench. */
   .ctt-stage-row { display: block; }
   .ctt-detail { width: auto; margin-top: 10px; }
+  .ctt-district-layout { display: block; }
 }

@@ -12,6 +12,56 @@ tracker (Phase-4 tail items open, PLUS a brand-new third pane view — "Change",
 (feature-complete first version, operator refinement rounds ongoing; see sessions ai→at, aw).
 **Last updated:** 2026-09-04
 
+> **SESSION (bu), 2026-09-04 — District phase, Milestone 1: docked per-district detail viewer +
+> click-to-pin (Summary > District).** Operator confirmed 2 design questions before this
+> started: (1) "Set upon map" always REPLACES whatever's currently deployed (no blocking), and
+> (2) the on-map default position/size is the agent's own reasonable call. Operator also
+> revisited (bt)'s hover-scale fix after testing it live: the bigger 1.35x growth (which (bt)
+> had matched down to the map's 1.17x) actually reads BETTER for this cartogram specifically,
+> since same-district blocks often sit with real gaps between them (the block-builder tool's
+> trimmed layout doesn't guarantee adjacency) and the bigger scale visually fuses them into one
+> shape — reverted to a dedicated `DISTRICT_SQ_SCALE_HOVER = 1.35` constant (kept separate from
+> the map's own `BLOCK_SCALE_HOVER`, not reusing it, so the two contexts can keep tuning apart).
+> This is the first slice of the large "District lift-onto-map" feature from the original
+> Summary-tab spec; see the (bs) entry for the full original ask and today's scope note.
+> - **Refactored the cartogram SVG builder out of `renderSummaryDistrict`** into a standalone
+>   `buildDistrictCartogramSVG(circuits, filterCircuitId)` — pure, reusable, and (with
+>   `filterCircuitId`) already able to render just ONE circuit's cluster, which the later
+>   drill-in fixed-sub-assembly milestone will need directly with no further refactor. Kept the
+>   Summary/on-map/drill-in presentations from being able to visually drift apart from each other.
+> - **Docked detail viewer** (`.ctt-district-detail`): same visual family as the judge-detail
+>   panel (shares its `.ctt-detail`/`.ctt-detail-content`/`.ctt-detail-hint`/`.ctt-detail-name`
+>   CSS rather than duplicating them), sits to the right of the cartogram in a new
+>   `.ctt-district-layout` flex row (mirrors `.ctt-stage-row`, including the same mobile
+>   stacking media-query rule). Hover fills it with the district's name + LIVE `seat_blocks`
+>   composition (never the frozen export data, same principle as the tooltip already followed);
+>   click PINS it (survives mouse-out, has a close × ) — this and the click-to-pin mechanic are
+>   exactly the two things the operator's spec says must NOT exist once deployed onto the map,
+>   so keeping them cleanly separable in the render path (this function is only ever called for
+>   the Summary pane) matters for the next milestone, not just this one.
+> - **Jump-to-court button**: on the pinned panel, drills into the district's own parent circuit
+>   and opens ITS info pane — `jumpToDistrictCourt()` is just `deselect()` + `drillIn(parent)` +
+>   `selectCourt(did)`, composed from existing, already-tested machinery rather than a new
+>   navigation path. Screenshot-verified end-to-end: pin a district, click Jump, land on that
+>   exact district's own Majority-view pane with the right selector-bar item highlighted.
+> - **Found and fixed a real test-fragility issue while adding this**, not a runtime bug: giving
+>   the district panel the shared `.ctt-detail` class (for free CSS reuse) made every EARLIER
+>   `root.querySelector(".ctt-detail")` in `tests/smoke.mjs` that runs AFTER visiting Summary >
+>   District ambiguous — document order now returns whichever detail panel happens to come
+>   first, not necessarily the judge one the assertion meant. Fixed by disambiguating those two
+>   assertions with `.ctt-detail:not(.ctt-district-detail)` rather than renaming the shared
+>   class (which would have meant duplicating a dozen CSS rules) — worth remembering if a THIRD
+>   `.ctt-detail`-styled panel ever gets added: bare `.ctt-detail` queries in tests need a
+>   second look at that point, not just at this one.
+> - **Tested**: `tests/smoke.mjs` extended (docked panel exists/starts with hint, hover fills it,
+>   click pins + shows the Jump button, close unpins + resets); real-browser CDP verification of
+>   the full pin → jump → land-on-that-court's-own-pane flow, screenshotted at each step. All
+>   prior suites (`browser-checks.mjs`) pass unmodified.
+> - Next: Milestone 2 — the "Set upon map" deployment mechanic itself (new on-map overlay
+>   layer, the 3 map-viewport control buttons, drag/resize, hover-highlight of the real district
+>   shape, the circuit-drill-in fixed sub-assembly, the pull-out animation). Continuing in this
+>   same session; watch for further dated entries below as each piece lands.
+
 > **SESSION (bt), 2026-09-04 — Summary-tab operator feedback: 4 fixes, then on to the District
 > phase.** Operator used the (bs) Summary tab and returned 4 items.
 > 1. **Tab labels absorb the removed heading.** `[Supreme Court | Courts of Appeals | District
@@ -1226,6 +1276,26 @@ Prove the whole app shell and asset schema on one circuit with hand-authored sam
 - Next: ...
 - Blockers: ...
 -->
+
+### 2026-09-04 (bu) — District phase, Milestone 1: docked detail viewer + click-to-pin
+- Phase: 4, continuing (bs)/(bt) — first slice of the large District "lift onto map" feature.
+  Refactored the cartogram SVG into a standalone `buildDistrictCartogramSVG()` (reusable for the
+  later on-map/drill-in presentations). Added a docked per-district detail panel to Summary >
+  District (hover fills it with live composition, click pins it, same visual family as the
+  judge-detail panel) plus a Jump-to-court button that drills into the district's own circuit
+  and opens its pane — composed from existing `drillIn`/`selectCourt`, not a new nav path. Also
+  reverted the district cartogram's hover-grow scale back to 1.35x (its own dedicated constant,
+  not the map's 1.17x) per operator feedback after testing it live: bigger growth reads better
+  here since same-district blocks often have real gaps between them.
+- Fixed a test-fragility issue this surfaced: reusing the `.ctt-detail` class for the new panel
+  made bare `.ctt-detail` queries in `tests/smoke.mjs` ambiguous after visiting District;
+  disambiguated with `:not(.ctt-district-detail)` rather than renaming the shared class.
+- Verified via extended `tests/smoke.mjs` and real-browser CDP screenshots of the full
+  pin -> jump -> land-on-court's-own-pane flow. Prior suites unmodified.
+- Next: Milestone 2 — the actual "Set upon map" deployment (on-map overlay, 3 control buttons,
+  drag/resize, hover-highlight of the real district shape, drill-in fixed sub-assembly, pull-out
+  animation). Full detail above CURRENT PHASE (search "(bu)").
+- Blockers: none.
 
 ### 2026-09-04 (bt) — Summary-tab feedback: 4 fixes (labels/sizing, ring tuning, real detach bug, hover scale+blur)
 - Phase: 4, continuing (bs). Operator feedback on the Summary tab: (1) tab labels now double
