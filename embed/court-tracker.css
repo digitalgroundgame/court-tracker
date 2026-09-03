@@ -134,6 +134,10 @@
 .ctt-svg-layer [data-inset="true"][data-layer="district"] { fill: var(--ctt-circuit); stroke: #5c6775; stroke-width: 2; }
 .ctt-shape { cursor: pointer; }
 .ctt-shape-selected { fill: #b9c8e6 !important; }
+/* Same "standard blue" as .ctt-shape-selected, but a SEPARATE class: this fires from hovering
+   the deployed district-cartogram overlay (a different mouse position than the shape itself),
+   and must be independent of whatever court happens to be actually selected right now. */
+.ctt-shape-district-hover { fill: #b9c8e6 !important; }
 /* National view: mainland districts are visual-only (hover/click fall through to the
    circuit beneath); insets stay interactive so they can be selected (#11). */
 .ctt-national-layer [data-layer="district"] { pointer-events: none; }
@@ -294,6 +298,39 @@
 .ctt-district-cartogram { width: 100%; height: auto; max-height: 60vh; display: block; }
 .ctt-district-detail { flex: 0 0 232px; }
 .ctt-district-jump { display: block; width: 100%; margin-top: 8px; text-align: center; }
+
+/* "Set upon map" deployed cartogram — sits over the national map, positioned/sized via inline
+   style (left/top/width) driven by S.districtMapState. Never rendered in circuit-local view
+   (see updateDistrictOverlayVisibility). */
+.ctt-district-overlay {
+  position: absolute; z-index: 3; cursor: grab; user-select: none;
+  filter: drop-shadow(0 2px 6px rgba(0,0,0,0.18));
+}
+.ctt-district-overlay.ctt-dragging { cursor: grabbing; }
+.ctt-district-overlay .ctt-district-cartogram { width: 100%; height: auto; display: block; pointer-events: none; }
+.ctt-district-overlay .ctt-district-sq { pointer-events: auto; }
+.ctt-district-overlay-controls {
+  position: absolute; top: -34px; right: 0; display: flex; gap: 4px;
+}
+/* "fill color-transparent but dark circle and button label colors" (operator spec) — distinct
+   from .ctt-pane-close's solid-fill style; these read as an overlay chrome, not pane chrome. */
+.ctt-district-overlay-btn {
+  width: 26px; height: 26px; border-radius: 50%; background: transparent;
+  border: 1.5px solid var(--ctt-ink); color: var(--ctt-ink); font-size: 14px; line-height: 1;
+  cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0;
+}
+.ctt-district-overlay-btn:hover { background: rgba(27,31,36,0.08); }
+
+/* Circuit-drill-in fixed sub-assembly (operator spec): that circuit's own districts only,
+   present regardless of the national deployment state. Anchored top-left of the local map —
+   deliberately not draggable/resizable (unlike the deployed national assembly, this is a fixed
+   reference view tied to the circuit you're looking at, not a moved/customized object). */
+.ctt-district-subassembly {
+  position: absolute; top: 12px; left: 12px; width: 130px; z-index: 3;
+  filter: drop-shadow(0 2px 6px rgba(0,0,0,0.18)); pointer-events: none;
+}
+.ctt-district-subassembly .ctt-district-cartogram { width: 100%; height: auto; display: block; }
+.ctt-district-subassembly .ctt-district-sq { pointer-events: auto; }
 /* Scale is applied via per-frame INLINE transforms in JS (animateDistrictSquare), NOT a CSS
    transition — same rule as .ctt-sq above and for the same reason (a transform transition on
    an SVG rect can't composite and re-rasterizes every frame, seen here as a brief blur on

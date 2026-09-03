@@ -76,6 +76,10 @@ const S = {
   streamColorScheme: "alt",   // 'alt' | 'fade' — Change view palette (operator A/B, CLAUDE ask)
   summaryView: "scotus",      // 'scotus' | 'appellate' | 'district' — Summary pane sub-tab
   districtArrangement: null,  // data/district_arrangement.json, lazy-loaded once (Summary > District)
+  districtOnMap: false,       // is the deployed cartogram currently VISIBLE on the national map
+  districtMapState: null,     // { left, top, width } CSS px in .ctt-map-viewport — persists
+                               // across show/hide toggles; reset only by a fresh deploy from
+                               // Summary ("Set upon map" always replaces — operator confirmed)
 };
 // Sentinel selectedCourt value for the Summary pane — not a real courts.csv row (has_geography
 // doesn't apply; it's a fixed pane, never a map shape), so every place that reads S.selectedCourt
@@ -116,7 +120,13 @@ function buildShell(root) {
   const svgStack = el("div", "ctt-svg-stack");   // national + local SVG layers
   const status = el("div", "ctt-status");
   status.textContent = "Loading…";
-  viewport.append(svgStack, status);
+  // District overlay: the "Set upon map" deployed cartogram. Sits ABOVE the map SVGs but
+  // BELOW the pane in DOM order (both are position:absolute with no z-index, so DOM order IS
+  // stacking order) — the info pane already covers "the rest of the map view" when open
+  // (CLAUDE.md §5), and this must be covered by it too rather than floating above it.
+  const districtOverlay = el("div", "ctt-district-overlay");
+  districtOverlay.style.display = "none";
+  viewport.append(svgStack, status, districtOverlay);
 
   const pane = el("div", "ctt-pane", { role: "region", "aria-label": "Court detail" });
   const paneBody = el("div", "ctt-pane-body");
@@ -159,10 +169,11 @@ function buildShell(root) {
   pane.append(detail);
 
   const ui = { root, tracked, subtitle, selector, viewport, svgStack, status, pane, paneBody, stow,
-               tooltip, detail, detailContent, nationalSVG: null };
+               tooltip, detail, detailContent, districtOverlay, nationalSVG: null };
   S.ui = ui;
   window.addEventListener("resize", () => {
     if (S.selectedCourt) layoutJudges();
+    if (S.districtOnMap) sizeDistrictOverlay();
     // Square size is in screen px, so the px->map-unit conversion is viewport-dependent.
     clearTimeout(S._resizeT);
     S._resizeT = setTimeout(refreshSeatBlocks, 120);
@@ -921,7 +932,185 @@ async function jumpToDistrictCourt(did) {
   await selectCourt(did);
 }
 
+// ---- Summary > District, "Set upon map" deployment -----------------------------
+// Circuits with NO districts of their own (cafc has none; it's reachable only through its
+// feeders, which aren't geographic) never get a fixed drill-in sub-assembly.
+const NO_DISTRICT_SUBASSEMBLY = new Set(["cafc"]);
+const DISTRICT_OVERLAY_MIN_W = 140, DISTRICT_OVERLAY_MAX_FRAC = 0.42, DISTRICT_OVERLAY_ZOOM_STEP = 1.2;
+
+/** Default on-map placement: bottom-right corner of the viewport, sized relative to the
+ *  viewport's OWN current width (operator ask: hold aspect ratio, scale with the space
+ *  available — a fixed px default would either overflow a mobile viewport or look tiny on a
+ *  wide desktop one). Re-derived fresh on every "Set upon map" click ("always replaces" —
+ *  operator confirmed), not read back from a previous deployment's drag/resize. */
+// Bottom-right, not top-right: the map's own per-circuit seat blocks already cluster densely
+// in the northeast (1st/2nd/3rd/DC), and an early version landed the deployed cartogram right
+// on top of them (screenshot-caught). The southeast/open-Atlantic corner stays clear on every
+// national-view zoom level this app supports. `aspect` (height/width of the cartogram's own
+// bbox) sizes the default box correctly on the FIRST placement — computed from the real SVG
+// bbox in deployDistrictOverlay, not guessed, so it doesn't need re-deriving if the arrangement
+// data's shape ever changes.
+function defaultDistrictMapState(aspect) {
+  const vp = S.ui.viewport.getBoundingClientRect();
+  const vw = vp.width || NOMINAL_MAP_PX, vh = vp.height || NOMINAL_MAP_PX;
+  const width = Math.max(DISTRICT_OVERLAY_MIN_W, Math.min(280, vw * DISTRICT_OVERLAY_MAX_FRAC));
+  const height = width * aspect;
+  return { left: Math.max(8, vw - width - 16), top: Math.max(8, vh - height - 16), width };
+}
+
+/** Single source of truth for whether the deployed national assembly is actually visible:
+ *  requires BOTH `districtOnMap` (the show/hide toggle) AND national view (operator spec: "the
+ *  full district assembly should not follow the map view into a drill-in view"). Call after
+ *  every state change that could affect either input, rather than toggling display directly at
+ *  each call site — the earlier docked-detail bug (session bt) was exactly this kind of drift. */
+function updateDistrictOverlayVisibility() {
+  const show = S.districtOnMap && S.view === "national" && S.districtMapState;
+  S.ui.districtOverlay.style.display = show ? "" : "none";
+  if (!show) highlightDistrictOnMap(null);   // don't leave a shape tinted once it's hidden
+}
+
+function sizeDistrictOverlay() {
+  const st = S.districtMapState;
+  if (!st) return;
+  const vp = S.ui.viewport.getBoundingClientRect();
+  const vw = vp.width || NOMINAL_MAP_PX, vh = vp.height || NOMINAL_MAP_PX;
+  // Reclamp on every resize (not just at deploy time) so a shrink to mobile width can't leave
+  // the assembly wider than the viewport it's sitting in.
+  st.width = Math.max(DISTRICT_OVERLAY_MIN_W, Math.min(st.width, vw * DISTRICT_OVERLAY_MAX_FRAC * 1.6, vw - 16));
+  st.left = Math.max(4, Math.min(st.left, vw - st.width - 4));
+  st.top = Math.max(4, Math.min(st.top, vh - 40));
+  const el2 = S.ui.districtOverlay;
+  el2.style.left = `${st.left}px`;
+  el2.style.top = `${st.top}px`;
+  el2.style.width = `${st.width}px`;
+}
+
+function renderDistrictOverlayButtons(controls) {
+  controls.innerHTML = "";
+  const toggle = el("button", "ctt-district-overlay-btn", { type: "button" });
+  toggle.textContent = S.districtOnMap ? "×" : "▦";
+  toggle.title = S.districtOnMap ? "Remove from map" : "Bring back the district blocks";
+  toggle.setAttribute("aria-label", toggle.title);
+  toggle.addEventListener("click", () => setDistrictOnMap(!S.districtOnMap));
+  controls.append(toggle);
+  if (S.districtOnMap) {   // +/- hide when the assembly itself is hidden (operator spec)
+    const minus = el("button", "ctt-district-overlay-btn", { type: "button", "aria-label": "Shrink" });
+    minus.textContent = "−";
+    minus.addEventListener("click", () => resizeDistrictOverlay(1 / DISTRICT_OVERLAY_ZOOM_STEP));
+    const plus = el("button", "ctt-district-overlay-btn", { type: "button", "aria-label": "Grow" });
+    plus.textContent = "+";
+    plus.addEventListener("click", () => resizeDistrictOverlay(DISTRICT_OVERLAY_ZOOM_STEP));
+    controls.append(minus, plus);
+  }
+}
+
+function resizeDistrictOverlay(factor) {
+  const st = S.districtMapState;
+  if (!st) return;
+  const vp = S.ui.viewport.getBoundingClientRect();
+  const vw = vp.width || NOMINAL_MAP_PX;
+  const cx = st.left + st.width / 2;   // resize around the assembly's own centre, not its corner
+  st.width = Math.max(DISTRICT_OVERLAY_MIN_W, Math.min(st.width * factor, vw * DISTRICT_OVERLAY_MAX_FRAC * 1.6, vw - 16));
+  st.left = cx - st.width / 2;
+  sizeDistrictOverlay();
+}
+
+/** Show/hide toggle (buttons [1]/[2] in the operator's spec) — NOT a full undeploy: the
+ *  position/scale in `S.districtMapState` survive, so re-showing lands exactly where it was. */
+function setDistrictOnMap(on) {
+  S.districtOnMap = on;
+  updateDistrictOverlayVisibility();   // also clears any stuck highlight when hiding — see there
+  const controls = S.ui.districtOverlay.querySelector(".ctt-district-overlay-controls");
+  if (controls) renderDistrictOverlayButtons(controls);
+  const btn = S.ui.paneBody.querySelector(".ctt-district-deploy-btn");
+  if (btn) btn.textContent = on ? "Remove from map" : "Set upon map";
+}
+
+/** "Set upon map": always replaces whatever was previously deployed (operator confirmed) —
+ *  fresh default position/size every time, not whatever a prior deployment's drag/resize left. */
+/** Tints the real geographic district shape "standard blue" (operator spec) while its
+ *  corresponding cartogram block is hovered — the shape lives in the CURRENT national SVG
+ *  (districts are real, if visually subordinate, shapes there per CLAUDE.md §5's national-view
+ *  layering), a different DOM entirely from the cartogram overlay hovering it. */
+function highlightDistrictOnMap(did) {
+  const svg = S.ui.nationalSVG;
+  if (!svg) return;
+  svg.querySelectorAll(".ctt-shape-district-hover").forEach((s) => s.classList.remove("ctt-shape-district-hover"));
+  if (!did) return;
+  svg.querySelector(`path[data-court-id="${CSS.escape(did)}"][data-layer="district"]`)
+    ?.classList.add("ctt-shape-district-hover");
+}
+
+function deployDistrictOverlay(circuits) {
+  const ov = S.ui.districtOverlay;
+  ov.innerHTML = "";
+  const controls = el("div", "ctt-district-overlay-controls");
+  const { svg, bbox } = buildDistrictCartogramSVG(circuits);
+  S.districtMapState = defaultDistrictMapState(bbox ? bbox.H / bbox.W : 0.6);
+  ov.append(svg, controls);
+  wireDistrictCartogramHover(svg, S.ui.tooltip, highlightDistrictOnMap);
+  wireDistrictOverlayDrag(ov, svg);
+  sizeDistrictOverlay();
+  setDistrictOnMap(true);
+}
+
+/** Cursor click-drag repositioning (operator spec). Dragging from a control button must not
+ *  also move the whole overlay — checked first and bailed, same guard shape as the map's own
+ *  seat-block tuner drag in tools/tune-seat-blocks.html. */
+function wireDistrictOverlayDrag(ov, svg) {
+  let drag = null;
+  ov.addEventListener("pointerdown", (e) => {
+    if (e.target.closest(".ctt-district-overlay-btn")) return;
+    const st = S.districtMapState;
+    if (!st) return;
+    drag = { startX: e.clientX, startY: e.clientY, left0: st.left, top0: st.top };
+    ov.classList.add("ctt-dragging");
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp, { once: true });
+    e.preventDefault();
+  });
+  function onMove(e) {
+    if (!drag) return;
+    const st = S.districtMapState;
+    st.left = drag.left0 + (e.clientX - drag.startX);
+    st.top = drag.top0 + (e.clientY - drag.startY);
+    sizeDistrictOverlay();
+  }
+  function onUp() {
+    window.removeEventListener("pointermove", onMove);
+    ov.classList.remove("ctt-dragging");
+    drag = null;
+  }
+}
+
+/** Circuit-drill-in fixed sub-assembly (operator spec): shown for the drilled-in circuit's OWN
+ *  districts regardless of whether the national assembly is deployed at all — a SEPARATE,
+ *  always-available presentation, not the same instance following the view. `circuitId=null`
+ *  sweeps it (called on drillOut). Renders directly into the LOCAL svg's layer wrapper so it
+ *  disappears/reappears with that layer exactly like everything else in circuit-local view. */
+function renderDistrictSubassembly(circuitId) {
+  const old = S.ui.viewport.querySelector(".ctt-district-subassembly");
+  if (old) old.remove();
+  if (!circuitId || NO_DISTRICT_SUBASSEMBLY.has(circuitId)) return;
+  loadDistrictArrangement().then((arrangement) => {
+    if (S.view !== "circuit" || S.activeCircuit !== circuitId) return;   // stale by the time it loads
+    const circuits = arrangement.circuits || [];
+    const { svg, bbox } = buildDistrictCartogramSVG(circuits, circuitId);
+    if (!bbox) return;   // no arrangement data for this circuit (e.g. not yet authored)
+    const wrap = el("div", "ctt-district-subassembly");
+    wrap.append(svg);
+    S.ui.viewport.append(wrap);
+    wireDistrictCartogramHover(svg, S.ui.tooltip);
+  });
+}
+
 function renderSummaryDistrict(container) {
+  const controls = el("div", "ctt-pane-controls");
+  const deployBtn = el("button", "ctt-toggle ctt-district-deploy-btn", { type: "button" });
+  deployBtn.textContent = S.districtOnMap ? "Remove from map" : "Set upon map";
+  controls.append(deployBtn);
+  container.append(controls);
+
   const layout = el("div", "ctt-district-layout");
   const wrap = el("div", "ctt-district-cartogram-wrap");
   const detailBox = el("div", "ctt-detail ctt-district-detail");
@@ -943,6 +1132,12 @@ function renderSummaryDistrict(container) {
       layout.replaceWith(note);
       return;
     }
+    // setDistrictOnMap()/deployDistrictOverlay() both already update this button's text
+    // themselves (via the .ctt-district-deploy-btn lookup) — one source of truth for the label.
+    deployBtn.addEventListener("click", () => {
+      if (S.districtOnMap) setDistrictOnMap(false);
+      else deployDistrictOverlay(circuits);
+    });
     const { svg } = buildDistrictCartogramSVG(circuits);
     wrap.append(svg);
 
@@ -2636,6 +2831,7 @@ async function drillIn(circuitId) {
     cancelMorph();
     attachMorphLayer(null);
     S.view = "circuit"; S.activeCircuit = "cafc";
+    updateDistrictOverlayVisibility();   // full assembly never follows into a drill-in
     setPaneTallness("cafc");
     renderSelector();
     togglePane(false);
@@ -2647,6 +2843,8 @@ async function drillIn(circuitId) {
   const local = await ensureLocalLayer(circuitId);
   if (!local) return;
   S.view = "circuit"; S.activeCircuit = circuitId;
+  updateDistrictOverlayVisibility();   // full assembly never follows into a drill-in
+  renderDistrictSubassembly(circuitId);
   setPaneTallness(circuitId);
   togglePane(false);
   // Drop the circuit's map highlight before animating: the pane is closing, the circuit-local
@@ -2694,6 +2892,8 @@ async function drillOut() {
   if (S.ui.nationalSVG)   // feeder blocks (CIT/CFC) exist only inside the cafc feeder view
     S.ui.nationalSVG.querySelectorAll('.ctt-blocks[data-level="feeder"]').forEach((n) => n.remove());
   S.view = "national"; S.activeCircuit = null; S.selectedCourt = null;
+  updateDistrictOverlayVisibility();   // the deployed national assembly reappears if it was on
+  renderDistrictSubassembly(null);     // sweep the circuit-local fixed sub-assembly
   setPaneTallness(null);   // national view never reaches a note-bearing court directly
   unpinDetail();
   togglePane(false);
@@ -2758,6 +2958,7 @@ export async function mount(root) {
   S.detailPinned = false; S.affilMark = "none";
   S.appointmentsAll = null; S.presidentPhotos = null;
   S.summaryView = "scotus"; S.districtArrangement = null;
+  S.districtOnMap = false; S.districtMapState = null;
 
   const ui = buildShell(root);
   try {

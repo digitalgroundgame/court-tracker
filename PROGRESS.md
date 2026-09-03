@@ -12,6 +12,78 @@ tracker (Phase-4 tail items open, PLUS a brand-new third pane view — "Change",
 (feature-complete first version, operator refinement rounds ongoing; see sessions ai→at, aw).
 **Last updated:** 2026-09-04
 
+> **SESSION (bv), 2026-09-04 — District phase, Milestone 2: "Set upon map" deployment — the
+> full mechanic, in one session.** Everything from the original (bs) spec that (bu) explicitly
+> deferred: the on-map overlay layer, the 3 control buttons, show/hide, resize, drag, real-shape
+> hover-highlight, the circuit-drill-in fixed sub-assembly, and the mobile-responsive sizing
+> item 4 punted from (bt). This is the single largest piece of the whole Summary-tab initiative;
+> it's DONE and tested end-to-end, not a partial slice — the only thing still explicitly out of
+> scope is the "pull out of one interface into another" deploy ANIMATION (operator spec: exists
+> for deploying, not for returning) — everything currently deploys/hides instantly, no motion.
+> - **State**: `S.districtOnMap` (visible right now) and `S.districtMapState` (`{left, top,
+>   width}`, CSS px within `.ctt-map-viewport`) — kept deliberately separate, since hiding via
+>   the on-map toggle must NOT discard position/size (operator spec: button [2] "bring back...
+>   without navigating," i.e. exactly where it was), while a FRESH "Set upon map" from Summary
+>   always resets both (operator confirmed: "always replaces," no blocked-redeploy state).
+> - **DOM placement, chosen deliberately**: `S.ui.districtOverlay` is inserted into
+>   `.ctt-map-viewport` BETWEEN the SVG stack and the info pane in DOM order — both are
+>   `position:absolute` with no z-index anywhere in this app, so DOM order alone is stacking
+>   order. This gets "the pane covers it by default, same as the rest of the map" for free,
+>   with no z-index bookkeeping of its own to get wrong.
+> - **Default placement bug caught by screenshot, not guessed right the first time**: an
+>   initial top-right default landed the deployed cartogram directly on top of the map's OWN
+>   already-dense 1st/2nd/3rd/DC seat-block cluster in the northeast — genuinely unreadable,
+>   only visible by actually looking at a screenshot, not from the code. Moved to bottom-right
+>   (open Atlantic/Gulf water at every zoom level this app supports), and made the default
+>   HEIGHT correct on the first placement by reading the cartogram's own real bbox aspect ratio
+>   out of `buildDistrictCartogramSVG`'s return value, rather than guessing a height and
+>   fixing it up after the fact.
+> - **Buttons styled exactly per spec** ("fill color-transparent but dark circle and button
+>   label colors") — a NEW distinct button class from the pane's own solid-fill `.ctt-pane-close`
+>   family, since the spec asked for a visually different chrome for overlay controls specifically.
+>   The single toggle button literally re-renders itself between two states/icons on click
+>   (button [1] "×" ↔ button [2] "▦") rather than being two different buttons — matches the
+>   spec's own framing of one control that "turns into" the other. The +/- resize buttons are
+>   omitted entirely from the DOM (not just hidden) whenever the assembly itself is hidden, per
+>   spec ("these hide when button 1 is clicked").
+> - **Resize** resizes around the assembly's own CENTRE (not its top-left corner) so growing/
+>   shrinking doesn't visually walk the assembly sideways. **Drag** is 1:1 pointer-delta,
+>   guarded so starting a drag on a control button doesn't also move the whole overlay (same
+>   guard shape as `tools/tune-seat-blocks.html`'s existing drag code). Both funnel through one
+>   `sizeDistrictOverlay()` that reclamps position/width against the CURRENT viewport size on
+>   every call (not just at deploy time) — this is also what makes the assembly correctly
+>   re-clamp itself on a browser window resize (wired into the existing `window.resize` handler)
+>   and is the mechanism behind the mobile-responsive sizing operator item 4 explicitly deferred
+>   from (bt): screenshot-verified at 380px width, the deployed assembly scales down
+>   proportionally and stays fully inside the viewport with its 3 controls still legible.
+> - **Hover-highlight of the real map shape** ("standard blue," operator spec): a NEW dedicated
+>   CSS class `.ctt-shape-district-hover` (same fill color as `.ctt-shape-selected`, but
+>   independent of it — this fires from a different mouse position than the shape itself, and
+>   must not collide with whatever court happens to actually be selected). Cleared centrally
+>   inside `updateDistrictOverlayVisibility()` whenever the overlay becomes hidden for ANY
+>   reason (toggle, drill-in, redeploy) — one place, not scattered across every hide call site,
+>   deliberately mirroring the lesson from (bt)'s docked-detail bug (drift between multiple
+>   partial-update call sites is exactly how that one happened).
+> - **Circuit-drill-in fixed sub-assembly**: reuses `buildDistrictCartogramSVG`'s
+>   `filterCircuitId` parameter added in (bu) specifically so this would need no further
+>   refactor — renders ONLY the drilled-in circuit's own cluster, fixed top-left, NOT
+>   draggable/resizable (a reference view tied to the circuit being viewed, not a customized
+>   object like the deployed national one). Independent of `S.districtOnMap` entirely — shows
+>   regardless of whether the national assembly is deployed, hidden, or never touched.
+>   `NO_DISTRICT_SUBASSEMBLY = new Set(["cafc"])` excludes the Federal Circuit (no districts of
+>   its own, feeders only) per spec. Wired into both `drillIn` exit paths and `drillOut`, with
+>   its own staleness guard (mirrors `renderSummaryDistrict`'s async-load pattern) so a fast
+>   drill-in/back-out cycle can't paint a stale circuit's blocks after the view has moved on.
+> - **Tested**: 25 new `tests/smoke.mjs` assertions covering deploy/hide/show/resize/drag/
+>   redeploy-resets/hover-highlight/drill-in-subassembly/cafc-exclusion, all exercised through
+>   real DOM events (not calling internal functions directly) so they'd catch wiring mistakes,
+>   not just logic bugs. Plus real-browser CDP screenshots at desktop AND 380px mobile widths,
+>   including a zoomed crop proving the actual `<path>` fill change on hover (not just the class
+>   existing in the DOM). All prior suites (`browser-checks.mjs`, `stress.mjs`) pass unmodified.
+> - Next: the deploy-only "pull out of one interface into another" animation (explicitly not
+>   built this session — everything else is otherwise feature-complete). After that, the whole
+>   original Summary-tab initiative from (bs) is essentially done.
+
 > **SESSION (bu), 2026-09-04 — District phase, Milestone 1: docked per-district detail viewer +
 > click-to-pin (Summary > District).** Operator confirmed 2 design questions before this
 > started: (1) "Set upon map" always REPLACES whatever's currently deployed (no blocking), and
@@ -1276,6 +1348,31 @@ Prove the whole app shell and asset schema on one circuit with hand-authored sam
 - Next: ...
 - Blockers: ...
 -->
+
+### 2026-09-04 (bv) — District phase, Milestone 2: full "Set upon map" deployment mechanic
+- Phase: 4, continuing (bs)/(bu) — the largest single piece of the Summary-tab initiative,
+  built and tested end-to-end in one session (not a partial slice): the on-map overlay layer,
+  its 3 control buttons (show/hide toggle + resize +/-), drag-to-reposition, hover-highlight of
+  the real district shape ("standard blue"), and the circuit-drill-in fixed sub-assembly (that
+  circuit's own districts only, independent of national deployment state, excluding cafc). Only
+  the deploy-only "pull out" animation is still explicitly deferred.
+- Caught a real placement bug via screenshot before it shipped: the initial top-right default
+  position landed directly on top of the map's own dense 1st/2nd/3rd/DC seat-block cluster.
+  Moved to bottom-right (open water at every zoom level), sized correctly on first placement
+  using the cartogram's own real bbox aspect ratio rather than a guessed height.
+- Resize/drag/window-resize all funnel through one `sizeDistrictOverlay()` that reclamps
+  against the current viewport — this is also what makes the assembly correctly scale down on
+  mobile (380px screenshot-verified), closing the responsive-sizing item explicitly deferred
+  from (bt). Hover-highlight clears centrally in one place (`updateDistrictOverlayVisibility`)
+  rather than at every hide call site, deliberately avoiding (bt)'s docked-detail drift bug
+  pattern. The circuit-drill-in sub-assembly reuses (bu)'s `filterCircuitId` refactor with zero
+  further changes needed.
+- Verified via 25 new `tests/smoke.mjs` assertions (real DOM events throughout) plus real-
+  browser CDP screenshots at desktop and mobile widths, including a zoomed crop proving the
+  actual map-shape fill change. Prior suites pass unmodified.
+- Next: the deploy-only pull-out animation; otherwise the Summary-tab initiative from (bs) is
+  essentially feature-complete. Full detail above CURRENT PHASE (search "(bv)").
+- Blockers: none.
 
 ### 2026-09-04 (bu) — District phase, Milestone 1: docked detail viewer + click-to-pin
 - Phase: 4, continuing (bs)/(bt) — first slice of the large District "lift onto map" feature.
