@@ -407,6 +407,10 @@ const moed = selItems.find((i) => i.getAttribute("data-court-id") === "moed");
 click(moed);
 await sleep(40);
 assert(/E\.D\. Mo\.|Eastern District of Missouri/.test(root.querySelector(".ctt-pane-title").textContent), "moed pane opens");
+// Pane-title min-height (stable position regardless of name length, operator ask, 2026-09-07) is
+// a CSS-value claim jsdom can't check — this harness never loads court-tracker.css at all, so
+// getComputedStyle() here reflects only inline styles, never the stylesheet. Covered instead in
+// tests/browser-checks.mjs (real Chrome), matching this project's existing jsdom/browser split.
 assert(root.querySelectorAll(".ctt-judge-stage .ctt-judge").length >= 7, "moed judges rendered");
 assert(!root.querySelector(".ctt-judge-stage .ctt-justice"), "district pane has NO circuit justice");
 click(back);
@@ -915,7 +919,7 @@ assert(!root.querySelector(".ctt-pane-head"), "Summary pane has no separate titl
 const summarySwitch = root.querySelector(".ctt-summary-switch");
 assert(summarySwitch, "Summary sub-tab switch exists");
 const summaryTabs = [...summarySwitch.querySelectorAll(".ctt-mode-opt")].map((b) => b.textContent);
-assert(JSON.stringify(summaryTabs) === JSON.stringify(["Supreme Court", "Courts of Appeals", "District Courts"]),
+assert(JSON.stringify(summaryTabs) === JSON.stringify(["Supreme Court", "Appellate Courts", "District Courts"]),
   `Summary sub-tabs are the full section names, in order (got ${JSON.stringify(summaryTabs)})`);
 assert(summarySwitch.querySelector(".ctt-mode-opt.ctt-is-active").textContent === "Supreme Court",
   "Supreme Court is the default Summary sub-tab");
@@ -965,7 +969,7 @@ assert(innerYs.every((y) => !onHorizon(y)), "no inner-ring seat sits on the hori
 assert(outerYs.filter(onHorizon).length === 2, "outer ring's two endpoint seats sit exactly on the horizontal (standard, unraised)");
 
 console.log("Summary > Appellate: blank placeholder (operator: come back to it later)");
-click(toggle("Courts of Appeals")); await sleep(20);
+click(toggle("Appellate Courts")); await sleep(20);
 assert(/Coming soon/.test(root.querySelector(".ctt-summary-content").textContent), "Appellate shows a placeholder");
 assert(!root.querySelector(".ctt-judge-stage"), "no SCOTUS bench lingers under Appellate");
 
@@ -976,6 +980,19 @@ assert(clusters.length === 12, `cartogram renders all 12 geographic circuits (go
 assert(root.querySelectorAll(".ctt-district-sq").length > 0, "cartogram renders district squares");
 assert(root.querySelectorAll(".ctt-district-sq.ctt-sq-rep, .ctt-district-sq.ctt-sq-dem").length > 0,
   "cartogram squares reuse the map's own R/D palette classes");
+
+console.log("Summary > District: controls row — right-aligned/width-matched deploy button, arrow-flanked label, left caption (operator ask, 2026-09-07)");
+const summaryDeployBtn = root.querySelector(".ctt-district-deploy-btn");
+const summaryCaption = root.querySelector(".ctt-district-controls-caption");
+assert(summaryDeployBtn.textContent === "▼ Set upon map ▼", "button label is flanked by down arrows");
+assert(summaryCaption && summaryCaption.textContent === "Party of District Court Appointments, Arranged by Circuit",
+  "left-aligned caption text is present and correct");
+// Right-alignment/width-matching are CSS-value claims jsdom can't check (no stylesheet loaded in
+// this harness) — covered instead in tests/browser-checks.mjs (real Chrome).
+
+console.log("Summary > District: hover growth scale is modest (operator ask, 2026-09-07: 'too much')");
+assert(mod._dev.DISTRICT_SQ_SCALE_HOVER > 1 && mod._dev.DISTRICT_SQ_SCALE_HOVER <= 1.2,
+  `DISTRICT_SQ_SCALE_HOVER is a modest grow, not the old 1.35 (got ${mod._dev.DISTRICT_SQ_SCALE_HOVER})`);
 
 console.log("Summary > District: docked detail panel + click-to-pin (operator spec)");
 const districtDetail = root.querySelector(".ctt-district-detail");
@@ -1001,6 +1018,23 @@ const rows = [...districtDetail.querySelectorAll(".ctt-district-row")];
 const expectedCount = [...mod._dev.S.courts.values()].filter((c) => c.court_level === "district" && c.parent_id === circuitId).length;
 assert(rows.length === expectedCount, `table lists every district in the circuit (got ${rows.length}, want ${expectedCount})`);
 assert(!label.nextElementSibling.querySelector("thead"), "table has no header row (operator ask)");
+
+console.log("Summary > District: Total row (operator ask, 2026-09-07)");
+const allTbodyRows = [...districtDetail.querySelectorAll(".ctt-district-row, .ctt-district-row-total")];
+const totalRow = districtDetail.querySelector(".ctt-district-row-total");
+assert(totalRow && allTbodyRows.indexOf(totalRow) === 1, "Total row sits directly below the first (pinned/hovered) row");
+const totalCells = [...totalRow.querySelectorAll("td")];
+assert(totalCells[0].textContent === "Total", "first cell reads 'Total'");
+const expectedTotals = [...mod._dev.S.courts.values()]
+  .filter((c) => c.court_level === "district" && c.parent_id === circuitId)
+  .reduce((acc, c) => {
+    const b = mod._dev.S.seatBlocks?.[c.court_id] || {};
+    acc.r += b.r ?? 0; acc.d += b.d ?? 0; acc.vacancies += b.vacancies ?? 0;
+    return acc;
+  }, { r: 0, d: 0, vacancies: 0 });
+assert(parseInt(totalCells[1].textContent) === expectedTotals.r, `R total correct (got ${totalCells[1].textContent}, want ${expectedTotals.r})`);
+assert(parseInt(totalCells[2].textContent) === expectedTotals.d, `D total correct (got ${totalCells[2].textContent}, want ${expectedTotals.d})`);
+assert(parseInt(totalCells[3].textContent) === expectedTotals.vacancies, `vacant total correct (got ${totalCells[3].textContent}, want ${expectedTotals.vacancies})`);
 assert(rows[0].classList.contains("ctt-district-row-active") && rows[0].textContent.includes(hoveredCourt.short_name),
   "mere hover (no click) already reorders the hovered district's row to the TOP, bolded/highlighted — same treatment as a pin (operator correction, 2026-09-05)");
 const repCell = rows[0].querySelectorAll("td")[1];
@@ -1088,10 +1122,10 @@ click(toggle("District Courts")); await sleep(60);
 const overlay = root.querySelector(".ctt-district-overlay");
 assert(overlay.style.display === "none", "deployed overlay starts hidden (nothing deployed yet)");
 const deployBtn = root.querySelector(".ctt-district-deploy-btn");
-assert(deployBtn.textContent === "Set upon map", "deploy button starts as 'Set upon map'");
+assert(deployBtn.textContent === "▼ Set upon map ▼", "deploy button starts as '▼ Set upon map ▼'");
 click(deployBtn);
 assert(overlay.style.display !== "none", "overlay becomes visible after deploying");
-assert(deployBtn.textContent === "Remove from map", "Summary's own button flips label once deployed");
+assert(deployBtn.textContent === "▼ Remove from map ▼", "Summary's own button flips label once deployed");
 assert(overlay.querySelectorAll(".ctt-district-cluster").length === 12,
   "deployed overlay renders all 12 geographic circuits, same as the Summary preview");
 // Default placement: fully within the viewport's own bounds (jsdom's 0-everything layout means
@@ -1105,12 +1139,17 @@ assert(cornerControls, "the fixed corner-controls box exists");
 assert(!overlay.contains(cornerControls), "...and is NOT a descendant of the draggable assembly itself");
 assert(cornerControls.querySelectorAll(".ctt-district-overlay-btn").length === 3,
   "shows all 3 controls (remove + resize +/-) while the assembly is deployed and visible");
+const cornerBtnOrder = [...cornerControls.querySelectorAll(".ctt-district-overlay-btn")].map((b) => b.textContent);
+assert(cornerBtnOrder[cornerBtnOrder.length - 1] === "×",
+  `× (remove) is the RIGHT-MOST control (operator ask, 2026-09-07) (got order ${cornerBtnOrder})`);
+// The actual top-right POSITION is a CSS-value claim jsdom can't check (no stylesheet loaded in
+// this harness) — covered instead in tests/browser-checks.mjs (real Chrome).
 
 console.log("on-map remove (×) preserves position — no full undeploy — and leaves a D button to redeploy");
 const savedState = { ...mod._dev.S.districtMapState };
 click([...cornerControls.querySelectorAll(".ctt-district-overlay-btn")].find((b) => b.textContent === "×"));
 assert(overlay.style.display === "none", "clicking × hides the (SVG-only) overlay");
-assert(deployBtn.textContent === "Set upon map", "Summary's button reflects the hide");
+assert(deployBtn.textContent === "▼ Set upon map ▼", "Summary's button reflects the hide");
 assert(JSON.stringify(mod._dev.S.districtMapState) === JSON.stringify(savedState),
   "hiding does NOT discard the remembered position/size (only visibility toggles)");
 const dButtons = cornerControls.querySelectorAll(".ctt-district-overlay-btn");
@@ -1157,6 +1196,18 @@ assert(litShape && litShape.getAttribute("data-court-id") === targetDid,
 overlay.querySelector(".ctt-district-cartogram").dispatchEvent(new window.MouseEvent("pointerleave", { bubbles: true }));
 assert(!root.querySelector(".ctt-shape-district-hover"), "moving off the overlay clears the map-shape highlight");
 
+console.log("REGRESSION (operator report, 2026-09-07): hovering ONE district must not grow every district in the assembly");
+// Root cause: `grow` was `(hoveredId && ...) || (isPinned && isPinned(sqDid))` — without an
+// isPinned function (the plain on-map wiring), the second half evaluates to `undefined`, not
+// `false`. classList.toggle(name, undefined) is spec'd to behave as a NORMAL toggle (flip
+// current state) rather than force-remove, so every non-hovered square's ABSENT class flipped to
+// PRESENT on its very first evaluation. Locking in the `!!(...)` fix permanently.
+someOverlaySq.dispatchEvent(new window.MouseEvent("pointermove", { bubbles: true, clientX: 1, clientY: 1 }));
+const grownDids = new Set([...overlay.querySelectorAll(".ctt-district-sq.ctt-district-sq-grown")]
+  .map((sq) => sq.getAttribute("data-district-id")));
+assert(grownDids.size === 1 && grownDids.has(targetDid),
+  `only the hovered district's own cells carry ctt-district-sq-grown (got ${grownDids.size} distinct districts: ${[...grownDids]})`);
+
 console.log("drag repositioning (operator spec)");
 const before = { ...mod._dev.S.districtMapState };
 overlay.dispatchEvent(new window.PointerEvent("pointerdown", { bubbles: true, clientX: 500, clientY: 500 }));
@@ -1189,6 +1240,15 @@ await waitFor(() => sub.querySelectorAll(".ctt-district-cluster").length > 0, 10
 const subClusters = [...sub.querySelectorAll(".ctt-district-cluster")].map((g) => g.getAttribute("data-circuit-id"));
 assert(JSON.stringify(subClusters) === JSON.stringify(["ca8"]),
   `sub-assembly renders ONLY the drilled-in circuit's own cluster (got ${JSON.stringify(subClusters)})`);
+// The actual bottom-left POSITION is a CSS-value claim jsdom can't check (no stylesheet loaded
+// in this harness) — covered instead in tests/browser-checks.mjs (real Chrome).
+console.log("sub-assembly hover ties to the standard blue map-shape highlight too (operator ask, 2026-09-07)");
+const subSq = sub.querySelector(".ctt-district-sq[data-district-id]");
+const subTargetDid = subSq.getAttribute("data-district-id");
+subSq.dispatchEvent(new window.MouseEvent("pointermove", { bubbles: true, clientX: 1, clientY: 1 }));
+const subLit = root.querySelector(".ctt-shape-district-hover");
+assert(subLit && subLit.getAttribute("data-court-id") === subTargetDid,
+  `hovering the sub-assembly tints the matching real (LOCAL circuit) map shape (got ${subLit?.getAttribute("data-court-id")}, want ${subTargetDid})`);
 click(root.querySelector(".ctt-selector-back"));
 await waitFor(() => mod._dev.S.view === "national", 2000);
 assert(!root.querySelector(".ctt-district-subassembly"), "sub-assembly is swept on drill-out");

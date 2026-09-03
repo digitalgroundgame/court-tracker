@@ -142,6 +142,66 @@ try {
   })()`));
   assert(settled.flyGone, "the flyover clone is removed once the animation settles");
   assert(settled.overlayVisible, "the real persistent overlay is visible in its place");
+
+  console.log("pane-title reserves fixed room regardless of name length, scoped to DISTRICT courts only (operator ask, 2026-09-07; scope fix after it regressed CFC's pane into a scrollbar) - jsdom reports 0 for every box, so this needs real layout");
+  await ev(`document.querySelector('.ctt-selector-item[data-court-id="ca9"]').click()`); await sleep(500);
+  await ev(`document.querySelector('.ctt-drill').click()`); await sleep(1800);
+  // gud ("...District of Guam", short) vs nmid ("...District of the Northern Mariana Islands",
+  // much longer) — both under ca9, real min/max-length district names, not just similar circuits.
+  await ev(`document.querySelector('.ctt-selector-item[data-court-id="gud"]').click()`); await sleep(500);
+  const gudTitleH = await ev(`document.querySelector('.ctt-pane-title').getBoundingClientRect().height`);
+  await ev(`document.querySelector('.ctt-selector-item[data-court-id="nmid"]').click()`); await sleep(500);
+  const nmidTitleH = await ev(`document.querySelector('.ctt-pane-title').getBoundingClientRect().height`);
+  assert(gudTitleH === nmidTitleH, `title box height is IDENTICAL regardless of name length (gud ${gudTitleH} vs nmid ${nmidTitleH})`);
+  await ev(`document.querySelector('.ctt-selector-back')?.click()`); await sleep(600);
+  await ev(`document.querySelector('.ctt-selector-item[data-court-id="cafc"]').click()`); await sleep(500);
+  await ev(`document.querySelector('.ctt-drill').click()`); await sleep(500);
+  await ev(`document.querySelector('.ctt-selector-item[data-court-id="uscfc"]').click()`); await sleep(500);
+  const cfcScroll = JSON.parse(await ev(`(() => { const b = document.querySelector('.ctt-pane-body'); return JSON.stringify({ scrollHeight: b.scrollHeight, clientHeight: b.clientHeight }); })()`));
+  assert(cfcScroll.scrollHeight <= cfcScroll.clientHeight,
+    `CFC (a short, single-line title) is unaffected by the district-only title reservation (scrollHeight ${cfcScroll.scrollHeight} <= clientHeight ${cfcScroll.clientHeight})`);
+  await ev(`document.querySelector('.ctt-selector-back')?.click()`); await sleep(500);
+
+  console.log("Summary > District controls row: deploy button right-aligned + width-matched to the docked panel (operator ask, 2026-09-07)");
+  await ev(`document.querySelector('.ctt-selector-item[data-court-id="summary"]').click()`); await sleep(400);
+  await ev(`[...document.querySelectorAll('.ctt-mode-opt')].find(b=>b.textContent==='District Courts').click()`); await sleep(600);
+  const alignGeom = JSON.parse(await ev(`(() => {
+    const btn = document.querySelector('.ctt-district-deploy-btn'), detail = document.querySelector('.ctt-district-detail');
+    const b = btn.getBoundingClientRect(), d = detail.getBoundingClientRect();
+    return JSON.stringify({ widthDiff: Math.abs(b.width - d.width), rightDiff: Math.abs(b.right - d.right) });
+  })()`));
+  assert(alignGeom.widthDiff < 1, `deploy button width matches the docked panel (diff ${alignGeom.widthDiff})`);
+  assert(alignGeom.rightDiff < 1, `deploy button right edge aligns with the docked panel (diff ${alignGeom.rightDiff})`);
+
+  console.log("fixed corner controls sit top-right; drill-in sub-assembly sits bottom-left (operator ask, 2026-09-07)");
+  await ev(`document.querySelector('.ctt-pane-close').click()`); await sleep(400);   // close Summary — the corner controls are hidden while any pane is open
+  await ev(`document.querySelector('.ctt-district-corner-controls .ctt-district-overlay-btn').click()`); await sleep(700);
+  const cornerGeom = JSON.parse(await ev(`(() => {
+    const box = document.querySelector('.ctt-district-corner-controls'), vp = document.querySelector('.ctt-map-viewport');
+    const r = box.getBoundingClientRect(), v = vp.getBoundingClientRect();
+    return JSON.stringify({ top: r.top - v.top, right: v.right - r.right });
+  })()`));
+  assert(cornerGeom.top < 30 && cornerGeom.right < 30, `corner controls anchored near the top-right (${JSON.stringify(cornerGeom)})`);
+  await ev(`document.querySelector('.ctt-selector-item[data-court-id="ca8"]').click()`); await sleep(400);
+  await ev(`document.querySelector('.ctt-drill').click()`); await sleep(1800);
+  const subGeom = JSON.parse(await ev(`(() => {
+    const sub = document.querySelector('.ctt-district-subassembly'), vp = document.querySelector('.ctt-map-viewport');
+    const r = sub.getBoundingClientRect(), v = vp.getBoundingClientRect();
+    return JSON.stringify({ bottom: v.bottom - r.bottom, left: r.left - v.left });
+  })()`));
+  assert(subGeom.bottom < 30 && subGeom.left < 30, `sub-assembly anchored near the bottom-left (${JSON.stringify(subGeom)})`);
+  await ev(`document.querySelector('.ctt-selector-back')?.click()`); await sleep(600);
+
+  console.log("REGRESSION (operator report, 2026-09-07): hovering one district in the deployed assembly must not grow every district");
+  const growthDids = JSON.parse(await ev(`(() => {
+    const sq = document.querySelector('.ctt-district-overlay .ctt-district-sq[data-district-id="cacd"]');
+    const r = sq.getBoundingClientRect();
+    sq.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: r.x + 1, clientY: r.y + 1 }));
+    return null;
+  })()`));
+  await sleep(300);
+  const grownDids = JSON.parse(await ev(`JSON.stringify([...new Set([...document.querySelectorAll('.ctt-district-overlay .ctt-district-sq.ctt-district-sq-grown')].map(s=>s.getAttribute('data-district-id')))])`));
+  assert(JSON.stringify(grownDids) === JSON.stringify(["cacd"]), `only cacd's cells are grown, not the whole assembly (got ${grownDids})`);
 } catch (e) { console.log("*** ", e.message); failures++; }
 finally { try { ws && ws.close(); } catch {} chrome.kill(); }
 
