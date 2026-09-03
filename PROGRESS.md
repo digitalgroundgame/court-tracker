@@ -10,7 +10,66 @@
 tracker (Phase-4 tail items open, PLUS a brand-new third pane view — "Change", built session
 (aw), operator review round addressed session (ax)) and the appointments beeswarm
 (feature-complete first version, operator refinement rounds ongoing; see sessions ai→at, aw).
-**Last updated:** 2026-09-05
+**Last updated:** 2026-09-06
+
+> **SESSION (by), 2026-09-06 — Two (bx) bug reports fixed: table growth was pushing the whole
+> pane into an outer scrollbar instead of clipping internally; hover stickiness/row-highlighting
+> didn't actually match the judge-detail panel's documented contract.** Operator used the
+> District feature from (bx) and reported both live.
+> - **Bug 1 — table overflow root-caused two levels deep, not just the flex-shrink pass (bx)
+>   already did.** (bx) correctly changed `.ctt-pane-body > .ctt-summary-content` /
+>   `.ctt-summary-content > .ctt-stage-row`/`.ctt-district-layout` from `flex: 1 0 auto` to
+>   `flex: 1 1 auto` so the row COULD shrink, but that alone didn't fix the 9th Circuit's
+>   15-row table (operator repro). Two more gaps, found by measuring real `getBoundingClientRect`
+>   geometry in headless Chrome rather than guessing from the CSS: (1) `.ctt-district-detail`
+>   itself had no `align-self: stretch` — `.ctt-district-layout`'s `align-items: flex-start`
+>   means a row flex child otherwise just hugs its own content height, so the detail box grew to
+>   fit ALL 15 rows instead of being capped to the row's actual available height (its sibling,
+>   `.ctt-district-cartogram-wrap`, already had this from (bx)'s centering fix — the detail box
+>   never got the same treatment). (2) even after bounding the box, `.ctt-district-table-wrap`'s
+>   own `flex: 1 1 auto; min-height: 0; overflow-y: auto` did nothing, because its actual parent
+>   in the DOM is `.ctt-detail-content` — a plain (non-flex) block div shared with the judge-detail
+>   panel — and flex properties on a child are inert unless the parent is itself `display: flex`.
+>   Fixed by scoping a flex-column declaration to `.ctt-district-detail > .ctt-detail-content`
+>   specifically (leaving the bare `.ctt-detail-content` rule, and the judge-detail panel that
+>   uses it, untouched), with a `> *` default of `flex: 0 0 auto` for the name/jump-button rows
+>   and a higher-specificity override (`.ctt-district-detail > .ctt-detail-content >
+>   .ctt-district-table-wrap`, mirroring the existing `.ctt-pane-body > .ctt-stage-row` vs.
+>   `.ctt-pane-body > *` specificity trick) so the table wrap alone gets `flex: 1 1 auto`.
+>   Verified directly in headless Chrome (not jsdom, which reports 0 for every box): 9th Circuit's
+>   `.ctt-pane-body` now measures `scrollHeight === clientHeight` (no outer scrollbar) while
+>   `.ctt-district-table-wrap` itself measures `scrollHeight (366) > clientHeight (306)` — the
+>   scroll genuinely moved inside the table, as asked.
+> - **Bug 2 — (bx)'s hover/pin split was actually the wrong reading of "sticky."** (bx) had
+>   read the operator's original ask as "reorder+bold only when PINNED, hover-in-place only
+>   otherwise" and built two separate row classes (`ctt-district-row-hover` /
+>   `-row-pinned`) plus an `onHover` callback that reset the panel to the empty hint on every
+>   `pointerleave`. The operator corrected both halves: hovering alone (no click) must be
+>   STICKY — content and the block's grown state persist after the cursor leaves, exactly like
+>   the pre-existing judge-detail panel's own `hideDetail()`/`unpinDetail()` contract, which
+>   never resets on hover-out — and the reorder-to-top/bold/highlight row treatment must apply
+>   on mere hover too, identically to a pin, not gated behind clicking. Fixed by collapsing the
+>   two row classes into one (`ctt-district-row-active`, applied unconditionally to whichever
+>   district is "current" — hovered or pinned, no distinction) and rewriting
+>   `wireDistrictCartogramHover` to take a `{ sticky, isPinned }` options object: in sticky mode,
+>   a genuine hover over a NEW district still replaces the current one, but a gap/leave event
+>   never clears it — only a different real hover does. Pinning now layers a LOCK on top of the
+>   same sticky-hover state (via `setHover(did)` synced at click time) rather than being a
+>   parallel, differently-behaved mechanism; unpinning (`unpinDistrictDetail()`, both via the
+>   close button and the shared document-`mousedown` click-elsewhere listener) now matches
+>   `unpinDetail()`'s own precedent exactly — it only drops the lock class, it does NOT reset
+>   content, leaving whatever's currently sticky-hovered on screen until a real new hover
+>   replaces it. `applyGrowth`/`setHover` are stashed on `S.ui.districtSummaryHover` so the
+>   module-level `unpinDistrictDetail()` (no closure access to the render) can still trigger a
+>   correct re-evaluation.
+> - **Tested**: rewrote the stale (bx) assertions in `tests/smoke.mjs` for the new unified
+>   `.ctt-district-row-active` class and the corrected no-reset-on-unpin/hover-take-over
+>   behavior (mere hover reorders+bolds+persists; pin adds a lock; click-elsewhere/close both
+>   leave content in place). `smoke.mjs` (jsdom), `browser-checks.mjs`, and `stress.mjs` (12
+>   drill-in cycles) all pass unmodified otherwise. Wrote a throwaway CDP script (not checked
+>   in) to directly confirm both bugs in real Chrome per the geometry numbers above — this is
+>   the same "measure `getBoundingClientRect`, don't eyeball or trust jsdom's zeroed layout"
+>   discipline `browser-checks.mjs`'s own header comment already documents.
 
 > **SESSION (bx), 2026-09-05 — Summary > District docked panel: circuit-wide table replaces
 > plain R/D/vacant text; sticky pin + click-elsewhere standardized to match the judge-detail
@@ -1477,6 +1536,32 @@ Prove the whole app shell and asset schema on one circuit with hand-authored sam
 - Next: ...
 - Blockers: ...
 -->
+
+### 2026-09-06 (by) — Two (bx) bug reports fixed: table-overflow scrollbar + hover stickiness/row-highlighting
+- Phase: 4, continuing (bx). Bug 1 (table growth pushed a whole-pane scrollbar instead of
+  clipping internally): (bx)'s flex-shrink pass was necessary but not sufficient. Fixed two more
+  gaps found via real getBoundingClientRect measurement — `.ctt-district-detail` needed
+  `align-self: stretch` (its row-flex parent's `align-items: flex-start` let it hug its own
+  15-row content height instead of the row's bounded height), and `.ctt-district-table-wrap`'s
+  own `flex: 1 1 auto`/`overflow-y: auto` were inert because its actual DOM parent
+  (`.ctt-detail-content`, shared with the judge-detail panel) isn't itself `display: flex` —
+  scoped a flex-column override to `.ctt-district-detail > .ctt-detail-content` specifically so
+  the shared class/judge panel are untouched. Verified in headless Chrome: `.ctt-pane-body`
+  scrollHeight now equals clientHeight (no outer scrollbar) while `.ctt-district-table-wrap`
+  itself overflows internally as intended.
+- Bug 2 ((bx)'s hover/pin split was the wrong reading of "sticky"): collapsed the two row
+  classes (`-row-hover`/`-row-pinned`) into one `ctt-district-row-active`, applied identically
+  whether a district is merely hovered or pinned. Rewrote `wireDistrictCartogramHover` to take
+  `{ sticky, isPinned }`: sticky mode means a leave/gap event never clears the current district,
+  only a genuinely different real hover does — matching the pre-existing judge-detail panel's
+  own `hideDetail()`/`unpinDetail()` contract exactly. Pinning now layers a lock on top of the
+  same sticky-hover state instead of being a separate mechanism; unpinning (`unpinDistrictDetail()`)
+  no longer resets content, matching `unpinDetail()`'s precedent.
+- Verified: rewrote the stale (bx) assertions in tests/smoke.mjs for the unified active-row class
+  and no-reset-on-unpin behavior; smoke.mjs/browser-checks.mjs/stress.mjs (12 cycles) all pass.
+  Confirmed both bugs fixed directly in headless Chrome via a throwaway CDP script (not checked in).
+- Next: no open item from this bug report. Resume the Phase-4 tail list above as the next task.
+- Blockers: none.
 
 ### 2026-09-05 (bx) — Summary > District docked panel: table, sticky pin standardization, dock height
 - Phase: 4, continuing (bs)-(bw). Replaced the docked panel's plain R/D/vacant text with a

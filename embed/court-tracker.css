@@ -293,10 +293,18 @@
    .ctt-pane-body > .ctt-stage-row rule above). Summary's content sits ONE level deeper
    (.ctt-pane-body > .ctt-summary-content > .ctt-stage-row/.ctt-district-layout), which that
    selector never reached — propagate the same "fill leftover height" flex down through both
-   levels instead of just the outer one. */
-.ctt-pane-body > .ctt-summary-content { flex: 1 0 auto; display: flex; flex-direction: column; min-height: 0; }
+   levels instead of just the outer one.
+   flex-SHRINK is 1 here (not 0, unlike the pre-existing .ctt-pane-body > .ctt-stage-row rule
+   above, which can safely stay flex-shrink:0 because ITS stage height is already pre-clamped
+   in JS via majorityStageHeight()): a large circuit's table (e.g. the 9th's 15 districts) has
+   no such JS-computed ceiling, and flex-shrink:0 let it grow past available room and made the
+   whole PANE scroll instead of the table's own inner .ctt-district-table-wrap — visible as the
+   docked panel "growing downward" and pushing the rest of the layout around (operator report,
+   2026-09-05). flex-shrink:1 lets these rows compress to their allotted space instead, which is
+   what actually lets min-height:0 + the table wrap's own overflow-y:auto take over. */
+.ctt-pane-body > .ctt-summary-content { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; }
 .ctt-summary-content { min-height: 200px; }
-.ctt-summary-content > .ctt-stage-row { flex: 1 0 auto; min-height: 0; }
+.ctt-summary-content > .ctt-stage-row { flex: 1 1 auto; min-height: 0; }
 .ctt-summary-subtitle { font-size: 15px; font-weight: 650; margin-bottom: 2px; }
 .ctt-summary-placeholder { color: var(--ctt-muted); font-size: 13px; padding: 24px 0; }
 /* Summary > District: a static preview of the cartogram (no map deployment yet — see
@@ -305,8 +313,8 @@
    inventing a second palette that could drift from it. */
 /* Cartogram + its docked per-district detail panel, side by side — same row shape as
    .ctt-stage-row (bench + judge detail), stacking on mobile via the same media query.
-   flex:1 0 auto here is the SAME fix as .ctt-summary-content above, one level deeper. */
-.ctt-district-layout { display: flex; align-items: flex-start; gap: 14px; flex: 1 0 auto; min-height: 0; }
+   flex:1 1 auto here is the SAME fix as .ctt-summary-content above, one level deeper. */
+.ctt-district-layout { display: flex; align-items: flex-start; gap: 14px; flex: 1 1 auto; min-height: 0; }
 /* align-self:stretch (not the row's own flex-start) + a column flex with justify-content:center
    is what actually centers the cartogram vertically (operator ask) — without stretch, the wrap
    would only ever be as tall as the SVG itself, leaving no extra space to center within. */
@@ -315,21 +323,39 @@
   display: flex; flex-direction: column; justify-content: center; min-height: 0;
 }
 .ctt-district-cartogram { width: 100%; height: auto; max-height: 60vh; display: block; flex: 0 0 auto; }
-.ctt-district-detail { flex: 0 0 232px; display: flex; flex-direction: column; }
+/* align-self:stretch + min-height:0 for the same reason as .ctt-district-cartogram-wrap above:
+   .ctt-district-layout's own align-items:flex-start means a row flex child otherwise just hugs
+   its content height — for a large circuit's table (e.g. the 9th's 15 rows) that meant this box
+   grew to fit ALL rows rather than being capped to the row's actual available height, so the
+   overflow never reached .ctt-district-table-wrap's own overflow-y:auto at all and instead spilled
+   out through .ctt-pane-body's ancestor scrollbar (operator-reported bug, 2026-09-06). */
+.ctt-district-detail { flex: 0 0 232px; display: flex; flex-direction: column; align-self: stretch; min-height: 0; }
+/* .ctt-detail-content is a plain block div everywhere else it's used (the shared judge-detail
+   panel) — .ctt-district-table-wrap's own flex:1 1 auto/min-height:0 (below) do NOTHING unless
+   their parent is itself a flex container, so without this scoped override the table-wrap just
+   rendered at its full natural content height and spilled out past .ctt-district-detail's now-
+   bounded box (found chasing the SAME bug report as the align-self fix above, 2026-09-06) — the
+   base .ctt-detail-content rule is left untouched so the judge-detail panel is unaffected. */
+.ctt-district-detail > .ctt-detail-content { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+.ctt-district-detail > .ctt-detail-content > * { flex: 0 0 auto; }
 .ctt-district-jump { display: block; width: 100%; margin-top: 8px; text-align: center; }
 /* The circuit-wide R/D/vacant table (operator ask, 2026-09-05) — same visual family as
    tools/district-block-builder.html's own District linker table: no header row, abbreviated
    names, a scrollable body so a large circuit (e.g. the 9th's 15 districts) clips instead of
    overflowing the docked panel. */
 .ctt-district-table-label { font-size: 13px; font-weight: 700; margin: 10px 0 4px; }
-.ctt-district-table-wrap { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+/* Scoped (not the bare class) so this outranks the sibling-default ".ctt-district-detail >
+   .ctt-detail-content > *" rule above by specificity, same technique .ctt-pane-body > .ctt-stage-row
+   already uses to outrank .ctt-pane-body > *. */
+.ctt-district-detail > .ctt-detail-content > .ctt-district-table-wrap { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
 .ctt-district-table { width: 100%; border-collapse: collapse; font-size: 12px; }
 .ctt-district-table td { padding: 3px 4px; border-bottom: 1px solid var(--ctt-line); white-space: nowrap; }
 .ctt-district-table td:first-child { width: 100%; white-space: normal; }
-/* Hover highlights the target row in place; pinning additionally bolds it (and the row is
-   reordered to the top in JS, not via CSS — see renderDistrictCircuitTable). */
-.ctt-district-row-hover { background: #f0f4fb; }
-.ctt-district-row-pinned { background: #eaf1fd; font-weight: 700; }
+/* The currently shown district's row — reordered to the top in JS (not CSS, see
+   renderDistrictCircuitTable), bolded and highlighted. SAME treatment whether it got there via
+   a sticky hover or an explicit pin (operator correction, 2026-09-05) — no separate lighter
+   "just hovering" style anymore. */
+.ctt-district-row-active { background: #eaf1fd; font-weight: 700; }
 /* Count comes BEFORE the swatch (operator preference — reversed from the block-builder tool's
    own swatch-then-count order). Square, not the circular .ctt-dot used elsewhere in this file —
    operator specifically asked for the block-builder tool's SQUARE swatch style. */

@@ -916,9 +916,11 @@ function districtsForCircuit(circuitId) {
  *  table" in tools/district-block-builder.html) — District | R | D | Vacant, no header row,
  *  abbreviated names, count BEFORE the color swatch (the linker tool's own table puts the
  *  swatch first; reversed here per explicit operator preference). Standard (alphabetical)
- *  order, EXCEPT the target district (pinned, or merely hovered) — pinned pushes it to the top
- *  and bolds/highlights it; hovering-only highlights it in place without reordering. */
-function renderDistrictCircuitTable(content, circuitId, targetDid, isPinned) {
+ *  order, except `targetDid`'s own row, which is pushed to the top and bolded/highlighted —
+ *  this is now the SAME treatment whether the district got there by a sticky hover or an
+ *  explicit pin (operator correction, 2026-09-05: "the first row+bold+row highlight format
+ *  should be in place on-hover by default too" — an earlier draft reserved it for pins only). */
+function renderDistrictCircuitTable(content, circuitId, targetDid) {
   const circuit = S.courts.get(circuitId);
   const label = el("div", "ctt-district-table-label");
   label.textContent = `${circuit?.short_name || circuitId} Districts`;
@@ -928,14 +930,10 @@ function renderDistrictCircuitTable(content, circuitId, targetDid, isPinned) {
   const table = el("table", "ctt-district-table");
   const tbody = el("tbody");
   let districts = districtsForCircuit(circuitId);
-  if (isPinned) {
-    const pinned = districts.find((d) => d.court_id === targetDid);
-    if (pinned) districts = [pinned, ...districts.filter((d) => d.court_id !== targetDid)];
-  }
+  const target = districts.find((d) => d.court_id === targetDid);
+  if (target) districts = [target, ...districts.filter((d) => d.court_id !== targetDid)];
   for (const d of districts) {
-    const isTarget = d.court_id === targetDid;
-    const tr = el("tr", "ctt-district-row" +
-      (isTarget && isPinned ? " ctt-district-row-pinned" : isTarget ? " ctt-district-row-hover" : ""));
+    const tr = el("tr", "ctt-district-row" + (d.court_id === targetDid ? " ctt-district-row-active" : ""));
     const b = S.seatBlocks?.[d.court_id] || {};
     tr.innerHTML = `<td>${d.short_name}</td>` +
       `<td>${b.r ?? 0}<span class="ctt-district-swatch ctt-district-swatch-rep"></span></td>` +
@@ -951,10 +949,10 @@ function renderDistrictCircuitTable(content, circuitId, targetDid, isPinned) {
 /** Fills the district docked panel for one district court. `onJump` wires the "Jump to court"
  *  button — drills into the district's own circuit and opens ITS info pane, exactly as if the
  *  operator had picked it from that circuit's own drill-in selector bar (operator spec).
- *  `isPinned` distinguishes a sticky pin (bold/reordered-to-top row) from a transient hover
- *  (highlighted in place) — see renderDistrictCircuitTable. Replaces the old plain R/D/vacant
- *  count text (operator ask, 2026-09-05) with the circuit-wide table. */
-function showDistrictDetail(content, did, onJump, isPinned) {
+ *  Replaces the old plain R/D/vacant count text (operator ask, 2026-09-05) with the circuit-
+ *  wide table. Whether this is a sticky hover or an explicit pin is decided by the CALLER
+ *  (renderSummaryDistrict) — this function always renders the same way either way. */
+function showDistrictDetail(content, did, onJump) {
   const court = S.courts.get(did);
   content.innerHTML = "";
   const name = el("div", "ctt-detail-name");
@@ -964,7 +962,7 @@ function showDistrictDetail(content, did, onJump, isPinned) {
   jump.textContent = "Jump to this court →";
   jump.addEventListener("click", () => onJump(did));
   content.append(jump);
-  if (court?.parent_id) renderDistrictCircuitTable(content, court.parent_id, did, isPinned);
+  if (court?.parent_id) renderDistrictCircuitTable(content, court.parent_id, did);
 }
 
 /** Click a block to jump straight to that district's own info pane: drill into its parent
@@ -1256,31 +1254,39 @@ function renderSummaryDistrict(container) {
     // handler (wired once in buildShell, same standard every other docked panel already has —
     // operator ask, 2026-09-05) can reach it without a reference to this specific render.
     detailClose.addEventListener("click", unpinDistrictDetail);
-    const { applyGrowth } = wireDistrictCartogramHover(svg, tip, (did) => {
+    // sticky:true — a hovered district's info/growth STAYS once the cursor leaves (matches the
+    // judge-detail panel's own documented contract; operator correction, 2026-09-05, of an
+    // earlier draft that wrongly reset to the empty hint on every hover-out). isPinned keeps an
+    // explicitly clicked district grown even while a DIFFERENT one is being explored by hover.
+    const { applyGrowth, setHover } = wireDistrictCartogramHover(svg, tip, (did) => {
       if (S.districtDetailPinnedId) return;    // a pinned panel stays put until dismissed
-      if (did) showDistrictDetail(detailContent, did, jumpToDistrictCourt, false);
-      else resetDistrictDetail(detailBox, detailContent);
-    }, (sqDid) => sqDid === S.districtDetailPinnedId);
+      showDistrictDetail(detailContent, did, jumpToDistrictCourt);
+    }, { sticky: true, isPinned: (sqDid) => sqDid === S.districtDetailPinnedId });
+    // Stashed so the document-level click-elsewhere handler (unpinDistrictDetail, which has no
+    // closure access to this specific render) can re-evaluate growth after clearing the pin.
+    S.ui.districtSummaryHover = { applyGrowth, setHover };
     // Click-to-pin — only in Summary > District (operator spec: this and the docked viewer are
-    // the two things that do NOT exist once the assembly is deployed onto the map). Growing the
-    // newly-pinned district and shrinking whatever was pinned before both fall out of one
-    // applyGrowth() call, since it always recomputes every square from the CURRENT pin id.
+    // the two things that do NOT exist once the assembly is deployed onto the map). setHover
+    // first (syncing the sticky-hover state to the clicked district, in case they'd diverged),
+    // which growth naturally follows — applyGrowth then layers the PIN on top so it stays grown
+    // even once a later hover moves the sticky target elsewhere.
     svg.addEventListener("click", (e) => {
       const sq = e.target.closest && e.target.closest(".ctt-district-sq");
       const did = sq?.getAttribute("data-district-id");
       if (!did) return;
+      setHover(did);
       S.districtDetailPinnedId = did;
       detailBox.classList.add("ctt-pinned");
-      showDistrictDetail(detailContent, did, jumpToDistrictCourt, true);
+      showDistrictDetail(detailContent, did, jumpToDistrictCourt);
       applyGrowth();
     });
     // A pin survives switching Summary sub-tabs and back (module-level state, not reset here) —
     // restore its content + grown blocks immediately rather than silently reverting to the
     // empty hint, which would un-stick the pin without an explicit unpin action.
     if (S.districtDetailPinnedId) {
+      setHover(S.districtDetailPinnedId);
       detailBox.classList.add("ctt-pinned");
-      showDistrictDetail(detailContent, S.districtDetailPinnedId, jumpToDistrictCourt, true);
-      applyGrowth();
+      showDistrictDetail(detailContent, S.districtDetailPinnedId, jumpToDistrictCourt);
     }
   }).catch((err) => {
     if (!container.isConnected || S.summaryView !== "district") return;
@@ -1333,7 +1339,20 @@ const DISTRICT_SQ_SCALE_HOVER = 1.35;
  *  not). Returns `{ applyGrowth }` so an external state change (e.g. clicking a NEW block while
  *  a DIFFERENT one is already pinned) can force every square to re-evaluate its grow state
  *  on demand, bypassing setHover's unchanged-hoveredId short-circuit. */
-function wireDistrictCartogramHover(svg, tip, onHover, isPinned) {
+/** `opts.sticky` (only the Summary preview passes this): once a real district has been
+ *  hovered, it STAYS the "current" one — grown, and (via the caller's onHover) shown in the
+ *  docked panel — even after the cursor leaves every block entirely. Only hovering a
+ *  DIFFERENT real district changes it; moving over a gap or off the whole cartogram does
+ *  nothing. This is deliberately the SAME "sticky" contract CLAUDE.md already documents for
+ *  the judge-detail panel ("hover-out... keeps the last judge's details up... only a new hover
+ *  replaces content") — an earlier draft reset everything to the empty hint on pointerleave,
+ *  which was the actual bug (operator correction, 2026-09-05: "it's a stickiness on-hover").
+ *  Non-sticky callers (the on-map overlay, the drill-in sub-assembly) get the ordinary
+ *  hover-and-release behavior unchanged — there is no docked panel or pin concept there.
+ *  `opts.isPinned(did)` (Summary preview only) keeps an explicitly PINNED district grown even
+ *  while a DIFFERENT district is being transiently explored via sticky hover. */
+function wireDistrictCartogramHover(svg, tip, onHover, opts = {}) {
+  const { sticky, isPinned } = opts;
   let hoveredId = null;
   const applyGrowth = () => {
     svg.querySelectorAll(".ctt-district-sq").forEach((sq) => {
@@ -1351,7 +1370,7 @@ function wireDistrictCartogramHover(svg, tip, onHover, isPinned) {
   svg.addEventListener("pointermove", (e) => {
     const sq = e.target.closest && e.target.closest(".ctt-district-sq");
     const did = sq?.getAttribute("data-district-id") || null;
-    setHover(did);
+    if (did || !sticky) setHover(did);   // sticky mode: a gap/non-square never clears the target
     if (did) {
       const court = S.courts.get(did);
       const b = S.seatBlocks?.[did];
@@ -1361,11 +1380,14 @@ function wireDistrictCartogramHover(svg, tip, onHover, isPinned) {
       tip.style.left = `${e.clientX + 14}px`;
       tip.style.top = `${e.clientY + 14}px`;
     } else {
-      tip.style.display = "none";
+      tip.style.display = "none";   // the cursor-following tooltip always hides — it's not sticky
     }
   });
-  svg.addEventListener("pointerleave", () => { setHover(null); tip.style.display = "none"; });
-  return { applyGrowth };
+  svg.addEventListener("pointerleave", () => {
+    tip.style.display = "none";
+    if (!sticky) setHover(null);
+  });
+  return { applyGrowth, setHover };
 }
 
 // ---- bench model --------------------------------------------------------------
@@ -1892,20 +1914,19 @@ function unpinDetail() {
 }
 /** District-panel analogue of unpinDetail() (operator ask, 2026-09-05: it was missing the same
  *  "sticky + click elsewhere to close" standard every other docked panel in the app already
- *  has). The panel itself is rebuilt fresh every time Summary > District renders (unlike the
- *  single persistent S.ui.detail node), so this looks it up by class rather than holding a
- *  reference — a no-op if Summary > District isn't even on screen right now. Also shrinks the
- *  formerly-pinned district's blocks back down: pinning only exists in the Summary preview
- *  (never the on-map overlay or drill-in sub-assembly), so that's the only place to check. */
+ *  has) — and, like unpinDetail()/hideDetail(), unpinning does NOT reset content: it only drops
+ *  the lock, leaving whatever is currently shown (the just-unpinned district, until a real new
+ *  hover replaces it) exactly as-is. The panel itself is rebuilt fresh every time Summary >
+ *  District renders (unlike the single persistent S.ui.detail node), so this looks it up by
+ *  class rather than holding a reference — a no-op if Summary > District isn't even on screen
+ *  right now. applyGrowth() is stashed on S.ui by the render (this function has no closure
+ *  access to it) and re-shrinks the formerly-pinned block unless the cursor still happens to be
+ *  sitting on it. */
 function unpinDistrictDetail() {
   if (!S.districtDetailPinnedId) return;
-  const pinnedId = S.districtDetailPinnedId;
   S.districtDetailPinnedId = null;
-  const box = document.querySelector(".ctt-district-detail");
-  const content = box?.querySelector(".ctt-detail-content");
-  if (box && content) resetDistrictDetail(box, content);
-  document.querySelectorAll(`.ctt-summary-content .ctt-district-sq[data-district-id="${CSS.escape(pinnedId)}"]`)
-    .forEach((sq) => animateDistrictSquare(sq, 1));
+  document.querySelector(".ctt-district-detail")?.classList.remove("ctt-pinned");
+  S.ui.districtSummaryHover?.applyGrowth();
 }
 /** Empty state for the docked panel (a fresh court selection): a muted usage hint. */
 function resetDetail() {
