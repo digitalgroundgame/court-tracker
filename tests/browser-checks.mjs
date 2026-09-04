@@ -143,28 +143,47 @@ try {
   assert(settled.flyGone, "the flyover clone is removed once the animation settles");
   assert(settled.overlayVisible, "the real persistent overlay is visible in its place");
 
-  console.log("pane-title reserves fixed room regardless of name length, scoped to DISTRICT courts only (operator ask, 2026-09-07; scope fix after it regressed CFC's pane into a scrollbar) - jsdom reports 0 for every box, so this needs real layout");
+  console.log("ordinary court panes (reached via drill-in) do NOT reserve extra title height - that was a MISAPPLICATION of the operator's 2026-09-07 ask, corrected 2026-09-09 to apply only to the Summary docked tooltip's own name label (see below)");
   await ev(`document.querySelector('.ctt-selector-item[data-court-id="ca9"]').click()`); await sleep(500);
   await ev(`document.querySelector('.ctt-drill').click()`); await sleep(1800);
-  // gud ("...District of Guam", short) vs nmid ("...District of the Northern Mariana Islands",
-  // much longer) — both under ca9, real min/max-length district names, not just similar circuits.
+  // gud ("...District of Guam", short) — an ordinary drill-in pane's title has no reservation
+  // CSS applied to it at all any more (checked directly via computed style, not by relying on
+  // incidental text-wrapping at one particular window width, which is fragile).
   await ev(`document.querySelector('.ctt-selector-item[data-court-id="gud"]').click()`); await sleep(500);
-  const gudTitleH = await ev(`document.querySelector('.ctt-pane-title').getBoundingClientRect().height`);
-  await ev(`document.querySelector('.ctt-selector-item[data-court-id="nmid"]').click()`); await sleep(500);
-  const nmidTitleH = await ev(`document.querySelector('.ctt-pane-title').getBoundingClientRect().height`);
-  assert(gudTitleH === nmidTitleH, `title box height is IDENTICAL regardless of name length (gud ${gudTitleH} vs nmid ${nmidTitleH})`);
+  const gudTitleMinHeight = await ev(`getComputedStyle(document.querySelector('.ctt-pane-title')).minHeight`);
+  assert(gudTitleMinHeight === "0px" || gudTitleMinHeight === "auto",
+    `ordinary court pane titles carry no min-height reservation any more (got "${gudTitleMinHeight}")`);
   await ev(`document.querySelector('.ctt-selector-back')?.click()`); await sleep(600);
   await ev(`document.querySelector('.ctt-selector-item[data-court-id="cafc"]').click()`); await sleep(500);
   await ev(`document.querySelector('.ctt-drill').click()`); await sleep(500);
   await ev(`document.querySelector('.ctt-selector-item[data-court-id="uscfc"]').click()`); await sleep(500);
   const cfcScroll = JSON.parse(await ev(`(() => { const b = document.querySelector('.ctt-pane-body'); return JSON.stringify({ scrollHeight: b.scrollHeight, clientHeight: b.clientHeight }); })()`));
   assert(cfcScroll.scrollHeight <= cfcScroll.clientHeight,
-    `CFC (a short, single-line title) is unaffected by the district-only title reservation (scrollHeight ${cfcScroll.scrollHeight} <= clientHeight ${cfcScroll.clientHeight})`);
+    `CFC pane still has no vertical scrollbar (scrollHeight ${cfcScroll.scrollHeight} <= clientHeight ${cfcScroll.clientHeight})`);
   await ev(`document.querySelector('.ctt-selector-back')?.click()`); await sleep(500);
 
-  console.log("Summary > District controls row: deploy button right-aligned + width-matched to the docked panel (operator ask, 2026-09-07)");
+  console.log("Summary > District docked tooltip's own name label reserves fixed room instead (operator report, 2026-09-09 — the corrected scope for the 2026-09-07 ask)");
   await ev(`document.querySelector('.ctt-selector-item[data-court-id="summary"]').click()`); await sleep(400);
   await ev(`[...document.querySelectorAll('.ctt-mode-opt')].find(b=>b.textContent==='District Courts').click()`); await sleep(600);
+  const nameHeights = JSON.parse(await ev(`(() => {
+    const sqs = [...document.querySelectorAll('.ctt-summary-content .ctt-district-sq[data-district-id]')];
+    const results = {};
+    for (const sq of sqs.slice(0, 40)) {
+      const did = sq.getAttribute('data-district-id');
+      const r = sq.getBoundingClientRect();
+      sq.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: r.x + 1, clientY: r.y + 1 }));
+      const nameEl = document.querySelector('.ctt-district-detail .ctt-detail-name');
+      results[did] = nameEl.getBoundingClientRect().height;
+    }
+    return JSON.stringify(results);
+  })()`));
+  const heights = Object.values(nameHeights);
+  const allSame = heights.every((h) => h === heights[0]);
+  assert(allSame, `the docked tooltip's name box height is IDENTICAL across every district hovered (never shrinks/grows with name length) (${JSON.stringify(nameHeights)})`);
+
+  console.log("Summary > District controls row: deploy button right-aligned + width-matched to the docked panel (operator ask, 2026-09-07)");
+  // Already on Summary > District from the name-height check just above — re-clicking the
+  // already-selected "summary" item here would TOGGLE IT CLOSED instead of doing nothing.
   const alignGeom = JSON.parse(await ev(`(() => {
     const btn = document.querySelector('.ctt-district-deploy-btn'), detail = document.querySelector('.ctt-district-detail');
     const b = btn.getBoundingClientRect(), d = detail.getBoundingClientRect();
@@ -207,14 +226,36 @@ try {
   await ev(`document.querySelector('.ctt-selector-item[data-court-id="summary"]').click()`); await sleep(400);
   await ev(`[...document.querySelectorAll('.ctt-mode-opt')].find(b=>b.textContent==='District Courts').click()`); await sleep(600);
   const captionGeom = JSON.parse(await ev(`(() => {
-    const title = document.querySelector('.ctt-district-controls-caption .ctt-summary-subtitle');
-    const meta = document.querySelector('.ctt-district-controls-caption .ctt-pane-meta');
+    const title = document.querySelector('.ctt-district-caption-row .ctt-summary-subtitle');
+    const meta = document.querySelector('.ctt-district-caption-row .ctt-pane-meta');
     return JSON.stringify({ weight: getComputedStyle(title).fontWeight, metaText: meta.textContent,
       titleTop: title.getBoundingClientRect().top, metaTop: meta.getBoundingClientRect().top });
   })()`));
   assert(parseInt(captionGeom.weight) >= 600, `caption title is bold-weight (got ${captionGeom.weight})`);
   assert(/^\d+ authorized · \d+ active · \d+ vacant$/.test(captionGeom.metaText), `meta line matches the standard summary format (got "${captionGeom.metaText}")`);
   assert(captionGeom.metaTop > captionGeom.titleTop, "meta line sits below the title");
+
+  console.log("REGRESSION (operator report, 2026-09-09): Summary > Supreme Court and District Courts docked panels must align to the SAME position and height, text included");
+  // Already on Summary > District from the caption test just above.
+  await ev(`[...document.querySelectorAll('.ctt-mode-opt')].find(b=>b.textContent==='Supreme Court').click()`); await sleep(400);
+  const scotusRects = JSON.parse(await ev(`(() => {
+    const subtitle = document.querySelector('.ctt-summary-content > .ctt-summary-subtitle');
+    const meta = document.querySelector('.ctt-summary-content > .ctt-pane-meta');
+    const stage = document.querySelector('.ctt-stage-row');
+    return JSON.stringify({ subtitleTop: subtitle.getBoundingClientRect().top, subtitleLeft: subtitle.getBoundingClientRect().left,
+      stageTop: stage.getBoundingClientRect().top, stageBottom: stage.getBoundingClientRect().bottom });
+  })()`));
+  await ev(`[...document.querySelectorAll('.ctt-mode-opt')].find(b=>b.textContent==='District Courts').click()`); await sleep(400);
+  const districtRects = JSON.parse(await ev(`(() => {
+    const title = document.querySelector('.ctt-district-caption-row .ctt-summary-subtitle');
+    const layout = document.querySelector('.ctt-district-layout');
+    return JSON.stringify({ titleTop: title.getBoundingClientRect().top, titleLeft: title.getBoundingClientRect().left,
+      layoutTop: layout.getBoundingClientRect().top, layoutBottom: layout.getBoundingClientRect().bottom });
+  })()`));
+  assert(scotusRects.subtitleTop === districtRects.titleTop, `title text starts at the SAME y-position in both sub-tabs (SCOTUS ${scotusRects.subtitleTop} vs District ${districtRects.titleTop})`);
+  assert(scotusRects.subtitleLeft === districtRects.titleLeft, `title text starts at the SAME x-position in both sub-tabs (SCOTUS ${scotusRects.subtitleLeft} vs District ${districtRects.titleLeft})`);
+  assert(scotusRects.stageTop === districtRects.layoutTop, `content row starts at the SAME y-position in both sub-tabs (SCOTUS ${scotusRects.stageTop} vs District ${districtRects.layoutTop})`);
+  assert(scotusRects.stageBottom === districtRects.layoutBottom, `content row ends at the SAME y-position in both sub-tabs (SCOTUS ${scotusRects.stageBottom} vs District ${districtRects.layoutBottom})`);
 
   console.log("assembly edge-clipping is now symmetric on all 4 edges, each capped near 80% hidden (operator ask, 2026-09-08)");
   await ev(`document.querySelector('.ctt-pane-close').click()`); await sleep(400);   // close Summary — may already be deployed from earlier in this run

@@ -983,7 +983,7 @@ assert(root.querySelectorAll(".ctt-district-sq.ctt-sq-rep, .ctt-district-sq.ctt-
 
 console.log("Summary > District: controls row — right-aligned/width-matched deploy button, arrow-flanked label, left caption (operator ask, 2026-09-07)");
 const summaryDeployBtn = root.querySelector(".ctt-district-deploy-btn");
-const summaryCaption = root.querySelector(".ctt-district-controls-caption");
+const summaryCaption = root.querySelector(".ctt-district-caption-row");
 assert(summaryDeployBtn.textContent === "▼ Set upon map ▼", "button label is flanked by down arrows");
 assert(summaryCaption?.querySelector(".ctt-summary-subtitle")?.textContent === "Party of District Court Appointments, Arranged by Circuit",
   "left-aligned caption title text is present and correct (bolded like a standard title, operator ask, 2026-09-08)");

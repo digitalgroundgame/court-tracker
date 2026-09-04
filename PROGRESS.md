@@ -10,7 +10,54 @@
 tracker (Phase-4 tail items open, PLUS a brand-new third pane view — "Change", built session
 (aw), operator review round addressed session (ax)) and the appointments beeswarm
 (feature-complete first version, operator refinement rounds ongoing; see sessions ai→at, aw).
-**Last updated:** 2026-09-08
+**Last updated:** 2026-09-09
+
+> **SESSION (cc), 2026-09-09 — Two operator reports, both self-corrections: (cb)'s caption
+> promotion broke Summary height/text parity between SCOTUS and District, and an earlier
+> session's title-stability fix (2026-09-07) had been scoped to the wrong element entirely.**
+> - **Bug 1 — Summary height/text parity, root-caused precisely.** (cb) promoted the District
+>   caption to a title+meta pair but nested it inside `.ctt-pane-controls`, whose own scoped
+>   `margin: 6px 0 5px` (from session bz) pushed the text down 6px from where SCOTUS's own
+>   `renderSummaryScotus` starts its identical-looking subtitle+meta chain — breaking BOTH the
+>   text's own y-position (operator: "SCOTUS text is higher... copy that") and, compounded by the
+>   caption/button flex row's own height being taller than SCOTUS's plain 2-line chain, the whole
+>   panel's cumulative height. Fixed by literally mirroring `renderSummaryScotus`'s structure:
+>   `captionTitle`/`captionMeta` are now DIRECT children of `.ctt-summary-content`, in a
+>   `display:flex; flex-direction:column` wrapper (`.ctt-district-caption-row`) — flex-column,
+>   not plain block flow, matters here too: `.ctt-summary-content` is itself a flex column, so
+>   SCOTUS's subtitle/meta margins DON'T collapse (2px+2px=4px gap); a plain block wrapper would
+>   have collapsed them to 2px, a subtler SECOND mismatch. The deploy button moved from a flex
+>   sibling to `position:absolute` (anchored to `.ctt-district-caption-row`, which is
+>   `position:relative`) so it can still sit right-aligned/vertically-centered against the
+>   caption without adding one byte of its own height to that flow — verified pixel-identical
+>   (not just "close") top, left, content-row-top, AND content-row-bottom between the two
+>   sub-tabs via `getBoundingClientRect()`, added as a permanent regression test given this is
+>   the second time this exact parity has broken.
+> - **Bug 2 — the 2026-09-07 title-stability fix was scoped to the wrong element from the start.**
+>   Re-reading the operator's original ask: "the 'U.S. District Court for the...' label text" in
+>   the request meant the Summary > District docked tooltip's own name line
+>   (`.ctt-district-detail .ctt-detail-name`, shown when hovering/pinning a cartogram block) —
+>   NOT `.ctt-pane-title`, the ordinary per-court pane's own title reached by actually drilling
+>   into a circuit and selecting a district. That misreading was already worked around once
+>   (rescoping the reservation from ALL courts to district-level courts only, after it regressed
+>   CFC's pane into a scrollbar) without questioning whether it belonged on `.ctt-pane-title` at
+>   all. Fully reverted `.ctt-pane-title--district` (JS class-adding logic and both CSS rules) —
+>   ordinary drill-in panes (moed, gud, nmid, everything) now behave exactly as they did before
+>   2026-09-07, sized to their own actual content with no reservation. Re-applied the SAME
+>   min-height concept (3 lines desktop / 2 mobile) to `.ctt-district-detail .ctt-detail-name`
+>   instead, this time also setting `line-height: 1.25` explicitly on it — `min-height: 3.75em`
+>   without an explicit line-height silently used `.ctt-detail`'s own inherited 1.45, computing a
+>   FLOOR (52.5px) shorter than what a genuine 3-line name actually needs (60.9px), so shorter
+>   names sat at the wrong (too-short) floor while longer ones still grew past it — caught by
+>   measuring the tooltip's name-box height across many different districts in a real browser and
+>   finding it WASN'T actually constant, not by assuming the CSS was correct because it compiled.
+> - **Verified**: rewrote the now-stale browser-checks.mjs assertions from the 2026-09-07 session
+>   (gud/nmid title-height parity, the CFC-scrollbar guard) to check the CORRECT element instead,
+>   confirmed ordinary panes carry no reservation CSS at all (`min-height: 0px`, checked directly
+>   rather than relying on incidental wrapping at one window width), and added a new check
+>   hovering many different districts in the Summary tooltip to confirm the name-box height is
+>   now GENUINELY constant end-to-end. `smoke.mjs`/`browser-checks.mjs`/`stress.mjs` (12 cycles)
+>   all pass.
 
 > **SESSION (cb), 2026-09-08 — Four more operator reports: sticky-hover-while-pinned refined,
 > the District caption promoted to a real title+meta, all-four-edge partial clipping for the
@@ -1704,6 +1751,27 @@ Prove the whole app shell and asset schema on one circuit with hand-authored sam
 - Next: ...
 - Blockers: ...
 -->
+
+### 2026-09-09 (cc) — Two self-corrections: Summary height/text parity broken by (cb)'s caption promotion, and the 2026-09-07 title-stability fix scoped to the wrong element
+- Phase: 4, continuing (cb). Summary parity: District's caption+meta was nested inside
+  .ctt-pane-controls (own scoped margin pushed it down 6px from SCOTUS's own subtitle/meta
+  start). Fixed by mirroring renderSummaryScotus's structure exactly — captionTitle/captionMeta
+  as direct children of .ctt-summary-content in a flex-column wrapper (.ctt-district-caption-row,
+  needed so their margins don't collapse the way plain block flow would), deploy button moved to
+  position:absolute so it adds zero height to that flow. Verified pixel-identical top/left/
+  content-row-top/content-row-bottom between the two sub-tabs.
+- Title-stability fix rescoped (again): the 2026-09-07 ask was about the Summary > District
+  docked tooltip's own name line (.ctt-district-detail .ctt-detail-name), not .ctt-pane-title
+  (ordinary drill-in court panes). Fully reverted .ctt-pane-title--district; re-applied the same
+  min-height concept to .ctt-detail-name inside .ctt-district-detail instead — this time with an
+  explicit line-height:1.25 too, since min-height:3.75em without it silently used the inherited
+  1.45 line-height, computing a floor shorter than a genuine 3-line name actually needs.
+- Verified: rewrote the stale 2026-09-07 browser-checks.mjs assertions to check the correct
+  element; confirmed ordinary panes carry zero reservation CSS; confirmed the tooltip's name-box
+  height is genuinely constant across many different districts hovered in a real browser.
+  smoke.mjs/browser-checks.mjs/stress.mjs (12 cycles) all pass.
+- Next: no open item from this bug report. Resume the Phase-4 tail list above as the next task.
+- Blockers: none.
 
 ### 2026-09-08 (cb) — Sticky-while-pinned refinement, District caption title+meta, all-four-edge partial clipping, sub-assembly block-growth + click-to-open
 - Phase: 4, continuing (ca). Sticky-hover now pauses itself while something is pinned:
