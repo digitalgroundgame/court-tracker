@@ -935,6 +935,20 @@ function districtsForCircuit(circuitId) {
     .sort((a, b) => a.short_name.localeCompare(b.short_name));
 }
 
+/** Nation-wide district-court totals for the Summary > District caption meta line (operator ask,
+ *  2026-09-08) — authorized/active/vacant summed across EVERY district court, not any one
+ *  circuit. `active` = r+d+o = authorized-vacancies; summed directly from seatBlocks rather than
+ *  re-derived, so it can never drift from the same numbers the table/blocks themselves show. */
+function districtNationalTotals() {
+  return [...S.courts.values()].filter((c) => c.court_level === "district").reduce((acc, c) => {
+    const b = S.seatBlocks?.[c.court_id] || {};
+    acc.authorized += b.authorized ?? 0;
+    acc.active += (b.r ?? 0) + (b.d ?? 0) + (b.o ?? 0);
+    acc.vacancies += b.vacancies ?? 0;
+    return acc;
+  }, { authorized: 0, active: 0, vacancies: 0 });
+}
+
 /** The circuit-wide table (operator spec, 2026-09-05: "in the style of the [District linker]
  *  table" in tools/district-block-builder.html) — District | R | D | Vacant, no header row,
  *  abbreviated names, count BEFORE the color swatch (the linker tool's own table puts the
@@ -1069,7 +1083,11 @@ function defaultDistrictMapState(aspect) {
   const baseWidth = loadStoredDistrictWidth() ?? DISTRICT_OVERLAY_DEFAULT_W;
   const width = Math.max(DISTRICT_OVERLAY_MIN_W, Math.min(baseWidth, vw * DISTRICT_OVERLAY_MAX_FRAC));
   const height = width * aspect;
-  return { left: Math.max(8, vw - width - 16), top: Math.max(8, vh - height - 16), width };
+  // `aspect` rides along in the state (not just used to compute the initial height) so
+  // sizeDistrictOverlay can always re-derive the CURRENT height from the current width, for the
+  // edge-clipping clamp below — it has no other way to know the assembly's rendered height,
+  // since only left/top/width actually persist in S.districtMapState.
+  return { left: Math.max(8, vw - width - 16), top: Math.max(8, vh - height - 16), width, aspect };
 }
 
 /** Single source of truth for whether the deployed national assembly is actually visible:
@@ -1095,6 +1113,12 @@ function updateDistrictSubassemblyVisibility() {
   sub.style.display = S.ui.pane.classList.contains("ctt-is-open") ? "none" : "";
 }
 
+// At most this fraction of the assembly's own width/height may be dragged past a given edge —
+// symmetric across all four (operator ask, 2026-09-08, generalizing the bottom edge's existing
+// partial-clip behavior to left/right/top too): enough to tuck it mostly out of the way and cut
+// down on visual noise, but never so much it's lost entirely off any one side.
+const DISTRICT_OVERLAY_MAX_HIDDEN_FRAC = 0.8;
+
 function sizeDistrictOverlay() {
   const st = S.districtMapState;
   if (!st) return;
@@ -1103,8 +1127,10 @@ function sizeDistrictOverlay() {
   // Reclamp on every resize (not just at deploy time) so a shrink to mobile width can't leave
   // the assembly wider than the viewport it's sitting in.
   st.width = Math.max(DISTRICT_OVERLAY_MIN_W, Math.min(st.width, vw * DISTRICT_OVERLAY_MAX_FRAC * 1.6, vw - 16));
-  st.left = Math.max(4, Math.min(st.left, vw - st.width - 4));
-  st.top = Math.max(4, Math.min(st.top, vh - 40));
+  const height = st.width * (st.aspect || 0.6);
+  const visibleFrac = 1 - DISTRICT_OVERLAY_MAX_HIDDEN_FRAC;
+  st.left = Math.max(-st.width * DISTRICT_OVERLAY_MAX_HIDDEN_FRAC, Math.min(st.left, vw - st.width * visibleFrac));
+  st.top = Math.max(-height * DISTRICT_OVERLAY_MAX_HIDDEN_FRAC, Math.min(st.top, vh - height * visibleFrac));
   const el2 = S.ui.districtOverlay;
   el2.style.left = `${st.left}px`;
   el2.style.top = `${st.top}px`;
@@ -1321,10 +1347,21 @@ function renderDistrictSubassembly(circuitId) {
     updateDistrictSubassemblyVisibility();   // apply the CURRENT pane state right away — this
                                               // mounts asynchronously, after togglePane's own
                                               // hook already ran for this drill-in
-    // highlightDistrictOnMap tints the real district shape "standard blue" while its cartogram
-    // block is hovered — the deployed national assembly already gets this; the drill-in
-    // sub-assembly was missing it (operator report, 2026-09-07).
-    wireDistrictCartogramHover(svg, S.ui.tooltip, highlightDistrictOnMap);
+    // Hovering a sub-assembly block ties to BOTH the real district shape's blue highlight
+    // (highlightDistrictOnMap — added session ca) AND the real on-map seat-block grid growing
+    // together (highlightBlock, the SAME mechanism a direct map-shape hover already uses — see
+    // wireShapeEvents) (operator report, 2026-09-08: the seat blocks weren't growing here yet).
+    // Clicking a block opens that district's own info pane directly — jumpToDistrictCourt's own
+    // drillIn call is a harmless no-op here since we're already in this circuit.
+    wireDistrictCartogramHover(svg, S.ui.tooltip, (did) => {
+      highlightDistrictOnMap(did);
+      highlightBlock(currentSVG(), did, "ctt-block-hover");
+    });
+    svg.addEventListener("click", (e) => {
+      const sq = e.target.closest && e.target.closest(".ctt-district-sq");
+      const did = sq?.getAttribute("data-district-id");
+      if (did) jumpToDistrictCourt(did);
+    });
   });
 }
 
@@ -1339,9 +1376,16 @@ function renderSummaryDistrict(container) {
   const controls = el("div", "ctt-pane-controls");
   // Left-aligned caption filling the space the deploy button vacated when it moved to the
   // right (operator ask, 2026-09-07) — describes what the cartogram itself encodes, since
-  // nothing else in this header does.
+  // nothing else in this header does. Bolded like a standard pane title, with a summary meta
+  // line below it (operator ask, 2026-09-08) — same title+meta pairing every other court pane
+  // already uses (.ctt-summary-subtitle / .ctt-pane-meta), reused rather than reinvented.
   const caption = el("div", "ctt-district-controls-caption");
-  caption.textContent = "Party of District Court Appointments, Arranged by Circuit";
+  const captionTitle = el("div", "ctt-summary-subtitle");
+  captionTitle.textContent = "Party of District Court Appointments, Arranged by Circuit";
+  const captionMeta = el("div", "ctt-pane-meta");
+  const natTotals = districtNationalTotals();
+  captionMeta.textContent = `${natTotals.authorized} authorized · ${natTotals.active} active · ${natTotals.vacancies} vacant`;
+  caption.append(captionTitle, captionMeta);
   const deployBtn = el("button", "ctt-toggle ctt-district-deploy-btn", { type: "button" });
   deployBtn.textContent = districtDeployBtnLabel();
   controls.append(caption, deployBtn);
@@ -1391,7 +1435,7 @@ function renderSummaryDistrict(container) {
     const { applyGrowth, setHover } = wireDistrictCartogramHover(svg, tip, (did) => {
       if (S.districtDetailPinnedId) return;    // a pinned panel stays put until dismissed
       showDistrictDetail(detailContent, did, jumpToDistrictCourt);
-    }, { sticky: true, isPinned: (sqDid) => sqDid === S.districtDetailPinnedId });
+    }, { sticky: true, isPinned: (sqDid) => sqDid === S.districtDetailPinnedId, anyPinned: () => !!S.districtDetailPinnedId });
     // Stashed so the document-level click-elsewhere handler (unpinDistrictDetail, which has no
     // closure access to this specific render) can re-evaluate growth after clearing the pin.
     S.ui.districtSummaryHover = { applyGrowth, setHover };
@@ -1483,7 +1527,15 @@ const DISTRICT_SQ_SCALE_HOVER = 1.15;
  *  `opts.isPinned(did)` (Summary preview only) keeps an explicitly PINNED district grown even
  *  while a DIFFERENT district is being transiently explored via sticky hover. */
 function wireDistrictCartogramHover(svg, tip, onHover, opts = {}) {
-  const { sticky, isPinned } = opts;
+  const { sticky, isPinned, anyPinned } = opts;
+  // Sticky mode "pauses" itself once something is pinned (operator ask, 2026-09-08): before a
+  // pin exists, the LAST hovered district should stay grown after the cursor leaves (that's the
+  // whole point of sticky) — but once one IS pinned, a DIFFERENT district's hover-growth must go
+  // back to being transient (grow while actively hovered, un-grow on leave), so it can never be
+  // mistaken for a second, equally "stuck" district alongside the actual pin. The pinned
+  // district's own growth is unaffected either way — it comes from isPinned below, not from
+  // hoveredId ever being cleared or not.
+  const stickyNow = () => sticky && !(anyPinned && anyPinned());
   let hoveredId = null;
   const applyGrowth = () => {
     svg.querySelectorAll(".ctt-district-sq").forEach((sq) => {
@@ -1516,7 +1568,7 @@ function wireDistrictCartogramHover(svg, tip, onHover, opts = {}) {
   svg.addEventListener("pointermove", (e) => {
     const sq = e.target.closest && e.target.closest(".ctt-district-sq");
     const did = sq?.getAttribute("data-district-id") || null;
-    if (did || !sticky) setHover(did);   // sticky mode: a gap/non-square never clears the target
+    if (did || !stickyNow()) setHover(did);   // sticky mode: a gap/non-square never clears the target
     if (did) {
       const court = S.courts.get(did);
       const b = S.seatBlocks?.[did];
@@ -1531,7 +1583,7 @@ function wireDistrictCartogramHover(svg, tip, onHover, opts = {}) {
   });
   svg.addEventListener("pointerleave", () => {
     tip.style.display = "none";
-    if (!sticky) setHover(null);
+    if (!stickyNow()) setHover(null);
   });
   return { applyGrowth, setHover };
 }
@@ -3347,5 +3399,5 @@ export const _dev = {
   S, renderSeatBlocks, refreshSeatBlocks, viewBoxOf, flipConst, shapeAnchor, BLOCK_PX, drillIn, drillOut,
   buildStreamModel, valueAt, ensureChangeData, dayNum, isoOfDayNum, PRESIDENCIES, initials, surname,
   selectSummary, layoutScotusRing, deployDistrictOverlayAnimated, deployDistrictOverlay,
-  defaultDistrictMapState, DISTRICT_ZOOM_STORAGE_KEY, DISTRICT_SQ_SCALE_HOVER,
+  defaultDistrictMapState, DISTRICT_ZOOM_STORAGE_KEY, DISTRICT_SQ_SCALE_HOVER, districtNationalTotals,
 };

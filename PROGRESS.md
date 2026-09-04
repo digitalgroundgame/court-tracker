@@ -10,7 +10,47 @@
 tracker (Phase-4 tail items open, PLUS a brand-new third pane view — "Change", built session
 (aw), operator review round addressed session (ax)) and the appointments beeswarm
 (feature-complete first version, operator refinement rounds ongoing; see sessions ai→at, aw).
-**Last updated:** 2026-09-07
+**Last updated:** 2026-09-08
+
+> **SESSION (cb), 2026-09-08 — Four more operator reports: sticky-hover-while-pinned refined,
+> the District caption promoted to a real title+meta, all-four-edge partial clipping for the
+> deployed assembly, and the drill-in sub-assembly wired to the map's own block-growth + click.**
+> - **Sticky-while-pinned refined, not reverted.** (bz)'s sticky-hover contract was correct for
+>   the unpinned case, but once a district WAS pinned, hovering a DIFFERENT district still used
+>   the same sticky rule — it grew and then stayed grown after the cursor left, reading as a
+>   second, equally-"locked" district next to the real pin. Fixed by making stickiness
+>   conditional: `wireDistrictCartogramHover` now takes an `anyPinned()` callback alongside
+>   `isPinned()`, and re-evaluates on every pointermove/pointerleave (`sticky && !anyPinned()`)
+>   instead of capturing a fixed value at wire time — while nothing is pinned, hover is sticky as
+>   before; once something IS pinned, every OTHER district's hover-growth reverts to transient
+>   (grows while actively hovered, un-grows on leave), while the actual pin's own growth (via
+>   `isPinned`) is untouched either way. Added a permanent jsdom regression test.
+> - **District caption promoted to a real title + summary line.** "Party of District Court
+>   Appointments, Arranged by Circuit" now renders via the same `.ctt-summary-subtitle` (bold)
+>   class every other pane's own title uses, with a `.ctt-pane-meta` line underneath summarizing
+>   nation-wide district totals — `${authorized} authorized · ${active} active · ${vacant}
+>   vacant` — via a new `districtNationalTotals()` helper that sums straight from `seatBlocks`
+>   (active = r+d+o = authorized−vacancies) so it can never drift from what the table/blocks
+>   themselves show.
+> - **Partial-clip dragging generalized from the bottom edge to all four.** The bottom-only
+>   `vh - 40` fixed-pixel clamp became a symmetric `DISTRICT_OVERLAY_MAX_HIDDEN_FRAC = 0.8`
+>   applied to left/right/top/bottom alike — at most 80% of the assembly's own width or height
+>   may be dragged past any one edge, so it can be tucked mostly out of the way on any side
+>   without ever being lost entirely. This needed `aspect` to start riding along inside
+>   `S.districtMapState` itself (previously computed once and discarded) since `sizeDistrictOverlay`
+>   had no other way to re-derive the assembly's current HEIGHT (only left/top/width persist) to
+>   clamp top/bottom the same principled way width already clamps left/right.
+> - **Drill-in sub-assembly wired to the map's existing block-growth + click-to-open patterns.**
+>   Hovering a sub-assembly cartogram block now also grows the REAL on-map seat-block grid for
+>   that same district (`highlightBlock(currentSVG(), did, "ctt-block-hover")` — the exact
+>   mechanism a direct map-shape hover already uses, reused rather than reinvented) alongside the
+>   blue shape tint (ca) already added; clicking a block now opens that district's own info pane
+>   (`jumpToDistrictCourt` — its internal `drillIn` call is a harmless no-op since we're already
+>   in this circuit).
+> - **Tested**: extended `tests/smoke.mjs` (sticky-while-pinned regression, caption
+>   title+meta text, sub-assembly block-growth + click-opens-pane) and `tests/browser-checks.mjs`
+>   (caption bold/position, all-four-edge clip percentages in a real browser — jsdom can't measure
+>   any of this). `smoke.mjs`/`browser-checks.mjs`/`stress.mjs` (12 cycles) all pass.
 
 > **SESSION (ca), 2026-09-07 — Six more operator reports: pane-title stability, an Appellate
 > rename, deploy-button layout, a hover-growth scale reduction, a circuit Total row, and a
@@ -1664,6 +1704,29 @@ Prove the whole app shell and asset schema on one circuit with hand-authored sam
 - Next: ...
 - Blockers: ...
 -->
+
+### 2026-09-08 (cb) — Sticky-while-pinned refinement, District caption title+meta, all-four-edge partial clipping, sub-assembly block-growth + click-to-open
+- Phase: 4, continuing (ca). Sticky-hover now pauses itself while something is pinned:
+  wireDistrictCartogramHover takes an anyPinned() callback and re-evaluates `sticky &&
+  !anyPinned()` on every pointermove/pointerleave instead of a value fixed at wire time — a
+  different (non-pinned) district still grows on hover but no longer stays stuck grown once
+  something else is pinned; the actual pin's own growth is unaffected either way.
+- District caption promoted to a real title (.ctt-summary-subtitle, bold) + meta line
+  (.ctt-pane-meta) below it summarizing nation-wide totals via a new districtNationalTotals()
+  helper, summed straight from seatBlocks so it can't drift from the table/blocks themselves.
+- Partial-clip dragging generalized from bottom-only (fixed vh-40px) to all four edges
+  symmetrically via DISTRICT_OVERLAY_MAX_HIDDEN_FRAC = 0.8 — at most 80% of the assembly's own
+  width/height may go past any one edge. Needed `aspect` to persist in S.districtMapState itself
+  (previously computed once and discarded) so sizeDistrictOverlay can re-derive current height.
+- Drill-in sub-assembly: hovering a block now also grows the real on-map seat-block grid for that
+  district (highlightBlock(currentSVG(), did, "ctt-block-hover"), the same mechanism a direct
+  map-shape hover already uses) alongside the blue shape tint from (ca); clicking a block now
+  opens that district's own info pane via jumpToDistrictCourt.
+- Verified: extended tests/smoke.mjs (sticky-while-pinned regression, caption text, sub-assembly
+  growth+click) and tests/browser-checks.mjs (caption styling, all-four-edge clip percentages in
+  a real browser). smoke.mjs/browser-checks.mjs/stress.mjs (12 cycles) all pass.
+- Next: no open item from this bug report. Resume the Phase-4 tail list above as the next task.
+- Blockers: none.
 
 ### 2026-09-07 (ca) — Pane-title stability, Appellate rename, deploy-button layout, growth-scale reduction, circuit Total row, and a severe hidden bug (hover grew every district at once)
 - Phase: 4, continuing (bz). Pane-title min-height fix scoped to `.ctt-pane-title--district`

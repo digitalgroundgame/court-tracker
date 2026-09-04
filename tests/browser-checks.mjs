@@ -202,6 +202,51 @@ try {
   await sleep(300);
   const grownDids = JSON.parse(await ev(`JSON.stringify([...new Set([...document.querySelectorAll('.ctt-district-overlay .ctt-district-sq.ctt-district-sq-grown')].map(s=>s.getAttribute('data-district-id')))])`));
   assert(JSON.stringify(grownDids) === JSON.stringify(["cacd"]), `only cacd's cells are grown, not the whole assembly (got ${grownDids})`);
+
+  console.log("Summary > District caption: bolded title + summary meta line underneath (operator ask, 2026-09-08)");
+  await ev(`document.querySelector('.ctt-selector-item[data-court-id="summary"]').click()`); await sleep(400);
+  await ev(`[...document.querySelectorAll('.ctt-mode-opt')].find(b=>b.textContent==='District Courts').click()`); await sleep(600);
+  const captionGeom = JSON.parse(await ev(`(() => {
+    const title = document.querySelector('.ctt-district-controls-caption .ctt-summary-subtitle');
+    const meta = document.querySelector('.ctt-district-controls-caption .ctt-pane-meta');
+    return JSON.stringify({ weight: getComputedStyle(title).fontWeight, metaText: meta.textContent,
+      titleTop: title.getBoundingClientRect().top, metaTop: meta.getBoundingClientRect().top });
+  })()`));
+  assert(parseInt(captionGeom.weight) >= 600, `caption title is bold-weight (got ${captionGeom.weight})`);
+  assert(/^\d+ authorized · \d+ active · \d+ vacant$/.test(captionGeom.metaText), `meta line matches the standard summary format (got "${captionGeom.metaText}")`);
+  assert(captionGeom.metaTop > captionGeom.titleTop, "meta line sits below the title");
+
+  console.log("assembly edge-clipping is now symmetric on all 4 edges, each capped near 80% hidden (operator ask, 2026-09-08)");
+  await ev(`document.querySelector('.ctt-pane-close').click()`); await sleep(400);   // close Summary — may already be deployed from earlier in this run
+  const alreadyDeployed = await ev(`getComputedStyle(document.querySelector('.ctt-district-overlay')).display !== 'none'`);
+  if (!alreadyDeployed) { await ev(`document.querySelector('.ctt-district-corner-controls .ctt-district-overlay-btn').click()`); await sleep(700); }
+  const dragBy = async (dx, dy) => {
+    await ev(`(() => {
+      const ov = document.querySelector('.ctt-district-overlay');
+      const r = ov.getBoundingClientRect();
+      ov.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: r.x + 10, clientY: r.y + 10 }));
+      window.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: r.x + 10 + (${dx}), clientY: r.y + 10 + (${dy}) }));
+      window.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
+    })()`);
+    await sleep(100);
+  };
+  const overlayGeom = async () => JSON.parse(await ev(`(() => {
+    const ov = document.querySelector('.ctt-district-overlay'), vp = document.querySelector('.ctt-map-viewport');
+    const r = ov.getBoundingClientRect(), v = vp.getBoundingClientRect();
+    return JSON.stringify({ w: r.width, h: r.height, left: v.left - r.left, right: r.right - v.right, top: v.top - r.top, bottom: r.bottom - v.bottom });
+  })()`));
+  await dragBy(-2000, 0);
+  let og = await overlayGeom();
+  assert(og.left > 0 && og.left <= og.w * 0.81, `left-edge clip capped near 80% of width (${og.left} / ${og.w})`);
+  await dragBy(4000, 0);
+  og = await overlayGeom();
+  assert(og.right > 0 && og.right <= og.w * 0.81, `right-edge clip capped near 80% of width (${og.right} / ${og.w})`);
+  await dragBy(0, -2000);
+  og = await overlayGeom();
+  assert(og.top > 0 && og.top <= og.h * 0.81, `top-edge clip capped near 80% of height (${og.top} / ${og.h})`);
+  await dragBy(0, 4000);
+  og = await overlayGeom();
+  assert(og.bottom > 0 && og.bottom <= og.h * 0.81, `bottom-edge clip capped near 80% of height (${og.bottom} / ${og.h})`);
 } catch (e) { console.log("*** ", e.message); failures++; }
 finally { try { ws && ws.close(); } catch {} chrome.kill(); }
 
