@@ -23,3 +23,9 @@ __pycache__/
 
 # Claude Code runtime lock state (ephemeral, per-session)
 .claude/scheduled_tasks.lock
+
+# One-time raw operator handoff (district-block-builder.html's round-trip export for the ca1/ca3
+# alt sub-assembly layout, 2026-09-10) — converted into data/district_arrangement_alt.json by
+# scripts/build_district_arrangement_alt.py, which is the actual consumed asset. Left in place,
+# untouched, per the operator's own "make a copy of it, don't move/edit the original" instruction.
+temp_alt_ca1_ca3.txt

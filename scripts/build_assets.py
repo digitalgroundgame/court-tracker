@@ -35,6 +35,10 @@ CIRCUIT_JUSTICES_CSV = DATA / "circuit_justices.csv"
 SEAT_BLOCKS_CSV = DATA / "seat_blocks.csv"   # operator-tuned map placement (see docs/CODEBOOK.md)
 # Operator-authored via tools/district-block-builder.html — see docs/CODEBOOK.md Table F.
 DISTRICT_ARRANGEMENT_JSON = DATA / "district_arrangement.json"
+# Alternate ca1/ca3 layout for the circuit-drill-in sub-assembly ONLY (PR/VI positioned relative
+# to their own circuit, not to each other — see scripts/build_district_arrangement_alt.py's own
+# docstring for why). Same schema as the file above; produced by that script, not hand-authored.
+DISTRICT_ARRANGEMENT_ALT_JSON = DATA / "district_arrangement_alt.json"
 PRESIDENT_PHOTOS_CSV = DATA / "president_photos.csv"  # scripts/collect_president_photos.py
 PHOTO_THUMBS_FILE = DATA / "cache" / "photo_thumbs.json"  # scripts/cache_photos.py output
 
@@ -403,6 +407,18 @@ def main() -> int:
         district_arrangement_file = "data/district_arrangement.json"
         payloads.append(data)
 
+    # district_arrangement_alt.json — same drift-check treatment as the file above; it's
+    # SCRIPT-DERIVED (scripts/build_district_arrangement_alt.py), not hand-authored, but once
+    # written it's just as static/driftable as a hand-authored file until that script re-runs.
+    district_arrangement_alt_file = None
+    if DISTRICT_ARRANGEMENT_ALT_JSON.exists() and blocks:
+        arrangement_alt = json.loads(DISTRICT_ARRANGEMENT_ALT_JSON.read_text())
+        for w in check_district_arrangement_drift(arrangement_alt, blocks):
+            print(f"[build_assets] WARNING: {w}", file=sys.stderr)
+        data = DISTRICT_ARRANGEMENT_ALT_JSON.read_bytes()
+        district_arrangement_alt_file = "data/district_arrangement_alt.json"
+        payloads.append(data)
+
     # circuit_justices.json — small, separately loaded.
     justices_file = None
     if justices:
@@ -438,6 +454,8 @@ def main() -> int:
         files["seat_blocks"] = blocks_file
     if district_arrangement_file:
         files["district_arrangement"] = district_arrangement_file
+    if district_arrangement_alt_file:
+        files["district_arrangement_alt"] = district_arrangement_alt_file
     if appts_file:
         files["appointments"] = appts_file
     if pres_photos_file:

@@ -76,6 +76,7 @@ const S = {
   streamColorScheme: "alt",   // 'alt' | 'fade' — Change view palette (operator A/B, CLAUDE ask)
   summaryView: "scotus",      // 'scotus' | 'appellate' | 'district' — Summary pane sub-tab
   districtArrangement: null,  // data/district_arrangement.json, lazy-loaded once (Summary > District)
+  districtArrangementAlt: null,  // data/district_arrangement_alt.json, lazy-loaded once (ca1/ca3 drill-in sub-assembly only)
   districtOnMap: false,       // is the deployed cartogram currently VISIBLE on the national map
   districtMapState: null,     // { left, top, width } CSS px in .ctt-map-viewport — persists
                                // across show/hide toggles; reset only by a fresh deploy from
@@ -863,6 +864,19 @@ async function loadDistrictArrangement() {
   return S.districtArrangement;
 }
 
+// Circuits with an ALTERNATE drill-in sub-assembly layout (operator ask, 2026-09-10): the
+// national/Summary-preview cartogram positions PR/VI relative to EACH OTHER (a deliberate
+// cross-circuit layout choice), which reads wrong for a single circuit's own sub-assembly — see
+// scripts/build_district_arrangement_alt.py's docstring. Only that ONE presentation (never the
+// deployed national overlay or the Summary preview) uses this data.
+const DISTRICT_SUBASSEMBLY_ALT_CIRCUITS = new Set(["ca1", "ca3"]);
+async function loadDistrictArrangementAlt() {
+  if (S.districtArrangementAlt) return S.districtArrangementAlt;
+  const path = S.manifest.files?.district_arrangement_alt;
+  S.districtArrangementAlt = path ? await fetchJSON(path) : { circuits: [] };
+  return S.districtArrangementAlt;
+}
+
 // Same fixed layout constants the map's own seat blocks use (embed/court-tracker.js's
 // BLOCK_PX/BLOCK_GAP) so a block reads as the same "size" concept in both places, even though
 // this cartogram isn't on the map yet.
@@ -952,7 +966,7 @@ function districtNationalTotals() {
  *  this is now the SAME treatment whether the district got there by a sticky hover or an
  *  explicit pin (operator correction, 2026-09-05: "the first row+bold+row highlight format
  *  should be in place on-hover by default too" — an earlier draft reserved it for pins only). */
-function renderDistrictCircuitTable(content, circuitId, targetDid) {
+function renderDistrictCircuitTable(content, circuitId, targetDid, onRowClick) {
   const circuit = S.courts.get(circuitId);
   const label = el("div", "ctt-district-table-label");
   label.textContent = `${circuit?.short_name || circuitId} Districts`;
@@ -980,6 +994,10 @@ function renderDistrictCircuitTable(content, circuitId, targetDid) {
       `<td>${b.r ?? 0}<span class="ctt-district-swatch ctt-district-swatch-rep"></span></td>` +
       `<td>${b.d ?? 0}<span class="ctt-district-swatch ctt-district-swatch-dem"></span></td>` +
       `<td>${b.vacancies ?? 0}<span class="ctt-district-swatch ctt-district-swatch-vacant"></span></td>`;
+    // Clicking a district's own row pins it, same as clicking its cartogram block (operator ask,
+    // 2026-09-10) — the Total row (built separately below, a different class entirely) is
+    // deliberately excluded since it doesn't correspond to any one district.
+    if (onRowClick) tr.addEventListener("click", () => onRowClick(d.court_id));
     tbody.append(tr);
     if (i === 0) {
       const totalRow = el("tr", "ctt-district-row-total");
@@ -1010,10 +1028,10 @@ function renderDistrictCircuitTable(content, circuitId, targetDid) {
 // flex:0 0 auto on everything else) purely by DOM order — table first, so it's the one flexible
 // item; name and button after it, so they claim exactly what they need before the table gets
 // whatever's left.
-function showDistrictDetail(content, did, onJump) {
+function showDistrictDetail(content, did, onJump, onRowClick) {
   const court = S.courts.get(did);
   content.innerHTML = "";
-  if (court?.parent_id) renderDistrictCircuitTable(content, court.parent_id, did);
+  if (court?.parent_id) renderDistrictCircuitTable(content, court.parent_id, did, onRowClick);
   const name = el("div", "ctt-detail-name");
   name.textContent = court?.court_name || did;
   content.append(name);
@@ -1331,7 +1349,9 @@ function renderDistrictSubassembly(circuitId) {
   const old = S.ui.viewport.querySelector(".ctt-district-subassembly");
   if (old) old.remove();
   if (!circuitId || NO_DISTRICT_SUBASSEMBLY.has(circuitId)) return;
-  loadDistrictArrangement().then((arrangement) => {
+  const arrangementPromise = DISTRICT_SUBASSEMBLY_ALT_CIRCUITS.has(circuitId)
+    ? loadDistrictArrangementAlt() : loadDistrictArrangement();
+  arrangementPromise.then((arrangement) => {
     if (S.view !== "circuit" || S.activeCircuit !== circuitId) return;   // stale by the time it loads
     const circuits = arrangement.circuits || [];
     const { svg, bbox } = buildDistrictCartogramSVG(circuits, circuitId);
@@ -1360,11 +1380,13 @@ function renderDistrictSubassembly(circuitId) {
   });
 }
 
-// "▼ Set upon map ▼" / "▼ Remove from map ▼" (operator ask, 2026-09-07) — the flanking arrows
-// point down at the cartogram/deployed assembly the button acts on, sitting right below it.
+// "▼ Set upon map ▼" (arrows pointing DOWN — deploying pushes the assembly down onto the map) /
+// "▲ Remove from map ▲" (arrows pointing UP — removing brings it back up) (operator ask,
+// 2026-09-07, arrow direction corrected 2026-09-10).
 function districtDeployBtnLabel() {
   const label = S.districtOnMap ? "Remove from map" : "Set upon map";
-  return `▼ ${label} ▼`;
+  const arrow = S.districtOnMap ? "▲" : "▼";
+  return `${arrow} ${label} ${arrow}`;
 }
 
 function renderSummaryDistrict(container) {
@@ -1430,7 +1452,7 @@ function renderSummaryDistrict(container) {
     // explicitly clicked district grown even while a DIFFERENT one is being explored by hover.
     const { applyGrowth, setHover } = wireDistrictCartogramHover(svg, tip, (did) => {
       if (S.districtDetailPinnedId) return;    // a pinned panel stays put until dismissed
-      showDistrictDetail(detailContent, did, jumpToDistrictCourt);
+      showDistrictDetail(detailContent, did, jumpToDistrictCourt, pinDistrictCourt);
     }, { sticky: true, isPinned: (sqDid) => sqDid === S.districtDetailPinnedId, anyPinned: () => !!S.districtDetailPinnedId });
     // Stashed so the document-level click-elsewhere handler (unpinDistrictDetail, which has no
     // closure access to this specific render) can re-evaluate growth after clearing the pin.
@@ -1439,16 +1461,20 @@ function renderSummaryDistrict(container) {
     // the two things that do NOT exist once the assembly is deployed onto the map). setHover
     // first (syncing the sticky-hover state to the clicked district, in case they'd diverged),
     // which growth naturally follows — applyGrowth then layers the PIN on top so it stays grown
-    // even once a later hover moves the sticky target elsewhere.
-    svg.addEventListener("click", (e) => {
-      const sq = e.target.closest && e.target.closest(".ctt-district-sq");
-      const did = sq?.getAttribute("data-district-id");
+    // even once a later hover moves the sticky target elsewhere. Shared by BOTH the cartogram
+    // block click AND clicking a district's own row in the circuit table (operator ask,
+    // 2026-09-10) — one function so the two entry points can never drift apart.
+    function pinDistrictCourt(did) {
       if (!did) return;
       setHover(did);
       S.districtDetailPinnedId = did;
       detailBox.classList.add("ctt-pinned");
-      showDistrictDetail(detailContent, did, jumpToDistrictCourt);
+      showDistrictDetail(detailContent, did, jumpToDistrictCourt, pinDistrictCourt);
       applyGrowth();
+    }
+    svg.addEventListener("click", (e) => {
+      const sq = e.target.closest && e.target.closest(".ctt-district-sq");
+      pinDistrictCourt(sq?.getAttribute("data-district-id"));
     });
     // A pin survives switching Summary sub-tabs and back (module-level state, not reset here) —
     // restore its content + grown blocks immediately rather than silently reverting to the
@@ -1456,7 +1482,7 @@ function renderSummaryDistrict(container) {
     if (S.districtDetailPinnedId) {
       setHover(S.districtDetailPinnedId);
       detailBox.classList.add("ctt-pinned");
-      showDistrictDetail(detailContent, S.districtDetailPinnedId, jumpToDistrictCourt);
+      showDistrictDetail(detailContent, S.districtDetailPinnedId, jumpToDistrictCourt, pinDistrictCourt);
     }
   }).catch((err) => {
     if (!container.isConnected || S.summaryView !== "district") return;
@@ -3323,7 +3349,7 @@ export async function mount(root) {
   S.majorityMode = false; S.paneMode = "timeline"; S.seniorMode = "hide";
   S.detailPinned = false; S.affilMark = "none";
   S.appointmentsAll = null; S.presidentPhotos = null;
-  S.summaryView = "scotus"; S.districtArrangement = null;
+  S.summaryView = "scotus"; S.districtArrangement = null; S.districtArrangementAlt = null;
   S.districtOnMap = false; S.districtMapState = null; S.districtDetailPinnedId = null;
 
   const ui = buildShell(root);

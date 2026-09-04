@@ -288,6 +288,49 @@ try {
   await dragBy(0, 4000);
   og = await overlayGeom();
   assert(og.bottom > 0 && og.bottom <= og.h * 0.81, `bottom-edge clip capped near 80% of height (${og.bottom} / ${og.h})`);
+
+  console.log("deploy-button arrows flip direction with the label (operator ask, 2026-09-10)");
+  await ev(`document.querySelector('.ctt-selector-item[data-court-id="summary"]').click()`); await sleep(400);
+  await ev(`[...document.querySelectorAll('.ctt-mode-opt')].find(b=>b.textContent==='District Courts').click()`); await sleep(600);
+  const btnLabels = JSON.parse(await ev(`(() => {
+    const btn = document.querySelector('.ctt-district-deploy-btn');
+    const before = btn.textContent;
+    btn.click();
+    return JSON.stringify({ before, after: btn.textContent });
+  })()`));
+  await sleep(900);
+  console.log("   btnLabels:", JSON.stringify(btnLabels));
+  const arrowOf = (s) => s.trim()[0];
+  assert(btnLabels.before !== btnLabels.after, "label text actually changed");
+  assert(arrowOf(btnLabels.before) !== arrowOf(btnLabels.after),
+    `arrow direction flips along with the label (before "${btnLabels.before}" after "${btnLabels.after}")`);
+  assert((btnLabels.before.includes("Set upon map") && arrowOf(btnLabels.before) === "▼") ||
+    (btnLabels.before.includes("Remove from map") && arrowOf(btnLabels.before) === "▲"),
+    `"Set upon map" points down, "Remove from map" points up (got "${btnLabels.before}")`);
+
+  console.log("ca1/ca3 drill-in sub-assemblies use the alternate arrangement; unaffected circuits/presentations don't (operator ask, 2026-09-10)");
+  await ev(`document.querySelector('.ctt-pane-close').click()`); await sleep(400);
+  await ev(`document.querySelector('.ctt-selector-item[data-court-id="ca1"]').click()`); await sleep(400);
+  await ev(`document.querySelector('.ctt-drill').click()`); await sleep(1800);
+  const ca1Alt = JSON.parse(await ev(`(() => {
+    const sub = document.querySelector('.ctt-district-subassembly');
+    return JSON.stringify({ exists: !!sub, prdCells: sub.querySelectorAll('[data-district-id="prd"]').length });
+  })()`));
+  assert(ca1Alt.exists && ca1Alt.prdCells === 7, `ca1's sub-assembly renders prd with all 7 cells from the alt arrangement (got ${JSON.stringify(ca1Alt)})`);
+  await ev(`document.querySelector('.ctt-selector-back').click()`); await sleep(600);
+  await ev(`document.querySelector('.ctt-selector-item[data-court-id="summary"]').click()`); await sleep(400);
+  await ev(`[...document.querySelectorAll('.ctt-mode-opt')].find(b=>b.textContent==='District Courts').click()`); await sleep(600);
+  const summaryPrdCells = await ev(`document.querySelectorAll('.ctt-summary-content .ctt-district-sq[data-district-id="prd"]').length`);
+  assert(summaryPrdCells === 7, `Summary preview's prd is unaffected — still the MAIN arrangement, same cell count (got ${summaryPrdCells})`);
+
+  console.log("REGRESSION (operator report, 2026-09-10): Summary > District's empty-hint text aligns with SCOTUS's own (not 2px lower)");
+  await ev(`document.querySelector('.ctt-pane-close').click()`); await sleep(400);
+  await ev(`document.querySelector('.ctt-selector-item[data-court-id="summary"]').click()`); await sleep(400);
+  await ev(`[...document.querySelectorAll('.ctt-mode-opt')].find(b=>b.textContent==='Supreme Court').click()`); await sleep(400);
+  const scotusHintTop = await ev(`document.querySelector('.ctt-detail:not(.ctt-district-detail) .ctt-detail-hint').getBoundingClientRect().top`);
+  await ev(`[...document.querySelectorAll('.ctt-mode-opt')].find(b=>b.textContent==='District Courts').click()`); await sleep(600);
+  const districtHintTop = await ev(`document.querySelector('.ctt-district-detail .ctt-detail-hint').getBoundingClientRect().top`);
+  assert(scotusHintTop === districtHintTop, `empty-hint text starts at the SAME y-position in both sub-tabs (SCOTUS ${scotusHintTop} vs District ${districtHintTop})`);
 } catch (e) { console.log("*** ", e.message); failures++; }
 finally { try { ws && ws.close(); } catch {} chrome.kill(); }
 
