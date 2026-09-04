@@ -10,7 +10,52 @@
 tracker (Phase-4 tail items open, PLUS a brand-new third pane view — "Change", built session
 (aw), operator review round addressed session (ax)) and the appointments beeswarm
 (feature-complete first version, operator refinement rounds ongoing; see sessions ai→at, aw).
-**Last updated:** 2026-09-09
+**Last updated:** 2026-09-10
+
+> **SESSION (cd), 2026-09-10 — Deploy-button arrow direction, click-to-pin from the circuit
+> table, an alternate ca1/ca3 drill-in sub-assembly layout, and an empty-hint alignment fix.**
+> - **Deploy button arrows now flip with the label**: "▼ Set upon map ▼" (pointing down, toward
+>   the map) / "▲ Remove from map ▲" (pointing up, bringing it back) — `districtDeployBtnLabel()`
+>   picks the arrow from the same `S.districtOnMap` check that picks the label text, so they can
+>   never disagree.
+> - **New feature: clicking a row in the circuit table pins that district.** Refactored the
+>   existing cartogram-block click-to-pin logic (setHover + `S.districtDetailPinnedId` +
+>   `.ctt-pinned` + re-render + applyGrowth) out into a named `pinDistrictCourt(did)` closure so
+>   the SVG block-click handler and a new per-row click handler in `renderDistrictCircuitTable`
+>   (threaded through `showDistrictDetail`'s new `onRowClick` parameter) share one implementation
+>   rather than risking two pinning paths drifting apart. The Total row is a different class
+>   entirely (`ctt-district-row-total`, not `ctt-district-row`) so it never gets this wiring.
+> - **Alternate ca1/ca3 drill-in sub-assembly layout.** The 1st/3rd Circuits' district-block
+>   cartogram was originally built with PR and VI positioned relative to EACH OTHER (a deliberate
+>   cross-circuit layout for the deployed/Summary-preview presentation), which reads wrong for a
+>   single circuit's own sub-assembly. Operator supplied `temp_alt_ca1_ca3.txt` — a raw
+>   `district-block/circuit-linked@2` round-trip export from `tools/district-block-builder.html`
+>   (ownership + click-order per cell; colors never stored in that format, always re-derived).
+>   Wrote `scripts/build_district_arrangement_alt.py`, porting that same tool's own
+>   `resolvedCellColors()`/`colorForCell()`/`rankOf()`/`colorSequence()` algorithm line-for-line
+>   (read directly from `tools/district-block-builder.html`, not reinvented) so a re-run always
+>   agrees with what the tool itself would produce — resolves colors against the CURRENT
+>   `data/seat_blocks.json` (every district's cell count matched its seat_blocks total exactly,
+>   zero mismatches) and writes `data/district_arrangement_alt.json` in the same frozen
+>   `district-block/arrangement@1` shape `district_arrangement.json` itself uses. Registered in
+>   the manifest (`build_assets.py`, same drift-check treatment as the main file) and consumed
+>   ONLY by `renderDistrictSubassembly` for `DISTRICT_SUBASSEMBLY_ALT_CIRCUITS = {ca1, ca3}` — the
+>   deployed national overlay and the Summary preview keep using the original file unchanged
+>   (verified: prd's cell count matches in both, but ca1's own sub-assembly view now shows it
+>   repositioned). The raw operator-supplied file itself is left untouched and gitignored (a
+>   one-time handoff, not a consumed asset — the script's output is).
+> - **Empty-hint text alignment, root-caused.** Summary > District's hint sat 2px lower than
+>   Summary > SCOTUS's own — `.ctt-detail-content > div`'s generic 2px top margin collapses with
+>   `.ctt-detail-content`'s own 2px margin-top in the shared (plain block) judge-detail panel,
+>   landing the hint flush at the content box's own top edge; `.ctt-district-detail`'s own
+>   `.ctt-detail-content` is `display:flex` (needed for the table/name/button layout elsewhere in
+>   the SAME panel, from session bx), and flex containers never collapse margins with their
+>   children, so the identical hint sat 2px lower there instead. Cancelling the hint's own
+>   margin-top in that one scoped context reproduces the collapsed position exactly.
+> - **Tested**: extended `tests/smoke.mjs` (arrow-direction assertions, row-click-pins-district
+>   including the Total-row exclusion) and `tests/browser-checks.mjs` (arrow flip, ca1/ca3 alt
+>   arrangement vs. unaffected Summary preview, the empty-hint parity regression — all real-
+>   browser geometry checks). `smoke.mjs`/`browser-checks.mjs`/`stress.mjs` (12 cycles) all pass.
 
 > **SESSION (cc), 2026-09-09 — Two operator reports, both self-corrections: (cb)'s caption
 > promotion broke Summary height/text parity between SCOTUS and District, and an earlier
@@ -1751,6 +1796,33 @@ Prove the whole app shell and asset schema on one circuit with hand-authored sam
 - Next: ...
 - Blockers: ...
 -->
+
+### 2026-09-10 (cd) — Deploy-button arrow direction, click-to-pin from the circuit table, alternate ca1/ca3 sub-assembly layout, empty-hint alignment fix
+- Phase: 4, continuing (cc). Deploy button arrows now flip with the label (down for "Set upon
+  map", up for "Remove from map") — districtDeployBtnLabel() picks both from the same
+  S.districtOnMap check.
+- New feature: clicking a circuit-table row pins that district, same as clicking its cartogram
+  block. Refactored the pin logic into a shared pinDistrictCourt(did) closure used by both the
+  SVG click handler and a new per-row click handler (threaded through showDistrictDetail's new
+  onRowClick param); the Total row is excluded (different class entirely).
+- Alternate ca1/ca3 drill-in sub-assembly layout: PR/VI were positioned relative to each other
+  (a cross-circuit layout for the deployed/Summary presentation), which read wrong for a single
+  circuit's own sub-assembly. Wrote scripts/build_district_arrangement_alt.py, porting
+  tools/district-block-builder.html's own color-resolution algorithm line-for-line against the
+  operator-supplied raw round-trip export (temp_alt_ca1_ca3.txt, left untouched/gitignored) and
+  the current data/seat_blocks.json (zero cell-count mismatches) to produce
+  data/district_arrangement_alt.json in the same schema as the main file. Registered in the
+  manifest; consumed ONLY by renderDistrictSubassembly for ca1/ca3 — the deployed overlay and
+  Summary preview keep using the original file.
+- Empty-hint text: Summary > District's hint sat 2px lower than SCOTUS's own because
+  .ctt-district-detail's own .ctt-detail-content is display:flex (needed elsewhere in the same
+  panel) and flex containers don't collapse margins with children the way SCOTUS's plain-block
+  panel does. Cancelled the hint's own margin-top in that scoped context to match exactly.
+- Verified: extended tests/smoke.mjs and tests/browser-checks.mjs for all four fixes (arrow
+  direction, row-click-pins + Total-row exclusion, alt arrangement vs. unaffected presentations,
+  empty-hint parity). smoke.mjs/browser-checks.mjs/stress.mjs (12 cycles) all pass.
+- Next: no open item from this bug report. Resume the Phase-4 tail list above as the next task.
+- Blockers: none.
 
 ### 2026-09-09 (cc) — Two self-corrections: Summary height/text parity broken by (cb)'s caption promotion, and the 2026-09-07 title-stability fix scoped to the wrong element
 - Phase: 4, continuing (cb). Summary parity: District's caption+meta was nested inside

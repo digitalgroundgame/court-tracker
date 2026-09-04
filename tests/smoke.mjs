@@ -1046,6 +1046,22 @@ assert(/^\d+/.test(repCell.textContent) && repCell.querySelector(".ctt-district-
 assert(repCell.innerHTML.indexOf(repCell.textContent.trim()) < repCell.innerHTML.indexOf("ctt-district-swatch"),
   "the number literally precedes the swatch span in markup order");
 
+console.log("Summary > District: clicking a table row pins that district, same as clicking its cartogram block (operator ask, 2026-09-10)");
+const otherRow = rows.find((tr) => !tr.classList.contains("ctt-district-row-active"));
+const otherRowDid = [...mod._dev.S.courts.values()]
+  .find((c) => c.court_level === "district" && c.parent_id === circuitId && otherRow.textContent.includes(c.short_name))?.court_id;
+click(otherRow);
+assert(mod._dev.S.districtDetailPinnedId === otherRowDid, `clicking a district's row pins THAT district (got ${mod._dev.S.districtDetailPinnedId}, want ${otherRowDid})`);
+assert(districtDetail.classList.contains("ctt-pinned"), "the panel is genuinely pinned (not just sticky-hovered) from a row click");
+const otherRowSq = root.querySelector(`.ctt-summary-content .ctt-district-sq[data-district-id="${otherRowDid}"]`);
+assert(otherRowSq._sqScale > 1, "the corresponding cartogram block grows too, same as a direct block click would");
+const rowsAfterRowClick = [...districtDetail.querySelectorAll(".ctt-district-row")];
+assert(rowsAfterRowClick[0].classList.contains("ctt-district-row-active") && rowsAfterRowClick[0].textContent.includes(otherRow.textContent.replace(/\d/g, "").trim().slice(0, 3)),
+  "the newly-pinned district's row reorders to the top, same as any other pin");
+click(districtDetail.querySelector(".ctt-district-row-total"));
+assert(mod._dev.S.districtDetailPinnedId === otherRowDid, "clicking the Total row does NOT change the pin — it isn't a real district and has no click-to-pin wiring");
+window.document.body.dispatchEvent(new window.MouseEvent("mousedown", { bubbles: true }));   // unpin, reset for the tests below
+
 console.log("Summary > District: hover alone is sticky — content/growth persist after the cursor leaves, but (unlike a pin) they're not LOCKED");
 someSq.dispatchEvent(new window.MouseEvent("pointerleave", { bubbles: true }));
 assert(someSq._sqScale > 1, "the merely-hovered block's enlarged state survives the cursor leaving the SVG (sticky hover, not a pin)");
@@ -1143,7 +1159,7 @@ const deployBtn = root.querySelector(".ctt-district-deploy-btn");
 assert(deployBtn.textContent === "▼ Set upon map ▼", "deploy button starts as '▼ Set upon map ▼'");
 click(deployBtn);
 assert(overlay.style.display !== "none", "overlay becomes visible after deploying");
-assert(deployBtn.textContent === "▼ Remove from map ▼", "Summary's own button flips label once deployed");
+assert(deployBtn.textContent === "▲ Remove from map ▲", "Summary's own button flips label AND arrow direction once deployed (operator ask, 2026-09-10)");
 assert(overlay.querySelectorAll(".ctt-district-cluster").length === 12,
   "deployed overlay renders all 12 geographic circuits, same as the Summary preview");
 // Default placement: fully within the viewport's own bounds (jsdom's 0-everything layout means

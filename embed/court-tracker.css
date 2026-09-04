@@ -370,6 +370,10 @@
 .ctt-district-table { width: 100%; border-collapse: collapse; font-size: 12px; }
 .ctt-district-table td { padding: 3px 4px; border-bottom: 1px solid var(--ctt-line); white-space: nowrap; }
 .ctt-district-table td:first-child { width: 100%; white-space: normal; }
+/* Clicking a district's own row pins it, same as clicking its cartogram block (operator ask,
+   2026-09-10) — cursor:pointer signals that; the Total row (a different class entirely) is
+   deliberately excluded since it doesn't correspond to any one district. */
+.ctt-district-row { cursor: pointer; }
 /* The currently shown district's row — reordered to the top in JS (not CSS, see
    renderDistrictCircuitTable), bolded and highlighted. SAME treatment whether it got there via
    a sticky hover or an explicit pin (operator correction, 2026-09-05) — no separate lighter
@@ -576,6 +580,15 @@
 .ctt-detail-photo.ctt-dem { border-color: var(--ctt-dem); }
 .ctt-detail-photo.ctt-detail-senior { filter: saturate(0.4); opacity: 0.82; }
 .ctt-detail-hint { color: var(--ctt-muted); font-style: italic; text-align: center; padding: 18px 4px; }
+/* .ctt-detail-content > div's generic 2px top margin (see that rule below) COLLAPSES with
+   .ctt-detail-content's OWN 2px margin-top in the shared judge-detail panel (plain block flow),
+   landing the hint flush at content's own top edge — but .ctt-district-detail's own
+   .ctt-detail-content is display:flex (needed for the table/name/button layout elsewhere in this
+   same panel), and flex containers never collapse margins with their children, so the SAME hint
+   sat 2px lower there instead (operator report, 2026-09-10: SCOTUS is the standard, District
+   should match it). Cancelling the hint's own top margin in this one context reproduces the
+   collapsed (flush) position exactly. */
+.ctt-district-detail .ctt-detail-hint { margin-top: 0; }
 .ctt-detail-name { font-size: 14px; font-weight: 650; margin-bottom: 4px; }
 /* Spacing above the name now that the table sits above it (operator ask, 2026-09-06) — scoped to
    the district panel only, so the shared judge-detail panel (name is its first element) is unaffected. */
