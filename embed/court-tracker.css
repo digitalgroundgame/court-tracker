@@ -260,8 +260,10 @@
    doesn't apply to. */
 .ctt-summary-content > .ctt-pane-controls { margin: 6px 0 5px; }
 /* Caption filling the space the deploy button vacated when it moved to the right (operator ask,
-   2026-09-07) — grows to take whatever room the now-fixed-width button doesn't need. */
-.ctt-district-controls-caption { flex: 1 1 auto; min-width: 0; font-size: 12px; color: var(--ctt-muted); }
+   2026-09-07) — grows to take whatever room the now-fixed-width button doesn't need. Bolded
+   title (.ctt-summary-subtitle) + summary meta line (.ctt-pane-meta) underneath (operator ask,
+   2026-09-08) — both classes reused as-is from the rest of the app, no new rules needed for them. */
+.ctt-district-controls-caption { flex: 1 1 auto; min-width: 0; }
 /* Right-aligned, and matches the docked detail panel's own 232px width (.ctt-district-detail)
    so the two visually line up as one column (operator ask, 2026-09-07). margin-left:auto pushes
    just this one child right within .ctt-pane-controls's row, without touching that shared class's

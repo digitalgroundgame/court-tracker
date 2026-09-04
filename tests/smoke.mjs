@@ -985,8 +985,11 @@ console.log("Summary > District: controls row — right-aligned/width-matched de
 const summaryDeployBtn = root.querySelector(".ctt-district-deploy-btn");
 const summaryCaption = root.querySelector(".ctt-district-controls-caption");
 assert(summaryDeployBtn.textContent === "▼ Set upon map ▼", "button label is flanked by down arrows");
-assert(summaryCaption && summaryCaption.textContent === "Party of District Court Appointments, Arranged by Circuit",
-  "left-aligned caption text is present and correct");
+assert(summaryCaption?.querySelector(".ctt-summary-subtitle")?.textContent === "Party of District Court Appointments, Arranged by Circuit",
+  "left-aligned caption title text is present and correct (bolded like a standard title, operator ask, 2026-09-08)");
+const natTotals = mod._dev.districtNationalTotals();
+assert(summaryCaption?.querySelector(".ctt-pane-meta")?.textContent === `${natTotals.authorized} authorized · ${natTotals.active} active · ${natTotals.vacancies} vacant`,
+  `caption's meta line summarizes nation-wide authorized/active/vacant (got "${summaryCaption?.querySelector(".ctt-pane-meta")?.textContent}")`);
 // Right-alignment/width-matching are CSS-value claims jsdom can't check (no stylesheet loaded in
 // this harness) — covered instead in tests/browser-checks.mjs (real Chrome).
 
@@ -1065,6 +1068,21 @@ const rowsAfterPin = [...districtDetail.querySelectorAll(".ctt-district-row")];
 assert(rowsAfterPin[0].classList.contains("ctt-district-row-active") && rowsAfterPin[0].textContent.includes(otherCourt.short_name),
   "the pinned district's row is (still) at the top, bolded/highlighted — identical treatment to hover");
 assert(mod._dev.S.districtDetailPinnedId === otherDid, "pin state lives on S (module-level), not a local closure var");
+
+console.log("Summary > District: while pinned, a DIFFERENT district still grows on hover but does NOT stick (operator ask, 2026-09-08)");
+// Before this fix, sticky mode never distinguished "pinned" from "just hovered" — a second
+// district hovered WHILE one was pinned would grow and then stay stuck grown too, reading as a
+// second, equally-locked district alongside the real pin. Only the pin itself should persist.
+const thirdSq = [...root.querySelectorAll(".ctt-summary-content .ctt-district-sq[data-district-id]")]
+  .find((sq) => ![hoveredDid, otherDid].includes(sq.getAttribute("data-district-id")));
+thirdSq.dispatchEvent(new window.MouseEvent("pointermove", { bubbles: true, clientX: 5, clientY: 5 }));
+assert(thirdSq._sqScale > 1, "hovering a third (non-pinned) district still grows it while actively hovered");
+assert(otherSq._sqScale > 1, "...and the actual pin stays grown throughout, unaffected");
+thirdSq.dispatchEvent(new window.MouseEvent("pointerleave", { bubbles: true }));
+await sleep(120);
+assert(thirdSq._sqScale === 1, "...but the third district's growth does NOT stick — it shrinks back down once the cursor leaves it");
+assert(otherSq._sqScale > 1, "...while the pin remains grown, unaffected by the third district's hover coming and going");
+
 otherSq.dispatchEvent(new window.MouseEvent("pointerleave", { bubbles: true }));
 assert(otherSq._sqScale > 1, "the pinned block's enlarged hover state survives the cursor leaving (locked, not just sticky)");
 assert(districtDetail.classList.contains("ctt-pinned"), "the panel itself also stays pinned after the cursor leaves");
@@ -1249,6 +1267,22 @@ subSq.dispatchEvent(new window.MouseEvent("pointermove", { bubbles: true, client
 const subLit = root.querySelector(".ctt-shape-district-hover");
 assert(subLit && subLit.getAttribute("data-court-id") === subTargetDid,
   `hovering the sub-assembly tints the matching real (LOCAL circuit) map shape (got ${subLit?.getAttribute("data-court-id")}, want ${subTargetDid})`);
+
+console.log("sub-assembly hover also grows the real on-map seat-block grid for that district (operator ask, 2026-09-08)");
+const realBlock = root.querySelector(`.ctt-local-layer .ctt-block[data-court-id="${subTargetDid}"]`);
+assert(realBlock && realBlock.classList.contains("ctt-block-hover"),
+  "the matching real seat-block grid picks up ctt-block-hover from the sub-assembly hover");
+subSq.dispatchEvent(new window.MouseEvent("pointerleave", { bubbles: true }));
+assert(!realBlock.classList.contains("ctt-block-hover"), "...and releases it once the cursor leaves the sub-assembly");
+
+console.log("clicking a sub-assembly block opens that district's own info pane (operator ask, 2026-09-08)");
+click(subSq);
+await sleep(30);
+assert(mod._dev.S.selectedCourt === subTargetDid, `clicking the sub-assembly block selected/opened ${subTargetDid}'s own pane (got ${mod._dev.S.selectedCourt})`);
+assert(root.querySelector(".ctt-pane").classList.contains("ctt-is-open"), "...and the pane is actually open");
+click(root.querySelector(".ctt-pane-close"));
+await sleep(30);
+
 click(root.querySelector(".ctt-selector-back"));
 await waitFor(() => mod._dev.S.view === "national", 2000);
 assert(!root.querySelector(".ctt-district-subassembly"), "sub-assembly is swept on drill-out");
