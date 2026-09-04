@@ -556,12 +556,7 @@ function renderPane(court) {
   const headText = el("div", "ctt-pane-headtext");
   const justiceSlot = el("div", "ctt-justice-slot");
   head.append(headText, justiceSlot);
-  // The reserved multi-line height (see .ctt-pane-title--district's own CSS comment) is scoped
-  // to district courts ONLY — "U.S. District Court for the ..." is the one name pattern long
-  // enough to actually reach 2-3 lines; every other court level's name fits on one line already,
-  // and reserving 3 lines' worth of room for them anyway pushed some panes (CFC's) into an
-  // unwanted scrollbar (caught by tests/browser-checks.mjs after an initial unscoped attempt).
-  const h = el("div", "ctt-pane-title" + (court.court_level === "district" ? " ctt-pane-title--district" : ""));
+  const h = el("div", "ctt-pane-title");
   h.textContent = court.court_name;
   const meta = el("div", "ctt-pane-meta");
   if (court.tenure_type === "fixed_term") {
@@ -1373,23 +1368,24 @@ function districtDeployBtnLabel() {
 }
 
 function renderSummaryDistrict(container) {
-  const controls = el("div", "ctt-pane-controls");
-  // Left-aligned caption filling the space the deploy button vacated when it moved to the
-  // right (operator ask, 2026-09-07) — describes what the cartogram itself encodes, since
-  // nothing else in this header does. Bolded like a standard pane title, with a summary meta
-  // line below it (operator ask, 2026-09-08) — same title+meta pairing every other court pane
-  // already uses (.ctt-summary-subtitle / .ctt-pane-meta), reused rather than reinvented.
-  const caption = el("div", "ctt-district-controls-caption");
+  // Mirrors renderSummaryScotus's own subtitle+meta chain EXACTLY — same classes, same flex-
+  // column context (so adjacent margins don't collapse), same flush-with-container-top start —
+  // so the two Summary sub-tabs' docked panels measure pixel-identical top-to-bottom (operator
+  // report, 2026-09-09: promoting this caption to a title+meta pair, session cb, nested it
+  // inside .ctt-pane-controls instead, whose own scoped margin pushed the text down 6px and
+  // broke that parity). The deploy button overlays this same header via position:absolute
+  // (see .ctt-district-caption-row's own CSS) instead of sharing a flex row with the caption,
+  // so it can be right-aligned without perturbing the caption's own height/margins at all.
+  const captionRow = el("div", "ctt-district-caption-row");
   const captionTitle = el("div", "ctt-summary-subtitle");
   captionTitle.textContent = "Party of District Court Appointments, Arranged by Circuit";
   const captionMeta = el("div", "ctt-pane-meta");
   const natTotals = districtNationalTotals();
   captionMeta.textContent = `${natTotals.authorized} authorized · ${natTotals.active} active · ${natTotals.vacancies} vacant`;
-  caption.append(captionTitle, captionMeta);
   const deployBtn = el("button", "ctt-toggle ctt-district-deploy-btn", { type: "button" });
   deployBtn.textContent = districtDeployBtnLabel();
-  controls.append(caption, deployBtn);
-  container.append(controls);
+  captionRow.append(captionTitle, captionMeta, deployBtn);
+  container.append(captionRow);
 
   const layout = el("div", "ctt-district-layout");
   const wrap = el("div", "ctt-district-cartogram-wrap");

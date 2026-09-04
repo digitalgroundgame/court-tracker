@@ -231,18 +231,6 @@
 .ctt-pane-head { margin-bottom: 8px; display: flex; align-items: flex-start; gap: 10px; padding-right: 84px; }
 .ctt-pane-headtext { flex: 1 1 auto; min-width: 0; }
 .ctt-pane-title { font-size: 16px; font-weight: 650; line-height: 1.25; }
-/* Reserve room for the WORST CASE line count ("U.S. District Court for the ..." wraps to 2 or 3
-   lines on desktop) so nothing below this label shifts position depending on how long the
-   selected court's own name happens to be (operator report, 2026-09-07) — a shorter, 2-line name
-   simply carries unused space below it in the box rather than shrinking it; the label stays
-   top-aligned (plain block flow, nothing centers it) so it always occupies the TOP lines of that
-   reserved space, never the bottom. Scoped to DISTRICT courts only (see the JS-side comment on
-   where this class gets added) — every other court level's name fits on one line already, and an
-   earlier unscoped attempt reserving 3 lines everywhere pushed CFC's own pane into an unwanted
-   scrollbar. Mobile's own 1/2-line range (its title area isn't sharing width with the docked
-   detail column, so the same text wraps less) gets its own reservation in the mobile media query
-   below. */
-.ctt-pane-title--district { min-height: 3.75em; }
 .ctt-pane-meta { font-size: 12px; color: var(--ctt-muted); margin-top: 2px; }
 /* Circuit Justice chip slot in the header (timeline view) */
 .ctt-justice-slot { flex: 0 0 auto; }
@@ -251,24 +239,23 @@
 .ctt-judge.ctt-justice-inhead .ctt-judge-label { margin: 0; text-align: left; max-width: 120px; }
 
 .ctt-pane-controls { display: flex; gap: 8px; align-items: center; margin: 6px 0; flex-wrap: wrap; }
-/* Summary > District's header block (.ctt-pane-controls, for the "Set upon map" button) measured
-   1px taller overall than Summary > SCOTUS's own header (.ctt-summary-subtitle + .ctt-pane-meta),
-   so the docked panel's flexed row started - and so measured - 1px off between the two Summary
-   sub-tabs despite both correctly sharing the same fixed bottom edge (operator report,
-   2026-09-06). Scoped to Summary specifically since .ctt-pane-controls is also the majority-mode
-   toggle row on ordinary (non-Summary) court panes, an unrelated layout chain this 1px comparison
-   doesn't apply to. */
-.ctt-summary-content > .ctt-pane-controls { margin: 6px 0 5px; }
-/* Caption filling the space the deploy button vacated when it moved to the right (operator ask,
-   2026-09-07) — grows to take whatever room the now-fixed-width button doesn't need. Bolded
-   title (.ctt-summary-subtitle) + summary meta line (.ctt-pane-meta) underneath (operator ask,
-   2026-09-08) — both classes reused as-is from the rest of the app, no new rules needed for them. */
-.ctt-district-controls-caption { flex: 1 1 auto; min-width: 0; }
-/* Right-aligned, and matches the docked detail panel's own 232px width (.ctt-district-detail)
-   so the two visually line up as one column (operator ask, 2026-09-07). margin-left:auto pushes
-   just this one child right within .ctt-pane-controls's row, without touching that shared class's
-   own layout (it's also the ordinary-court majority-toggle row elsewhere). */
-.ctt-district-deploy-btn { margin-left: auto; flex: 0 0 232px; width: 232px; text-align: center; }
+/* Summary > District's caption (title + summary meta line, operator ask 2026-09-08) needs to
+   start at EXACTLY the same position as Summary > SCOTUS's own subtitle+meta chain
+   (renderSummaryScotus) so the two docked panels measure pixel-identical top-to-bottom (operator
+   report, 2026-09-09 — an earlier version nested the caption inside .ctt-pane-controls, whose
+   own margin pushed it down 6px and broke that parity). flex-direction:column (not the .ctt-
+   pane-controls row it used to share) matters too: .ctt-summary-subtitle/.ctt-pane-meta's own
+   adjacent margins only stay non-collapsing (4px gap, matching SCOTUS) as flex children — in
+   plain block flow they'd collapse to 2px. position:relative anchors the deploy button below. */
+.ctt-district-caption-row { position: relative; display: flex; flex-direction: column; }
+/* Room for the absolutely-positioned button (232px + 8px gap) so the caption text wraps exactly
+   as it did when the two shared a flex row — not narrower, not wider. */
+.ctt-district-caption-row .ctt-summary-subtitle, .ctt-district-caption-row .ctt-pane-meta { padding-right: 240px; }
+/* Right-aligned and vertically centered against the caption block, matching the docked detail
+   panel's own 232px width (.ctt-district-detail) so the two visually line up as one column
+   (operator ask, 2026-09-07). position:absolute (not a flex sibling any more) means it can't
+   perturb the caption's own height/margins — see .ctt-district-caption-row's own comment. */
+.ctt-district-deploy-btn { position: absolute; top: 50%; right: 0; transform: translateY(-50%); width: 232px; text-align: center; }
 .ctt-toggle, .ctt-drill {
   border: 1px solid var(--ctt-line); background: var(--ctt-panel); color: inherit; font: inherit;
   font-size: 13px; padding: 5px 12px; border-radius: 6px; cursor: pointer;
@@ -593,6 +580,17 @@
 /* Spacing above the name now that the table sits above it (operator ask, 2026-09-06) — scoped to
    the district panel only, so the shared judge-detail panel (name is its first element) is unaffected. */
 .ctt-district-detail > .ctt-detail-content > .ctt-detail-name { margin-top: 8px; }
+/* Reserve room for the WORST CASE line count ("U.S. District Court for the ..." wraps to 2 or 3
+   lines here, in the Summary > District docked tooltip) so the Jump-to-court button below it
+   doesn't shift position depending on which district is currently shown (operator ask,
+   2026-09-07; corrected 2026-09-09 to apply HERE — the Summary docked tooltip's own name label —
+   rather than to every ordinary court pane's .ctt-pane-title, which was never the intent and
+   regressed CFC's own pane into an unwanted scrollbar). A shorter, 2-line name simply carries
+   unused space below it rather than shrinking the box; the name stays top-aligned (plain block
+   flow, nothing centers it) so it always occupies the TOP lines of the reserved space, and the
+   table above it (flex:1 1 auto) is what actually gives up the room. Mobile's 1/2-line range
+   gets its own reservation in the mobile media query below. */
+.ctt-district-detail .ctt-detail-name { min-height: 3.75em; line-height: 1.25; }
 .ctt-detail a { color: var(--ctt-accent); }
 .ctt-affil { font-style: italic; color: var(--ctt-muted); }
 /* Required attribution for CC-licensed portraits — present but visually subordinate. */
@@ -626,5 +624,5 @@
   .ctt-stage-row { display: block; }
   .ctt-detail { width: auto; margin-top: 10px; }
   .ctt-district-layout { display: block; }
-  .ctt-pane-title--district { min-height: 2.5em; }   /* mobile: 1-2 lines instead of desktop's 2-3 */
+  .ctt-district-detail .ctt-detail-name { min-height: 2.5em; }   /* mobile: 1-2 lines instead of desktop's 2-3 */
 }
