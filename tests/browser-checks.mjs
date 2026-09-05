@@ -396,6 +396,8 @@ try {
   console.log("   heilGeom (3-district roving judge, should wrap):", JSON.stringify(heilGeom));
   assert(heilGeom.courtTop > heilGeom.presTop + 2,
     `a 3-district roving judge's court label wraps BELOW the president chip (pres top ${heilGeom.presTop} vs court top ${heilGeom.courtTop})`);
+  const heilSepHidden = await ev(`getComputedStyle(document.querySelector('.ctt-search-result .ctt-search-sep')).display === 'none'`);
+  assert(heilSepHidden, "the '· ' joiner is hidden once wrapped — it would otherwise read as an orphaned bullet on its own line");
   await ev(`(() => { const i = document.querySelector('.ctt-search-input'); i.value = 'sotomayor';
     i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
   await sleep(300);
@@ -408,6 +410,8 @@ try {
   console.log("   sotoGeom (short single-court row, should NOT wrap):", JSON.stringify(sotoGeom));
   assert(Math.abs(sotoGeom.courtTop - sotoGeom.presTop) < 2,
     `an ordinary short row stays on ONE line — no unnecessary wrap (pres top ${sotoGeom.presTop} vs court top ${sotoGeom.courtTop})`);
+  const sotoSepVisible = await ev(`getComputedStyle(document.querySelector('.ctt-search-result .ctt-search-sep')).display !== 'none'`);
+  assert(sotoSepVisible, "...and the '· ' joiner stays visible there, since it's genuinely inline");
   await ev(`document.querySelector('.ctt-search-clear').click()`);
 } catch (e) { console.log("*** ", e.message); failures++; }
 finally { try { ws && ws.close(); } catch {} chrome.kill(); }

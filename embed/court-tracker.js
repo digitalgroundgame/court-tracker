@@ -373,7 +373,11 @@ function renderSearchResults(results) {
       // wrap does this for free, since a flex item never breaks internally to wrap). This is
       // what keeps a roving judge's (up to three) district buttons from wrapping mid-list
       // (operator spec) while an ordinary single-court row still reads as one line whenever it
-      // fits — no JS overflow measurement needed, CSS wraps only when it actually has to.
+      // fits — the WRAP itself is CSS-only, no JS involved. The "· " joiner is its own `.ctt-
+      // search-sep` span (not bare text) specifically so it CAN be hidden once wrapped — a
+      // small measurement pass at the end of this function (after the list is actually visible,
+      // real layout exists) does that; a leading "· " reads as an orphaned bullet on its own
+      // line, and only makes sense as an inline joiner between the two halves.
       const metaLine = el("div", "ctt-search-meta");
       const shorthand = presidentShorthand(r.rec.appointing_president);
       const letter = partyLetter(r.rec.president_party);
@@ -384,7 +388,11 @@ function renderSearchResults(results) {
         metaLine.append(presWrap);
       }
       const courtWrap = el("span", "ctt-search-court");
-      if (shorthand) courtWrap.append(document.createTextNode("· "));
+      if (shorthand) {
+        const sep = el("span", "ctt-search-sep");
+        sep.textContent = "· ";
+        courtWrap.append(sep);
+      }
       if (roving) courtWrap.append(...buildRovingCourtLabel(row, r.courts));
       else courtWrap.append(document.createTextNode(courtLabelFor(r.courts)));
       metaLine.append(courtWrap);
@@ -396,6 +404,16 @@ function renderSearchResults(results) {
     }
   }
   searchResults.classList.add("ctt-is-open");
+  // Must run AFTER the class above — while `.ctt-search-results` is still `display:none` every
+  // `offsetTop` reads 0 (jsdom's permanent state, but also true of a real browser before this
+  // point), so wrap could never be detected. `offsetTop` is real-browser-only either way — see
+  // tests/browser-checks.mjs; jsdom asserts nothing here (it always reads 0/0 -> "not wrapped").
+  searchResults.querySelectorAll(".ctt-search-result").forEach((row) => {
+    const pres = row.querySelector(".ctt-search-president");
+    const sep = row.querySelector(".ctt-search-sep");
+    const court = row.querySelector(".ctt-search-court");
+    if (pres && sep && court) sep.style.display = court.offsetTop > pres.offsetTop ? "none" : "";
+  });
 }
 function hideSearchResults() {
   S.ui.searchResults?.classList.remove("ctt-is-open");

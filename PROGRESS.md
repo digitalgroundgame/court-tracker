@@ -12,6 +12,24 @@ tracker (Phase-4 tail items open, PLUS a brand-new third pane view — "Change",
 (feature-complete first version, operator refinement rounds ongoing; see sessions ai→at, aw).
 **Last updated:** 2026-09-11
 
+> **SESSION (cl), 2026-09-11 — Roving-judgeship UI: the "· " joiner hides itself once the meta
+> line wraps (operator report).**
+> - **Report**: when (ck)'s wrap landed the president chip above the court label, the leading
+> "· " that reads fine as an inline joiner ("Trump (R) · E.D. Okla. / ...") became an orphaned
+> bullet at the start of its own line once wrapped ("· E.D. Okla. / ...").
+> - **Fix**: the "· " is now its own `.ctt-search-sep` span (was a bare text node — text nodes
+> can't be individually shown/hidden) inside `.ctt-search-court`. A small measurement pass at
+> the end of `renderSearchResults` — AFTER `.ctt-is-open` is added, since `display:none` reads
+> `offsetTop` as 0 for everything and the wrap can't be detected before that — compares
+> `.ctt-search-court`'s `offsetTop` against `.ctt-search-president`'s and hides the separator
+> only when they actually differ (a real wrap). This is real-layout-dependent (same as the wrap
+> itself), so it can only be verified in a real browser, not jsdom.
+> - **Verified**: `tests/browser-checks.mjs` — Heil's (3-court, wraps) row hides the separator
+> (`getComputedStyle(...).display === 'none'`); Sotomayor's (short, doesn't wrap) row keeps it
+> visible. Screenshot-confirmed live: the second line now reads "E.D. Okla. / **N.D. Okla.** /
+> W.D. Okla. (10th Cir.)" with no leading bullet.
+> - `smoke.mjs`/`browser-checks.mjs` both ALL PASS; no regressions.
+
 > **SESSION (ck), 2026-09-11 — Roving-judgeship UI refinement: click also sets (and PERSISTS)
 > the carousel mark; the president/court meta line splits onto two lines, but only on overflow.**
 > - **(1) Click now also sets the mark, and persists it "over the page session."** Clicking a
