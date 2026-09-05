@@ -12,6 +12,53 @@ tracker (Phase-4 tail items open, PLUS a brand-new third pane view — "Change",
 (feature-complete first version, operator refinement rounds ongoing; see sessions ai→at, aw).
 **Last updated:** 2026-09-11
 
+> **SESSION (cg), 2026-09-11 — Search-bar bugfix round: SCOTUS results routed to an orphaned
+> pane instead of Summary, and search should auto-pin the clicked judge.**
+> - **Bug 1 — a SCOTUS search result opened a pane UNREACHABLE from anywhere else in the real
+>   UI.** `renderPane` still has a `court_level === "scotus"` branch left over from before the
+>   "Summary" button replaced the old lone SCOTUS selector entry (session earlier this project) —
+>   confirmed by grep that NOTHING calls `selectCourt("scotus")` except (cf)'s own new search
+>   code. Fixed by routing SCOTUS results through `selectSummary("scotus")` instead of
+>   `selectCourt("scotus")` — CLAUDE.md's "its own selector entry + pane" requirement for SCOTUS
+>   is satisfied by the Summary button's SCOTUS sub-tab, which is the actually-reachable pane.
+>   Left the orphaned `renderPane` branch itself untouched (out of scope for a bugfix; not
+>   something search should route to, but not this session's call to delete either).
+> - **`selectSummary` gained an optional `view` param** so a caller can force landing on a
+>   specific sub-tab (search always wants SCOTUS specifically — `S.summaryView` otherwise
+>   "persists across re-opens" by design, so a plain re-navigate could land on whatever sub-tab
+>   was last viewed). Had to handle the existing "re-click the Summary button toggles the pane
+>   closed" guard carefully: a FORCED view is a jump request, not a toggle, so that path now
+>   switches sub-tab in place instead of closing when already open on Summary. Caught a real
+>   landmine while doing this: `btn.addEventListener("click", selectSummary)` passed the button's
+>   own click `Event` as `selectSummary`'s first argument — harmless before (no params), but
+>   would have silently corrupted `S.summaryView` to a `MouseEvent` object the moment a `view`
+>   param was added. Fixed to `() => selectSummary()`.
+> - **Bug 2 (feature completion, not a regression) — auto-pin the searched judge.** Operator ask:
+>   landing on the court isn't the finish line — the reader searched for a SPECIFIC judge, so the
+>   docked detail panel should show and pin THAT judge, same as if they'd clicked the icon
+>   themselves. `pinSearchedJudge()` looks the judge up by `full_name` within the just-loaded
+>   court's judges (`judgesForCourt`), finds their icon node via the judge-stage model's
+>   `_nodeByJudge` map, and calls the SAME `onIconClick()` a real click uses — not a new pin
+>   mechanism. Confirmed (not assumed) that this is correctly a ONE-TIME effect per pane-opening,
+>   as the operator suspected it already would be: every render path that reaches here
+>   (`renderPane`/`renderSummaryPane`) already calls `unpinDetail()` at its own top, so the pin
+>   never survives closing and reopening the pane — verified directly rather than left as an
+>   assumption (a test closes the pane and asserts `S.detailPinned` is false again).
+> - **Verified**: `tests/smoke.mjs` rewrote the (cf) SCOTUS-navigation assertion to check the
+>   NOW-correct target (`S.selectedCourt === "summary"`, `S.summaryView === "scotus"`) instead of
+>   asserting the bug, added pin assertions for both the SCOTUS and the District search-navigation
+>   paths, added a pin-doesn't-survive-reopening check, and added a regression check that a plain
+>   re-click of the Summary button still toggles the pane closed (the forced-view code path didn't
+>   break the un-forced one). One test-authoring trap found and fixed along the way: `.ctt-pane-
+>   close` matches TWO buttons (the real × and the stow-only top button, which shares the class
+>   for styling and sits first in DOM order) — a bare class query silently grabbed the wrong one
+>   and the pin-survives assertion falsely failed; scoped to `[aria-label="Close panel"]`.
+>   Also eyeballed live in a real browser: searching "kavanaugh" and clicking the result lands on
+>   Summary > Supreme Court (tab correctly highlighted) with Kavanaugh's docked panel pinned
+>   (accent border + ×) and his same-president cohort (Gorsuch, Barrett) correctly ring-
+>   highlighted — confirms the pin reuses the real click path, not a lookalike.
+> - `smoke.mjs`/`browser-checks.mjs` both ALL PASS; no regressions.
+
 > **SESSION (cf), 2026-09-11 — New feature: header search bar (judges searchable by name).**
 > - **Operator ask**: a search bar, right-aligned in the title band (next to "Federal Court
 >   Appointment Tracker / National view · data v..."), searching sitting judges by name —
