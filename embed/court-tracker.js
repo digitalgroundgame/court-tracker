@@ -69,6 +69,9 @@ const S = {
   majorityMode: false,        // kept in sync with paneMode==='majority' — existing arc code reads this
   paneMode: "timeline",       // 'timeline' | 'majority' | 'change'
   seniorMode: "hide",         // 'hide' | 'show' | 'include' — Majority-view senior handling
+  _seniorModeForced: null,    // value to revert `seniorMode` to on the NEXT pane render, or null
+                               // — set when search auto-reveals a hidden senior (see pinSearchedJudge);
+                               // a real manual click on the Hide|Show|Include switch cancels this.
   affilMark: "none",          // 'none' | 'fedsoc' | 'acs' — mark reported affiliations
   _affilMarkTouched: false,   // has a real choice been made yet (manual toggle OR the one-time
                                // SCOTUS FedSoc default)? Gates that default from ever overriding one.
@@ -316,6 +319,21 @@ function renderSearchResults(results) {
 function hideSearchResults() {
   S.ui.searchResults?.classList.remove("ctt-is-open");
 }
+/** A senior judge is invisible in Majority view while Seniors is "hide" (`layoutArc` parks them
+ *  at dead centre with `place(..., false)` — no outer band, not folded into the arc either), so
+ *  pinning one there would dock a detail panel for an icon the reader can't actually see. Bumps
+ *  Seniors to "show" (reveals the outer band) and re-lays-out so the judge lands somewhere real,
+ *  same as if the reader had clicked Show themselves — but recorded in `S._seniorModeForced` so
+ *  `renderPane` can revert it "temporarily... until the info pane is refreshed" (operator spec),
+ *  rather than this search click silently becoming the new persistent Seniors preference. */
+function revealSeniorForSearch(judge) {
+  if (S.paneMode !== "majority" || judge.status !== "senior" || S.seniorMode !== "hide") return;
+  S._seniorModeForced = "hide";
+  S.seniorMode = "show";
+  S.ui.paneBody.querySelector(".ctt-foldrow")?.querySelectorAll(".ctt-mode-opt").forEach((o) =>
+    o.classList.toggle("ctt-is-active", o.getAttribute("data-senior") === "show"));
+  layoutJudges();
+}
 /** Auto-pins the searched judge in the docked detail panel after navigating there, the same as
  *  a real click on their icon (onIconClick) — so the reader lands straight on the judge they
  *  searched for, not just their court. A ONE-TIME effect for this viewing of the pane: every
@@ -327,9 +345,11 @@ function pinSearchedJudge(courtId, fullName) {
   const court = S.courts.get(courtId);
   if (!court) return;
   const judge = judgesForCourt(courtId, circuitOf(court)).find((j) => j.full_name === fullName);
+  if (!judge) return;
+  revealSeniorForSearch(judge);
   const model = S.ui.paneBody.querySelector(".ctt-judge-stage")?._model;
-  const node = judge && model?._nodeByJudge?.get(judge);
-  if (judge && node) onIconClick(judge, node);
+  const node = model?._nodeByJudge?.get(judge);
+  if (node) onIconClick(judge, node);
 }
 /** A search result click can land on a court that isn't reachable from wherever the map
  *  currently is (a different circuit's district, or a district while viewing national) — reuse
@@ -857,6 +877,11 @@ function deselect() {
 
 function renderPane(court) {
   unpinDetail();          // a new court's pane starts with no pinned/leftover detail (#20)
+  // Undo a search-triggered temporary Seniors reveal (see pinSearchedJudge) — it lasts only
+  // "until the info pane is refreshed" (operator spec), and a fresh renderPane IS that refresh,
+  // whether it's a different court or the same one reopened. A real manual click on the
+  // Hide|Show|Include switch already cleared this itself, so it can never clobber one.
+  if (S._seniorModeForced) { S.seniorMode = S._seniorModeForced; S._seniorModeForced = null; }
   const body = S.ui.paneBody;
   // The docked detail panel lives INSIDE the pane body (in the stage row), so it must be
   // rescued before the wipe or the wipe destroys it along with the old court's content.
@@ -970,6 +995,7 @@ function renderPane(court) {
     b.classList.toggle("ctt-is-active", S.seniorMode === mode);
     b.addEventListener("click", () => {
       S.seniorMode = mode;
+      S._seniorModeForced = null;   // a real manual choice — cancel any pending search auto-revert
       seniorWrap.querySelectorAll(".ctt-mode-opt").forEach((o) =>
         o.classList.toggle("ctt-is-active", o.getAttribute("data-senior") === mode));
       layoutJudges();
@@ -3678,7 +3704,7 @@ export async function mount(root) {
   cancelMorph();
   S.morphPlans.clear(); S.morphRAF = null; S.morphCancel = null; S.seatBlocks = null;
   S.view = "national"; S.activeCircuit = null; S.selectedCourt = null;
-  S.majorityMode = false; S.paneMode = "timeline"; S.seniorMode = "hide";
+  S.majorityMode = false; S.paneMode = "timeline"; S.seniorMode = "hide"; S._seniorModeForced = null;
   S.detailPinned = false; S.affilMark = "none"; S._affilMarkTouched = false;
   S.appointmentsAll = null; S.presidentPhotos = null;
   S.summaryView = "scotus"; S.districtArrangement = null; S.districtArrangementAlt = null;

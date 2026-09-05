@@ -12,6 +12,41 @@ tracker (Phase-4 tail items open, PLUS a brand-new third pane view — "Change",
 (feature-complete first version, operator refinement rounds ongoing; see sessions ai→at, aw).
 **Last updated:** 2026-09-11
 
+> **SESSION (ci), 2026-09-11 — Search-bar fix: a hidden senior pinned via search is now
+> temporarily revealed in Majority view.**
+> - **Operator ask**: if the searched judge is a senior AND the pane is currently in Majority
+> mode AND Seniors is set to Hide, that setting needs to flip to Show — temporarily, until the
+> pane is refreshed — otherwise the auto-pin (session cg) docks a detail panel for an icon the
+> reader literally cannot see (`layoutArc` parks a Hide-mode senior at dead centre with
+> `opacity:0; pointer-events:none` — no outer band, not folded into the arc either).
+> - **Fix**: `revealSeniorForSearch(judge)`, called from `pinSearchedJudge()` before pinning —
+> fires only when `S.paneMode === "majority" && judge.status === "senior" && S.seniorMode ===
+> "hide"`, flips `S.seniorMode` to `"show"`, updates the Seniors toggle's own active-button
+> class (so the visible control agrees with what happened), and re-runs `layoutJudges()` so the
+> judge actually lands in the outer band before `onIconClick` pins them.
+> - **"Temporarily, until the pane is refreshed" — `S.seniorMode` normally PERSISTS across court
+> selections** (same convention as `S.paneMode`/`S.summaryView`), so simply setting it to "show"
+> would have silently become the new session-wide default the next time ANY court's Majority
+> view opened — not what was asked. New state `S._seniorModeForced` records the value to revert
+> TO (i.e. "hide"); `renderPane` reverts it at its own top, before building the new pane, on
+> ANY subsequent render — a different court, the same court reopened, doesn't matter, since
+> "refreshed" means the next render, not a specific court. A genuine manual click on the
+> Hide|Show|Include switch clears `_seniorModeForced` itself, so a deliberate choice the reader
+> makes AFTER the auto-reveal can never be silently overwritten by a stale pending revert.
+> - **Verified**: `tests/smoke.mjs` — forced the exact reported precondition (Majority, Seniors:
+> Hide) on a real senior judge (Susan Webber Wright, 'are'), confirmed her icon's `opacity` is
+> actually `"0"` beforehand; searched her again (hits the (ch) "already open" fast path — still
+> the reported scenario), confirmed `seniorMode` flips to `"show"`, her icon's `opacity` becomes
+> `"1"`, the toggle control's active class updates, and `_seniorModeForced === "hide"` is
+> recorded; selected a DIFFERENT court and confirmed the revert actually fires there (not
+> scoped to the same court); confirmed a manual "Include" click after an auto-reveal clears the
+> pending revert and survives a further re-render. **Confirmed the tests fail without the fix**
+> (temporarily reverted `court-tracker.js`, 7 assertions failed as expected, restored). Also
+> eyeballed a real-browser before/after screenshot pair: before, Wright is pinned but her icon
+> is nowhere on the arc; after a second search, "Seniors: Show" is active and her icon (gray
+> senior tint, cohort-highlighted) appears in the outer band, still pinned.
+> - `smoke.mjs`/`browser-checks.mjs` both ALL PASS; no regressions.
+
 > **SESSION (ch), 2026-09-11 — Search-bar bugfix: a second search on the SAME open court closed
 > the pane instead of switching the pin.**
 > - **Operator report**: clicking a search result for a DIFFERENT judge on a court whose pane was
