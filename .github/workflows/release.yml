@@ -1,0 +1,109 @@
+name: Release
+
+# Pushing a v* tag builds the static-download bundle, proves it boots, and publishes
+# the GitHub release with the zip attached. Nothing here touches the data pipeline:
+# the bundle is derived from data/manifest.json, so a data-only refresh (new CSV/SVG
+# -> scripts/build_assets.py -> commit -> tag) releases with no workflow edit.
+#
+# Run it manually (workflow_dispatch) to rehearse: same build + verification, but it
+# uploads the zip as a run artifact instead of publishing anything.
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version label for the dry-run bundle (default: dev-<sha>)"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # tags + full history, so --generate-notes has something to diff
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Resolve version
+        id: version
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = "push" ]; then
+            VERSION="$GITHUB_REF_NAME"
+          elif [ -n "$INPUT_VERSION" ]; then
+            VERSION="$INPUT_VERSION"
+          else
+            VERSION="dev-${GITHUB_SHA::7}"
+          fi
+          # The version becomes a filename and a shell argument — keep it boring.
+          case "$VERSION" in
+            *[!A-Za-z0-9._-]*) echo "::error::bad version '$VERSION'"; exit 1 ;;
+          esac
+          echo "value=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Build static-download bundle
+        env:
+          VERSION: ${{ steps.version.outputs.value }}
+        run: python3 scripts/build_release.py --version "$VERSION"
+
+      - name: Verify the bundle boots offline
+        # The zip is the artifact people actually download, so the smoke suite runs
+        # against the *unpacked bundle*, not the repo: a file the app fetches but the
+        # bundle omits fails here rather than in someone's browser.
+        env:
+          VERSION: ${{ steps.version.outputs.value }}
+        run: |
+          set -euo pipefail
+          npm ci
+          BUNDLE="${RUNNER_TEMP}/bundle"
+          unzip -q "dist/court-tracker-${VERSION}.zip" -d "$BUNDLE"
+          ROOT="${BUNDLE}/court-tracker-${VERSION}"
+          mkdir -p "$ROOT/tests"
+          cp tests/smoke.mjs "$ROOT/tests/"
+          ln -s "$PWD/node_modules" "$ROOT/node_modules"
+          cd "$ROOT" && node tests/smoke.mjs
+
+      - name: Publish release
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.value }}
+        run: |
+          set -euo pipefail
+          # 0.x tags ship as pre-releases — the app is pre-1.0 (see PROGRESS.md Phase 4).
+          case "$VERSION" in v0.*) PRERELEASE=(--prerelease) ;; *) PRERELEASE=() ;; esac
+          # Hand-written notes when the repo has them; otherwise fall back to the commit
+          # log, whose summary lines mirror PROGRESS.md's session log.
+          if [ -f RELEASE_NOTES.md ]; then
+            NOTES=(--notes-file RELEASE_NOTES.md)
+          else
+            NOTES=(--generate-notes)
+          fi
+          gh release create "$VERSION" "dist/court-tracker-${VERSION}.zip" \
+            --title "$VERSION" --verify-tag "${PRERELEASE[@]}" "${NOTES[@]}"
+
+      - name: Upload dry-run bundle
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: court-tracker-${{ steps.version.outputs.value }}
+          path: dist/*.zip
+          if-no-files-found: error

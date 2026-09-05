@@ -10,7 +10,44 @@
 tracker (Phase-4 tail items open, PLUS a brand-new third pane view — "Change", built session
 (aw), operator review round addressed session (ax)) and the appointments beeswarm
 (feature-complete first version, operator refinement rounds ongoing; see sessions ai→at, aw).
-**Last updated:** 2026-09-11
+**Last updated:** 2026-09-05 (session (cn))
+
+> **SESSION (cn), 2026-09-05 — Release packaging: static-download bundler, notes, and a
+> tag-driven GitHub Actions release workflow.**
+> - **Context**: the repo had no tags and no releases, and `manifest.json`'s `version` is a
+> content hash for cache-busting, not a human release number — so releases needed their own
+> semver tags (`v0.1.0` first, pre-1.0) with the manifest stamp carried in the notes instead.
+> - **`scripts/build_release.py`** builds the static-download zip that a release attaches. The
+> file list is DERIVED, never hardcoded, so releasing stays a data-only operation exactly like
+> `build_assets.py`: every path in `manifest.json`'s `files` tree, plus every `photo_thumb`
+> value found inside those JSON payloads (verified first that photos are referenced ONLY via
+> that field — both widgets resolve `photoSrc()` from it and never construct a path), plus
+> `index.html` and all of `embed/`. A manifest-listed file missing on disk is a hard error.
+> Excludes what the app never fetches (CSVs, `scripts/`, `docs/`, `tests/`, `tools/`,
+> `data/census|nps/`) — those ride along in GitHub's auto-attached source tarball. Emits a
+> generated `README.txt` (data stamp, counts, embed snippet) inside a `court-tracker-<version>/`
+> top-level folder. `--list` dry-runs, `--version` defaults to the git tag on HEAD.
+> - **Measured**: 1,321 entries, 13.1 MB zipped / 18.2 MB unpacked, 1,278 photos. Also surfaced
+> that **1,113 photos in `assets/photos/` are unreferenced by current data** (stale thumbs from
+> earlier sweeps, ~14 MB) — not bundled, and printed as a note rather than an error. Worth a
+> cleanup pass sometime; harmless meanwhile.
+> - **Verified the bundle, not just the repo**: unpacked the zip to a scratch dir and ran
+> `tests/smoke.mjs` from inside it — **482/482 ALL PASS**, which proves every asset the app
+> actually drives is present in the download. (`node_modules` restored via `npm ci`; the lock
+> stays clean.)
+> - **`.github/workflows/release.yml`** (first workflow in this repo): pushing a `v*` tag builds
+> the bundle, re-runs that same unpacked-bundle smoke check in CI, and publishes the release
+> with `gh` (`--verify-tag`; `v0.*` auto-flagged pre-release; `RELEASE_NOTES.md` as the body,
+> falling back to `--generate-notes`, whose commit summaries mirror this log). `workflow_dispatch`
+> rehearses the whole thing and uploads the zip as a run artifact without publishing. Inputs go
+> through `env:` (no `${{ }}` interpolation into shell) and the version is charset-validated.
+> - **`RELEASE_NOTES.md`** drafted for v0.1.0: data snapshot, highlights, and an honest
+> **Known gaps** section (mobile/a11y pass, real-browser `file://` check, lazy-load/perf
+> verification, final UX-contract QA all still open; every row still `data_verified=false`).
+> - **Not done here**: nothing is tagged or published yet — that is the operator's call
+> (`git tag -a v0.1.0 && git push origin v0.1.0` triggers the workflow).
+> - Also noted: this log's recent entries are dated 2026-09-11 while the commits they describe
+> are dated 2026-09-05. Used the real date here.
 
 > **SESSION (cm), 2026-09-11 — Explained, not fixed: Summary > District's national totals don't
 > arithmetically add up, and that's correct (operator report: "654+27=681 > 673").**
@@ -2136,7 +2173,16 @@ Prove the whole app shell and asset schema on one circuit with hand-authored sam
       layout has never been eyeballed — carried since Phase 1, now self-serve via `tests/shoot.mjs`.
       Note seat blocks are constant-px, so they read relatively larger on a small map.
 - [ ] Lazy-load/perf tuning; verify only-needed assets load per view.
+- [x] **Release packaging** (session cn, 2026-09-05): `scripts/build_release.py` derives the
+      static-download zip from `manifest.json` (+ `photo_thumb` refs), and
+      `.github/workflows/release.yml` publishes it on a `v*` tag after re-running the smoke
+      suite against the *unpacked bundle*. `RELEASE_NOTES.md` drafted for v0.1.0. Nothing
+      tagged yet — that's the operator's call.
 - [ ] Verify static-download + archive.org behavior (relative paths, offline image fallback).
+      PARTIAL (session cn): the release bundle is proven complete headlessly — smoke 482/482
+      against the unpacked zip — and photo coverage is now fully local (1,255 cached thumbs,
+      235 judges on the initials fallback, zero remote hotlinks), so the offline story no
+      longer depends on Wikimedia. STILL OPEN: an actual `file://` open in a real browser.
       NOTE: 1,094 judge photos are **remote** Wikimedia URLs -> initials fallback offline (allowed
       by contract). Consider caching to `assets/photos/` if the download story needs better.
 - [ ] Final QA against the UX contract in `CLAUDE.md` §5.
