@@ -81,6 +81,24 @@ tracker (Phase-4 tail items open, PLUS a brand-new third pane view — "Change",
 > `git-receive-pack` — this session's credentials can push its own branch but not `refs/tags/*`.
 > The tag was never created on the remote. Moot now if Pages replaces the release.
 
+> - **OUTCOME — PAUSED, PR #1 closed unmerged (operator call, 2026-09-05).** Pages is
+> unavailable here: the repo is private and GitHub Pages on a private repo requires a paid
+> plan (Pro/Team/Enterprise), which this account does not have. Making the site public to get
+> free Pages was rejected — every judge row is still `data_verified=false`, so a public URL is
+> premature regardless of cost.
+> - **Why closed rather than merged**: `pages.yml` runs on every push to `main`, and
+> `deploy-pages` FAILS when Pages is not enabled — merging it would turn `main` red on every
+> push and mail a failure for each one. The branch (`claude/github-release-creation-br0ftu`)
+> is intact and the PR is reopenable; nothing needs rebuilding to resume.
+> - **To resume**, in order: (1) a paid plan, or make the repo public once data verification
+> is done; (2) repo Settings -> Pages -> Source: "GitHub Actions"; (3) merge the branch. The
+> first push to `main` then publishes.
+> - **Free fallback if a distributable copy is ever wanted before then**: GitHub *Releases*
+> work on a private repo on any plan (assets visible to collaborators) — `release.yml` +
+> `build_release.py` are already built and verified for exactly that, and need only a `v*` tag.
+> Note this session's own credentials cannot push tags (403 on `refs/tags/*`); the operator
+> must push it.
+
 > **SESSION (cm), 2026-09-11 — Explained, not fixed: Summary > District's national totals don't
 > arithmetically add up, and that's correct (operator report: "654+27=681 > 673").**
 > - **Root-caused, not assumed.** Computed the real numbers directly from `seat_blocks.json`:
@@ -2212,8 +2230,10 @@ Prove the whole app shell and asset schema on one circuit with hand-authored sam
       `digitalgroundgame.github.io/court-tracker` on every push to `main`;
       `.github/workflows/release.yml` publishes the zip on a `v*` tag. Both verify by running
       the smoke suite against the built tree, not the repo. `RELEASE_NOTES.md` drafted for
-      v0.1.0. BLOCKED on the operator: Pages must be enabled in repo Settings (Source:
-      "GitHub Actions"), and Pages on a private repo needs a paid plan + makes the site public.
+      v0.1.0. **Pages PAUSED 2026-09-05, PR #1 closed unmerged**: private repo + no paid plan =
+      no Pages, and going public was rejected while `data_verified=false`. Branch intact and
+      reopenable; see the (cn) session entry for the resume order. The release/zip path needs
+      no paid plan and is ready whenever a distributable copy is wanted.
 - [ ] Verify static-download + archive.org behavior (relative paths, offline image fallback).
       PARTIAL (session cn): the bundle is proven complete — smoke 482/482 against the unpacked
       zip AND against the Pages site tree — and photo coverage is now fully local (1,255 cached
