@@ -12,6 +12,35 @@ tracker (Phase-4 tail items open, PLUS a brand-new third pane view — "Change",
 (feature-complete first version, operator refinement rounds ongoing; see sessions ai→at, aw).
 **Last updated:** 2026-09-11
 
+> **SESSION (ch), 2026-09-11 — Search-bar bugfix: a second search on the SAME open court closed
+> the pane instead of switching the pin.**
+> - **Operator report**: clicking a search result for a DIFFERENT judge on a court whose pane was
+> ALREADY open closed the pane instead of switching the pin to the new judge; searching the SAME
+> judge again should reinstate the pin, not close anything either. Operator's own diagnosis was
+> right: `selectCourt`'s "re-select the already-open court" guard (a deliberate CLOSE toggle for
+> a manual re-click of the same selector item — there's "nowhere to go") fired for `courtId ===
+> S.selectedCourt`, which is exactly what a second search hit on the SAME court produces —
+> `selectSummary("scotus")` had the identical footgun for a second SCOTUS search (same root cause
+> as (cg)'s Summary-toggle fix, just not yet applied to the "already there" case specifically).
+> - **Fix**: `navigateToSearchResult` now checks whether the target court's pane is ALREADY open
+> (court-level-aware: `S.selectedCourt === courtId` for an ordinary court, or `S.selectedCourt ===
+> SUMMARY_ID && S.summaryView === "scotus"` for SCOTUS) BEFORE doing any navigation. If so, it
+> skips `selectCourt`/`selectSummary`/drilling entirely — nothing about the court needs to change
+> — and goes straight to `pinSearchedJudge()`, which finds the new judge in the STILL-rendered
+> stage and re-runs the same `onIconClick()` pin path. This is a strict ADDITION in front of the
+> existing navigation, not a change to `selectCourt`/`selectSummary` themselves — their own
+> manual-re-click-closes behavior (the correct default for the selector bar / Summary button) is
+> untouched.
+> - **Verified the bug reproduces without the fix, not just that the fix passes**: temporarily
+> reverted `court-tracker.js` (kept the new tests), confirmed the new assertion actually FAILS
+> (`selectedCourt=null` — the pane really does close), then restored the fix and confirmed it
+> passes — the standard this project holds itself to for "did I actually catch the bug" rather
+> than trusting a passing assertion on faith. `tests/smoke.mjs` gained 3 new scenarios: two
+> different ca9 circuit judges searched back-to-back (pane stays open, pin switches), the SAME
+> judge searched twice in a row after manually unpinning (pin reinstates), and the same two
+> checks for Summary > Supreme Court (Kavanaugh then Gorsuch). `smoke.mjs`/`browser-checks.mjs`
+> both ALL PASS.
+
 > **SESSION (cg), 2026-09-11 — Search-bar bugfix round: SCOTUS results routed to an orphaned
 > pane instead of Summary, and search should auto-pin the clicked judge.**
 > - **Bug 1 — a SCOTUS search result opened a pane UNREACHABLE from anywhere else in the real
