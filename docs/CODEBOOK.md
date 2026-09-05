@@ -177,6 +177,27 @@ District" feature) is still pending.
 - If a circuit's real judge composition changes before that build step exists, `cell_colors`
   here will silently be stale; there is no automatic refresh path yet.
 
+## Table G — `judges_search.json`  (derived; header search-bar index)
+
+Built by `build_assets.py` straight from the already-derived `judges` list (Table A), keeping
+only the fields the header search bar needs — no photos, education, affiliations, ABA rating,
+or dates. Deliberately a SEPARATE asset from the 14 per-circuit judge bundles (`data/judges/*.json`,
+~1.9MB combined): the search bar needs every sitting judge available client-side to filter on
+every keystroke, and fetching all 14 bundles just for name/court/party/president would defeat the
+national view's lazy-load contract (`CLAUDE.md` §6). The widget fetches this file once, lazily, on
+first interaction with the search box — never on initial mount.
+
+| key | type | description |
+|---|---|---|
+| `full_name` | string | As Table A — the string searched and displayed (with the matched portion bolded). |
+| `court_id` | string | FK → `courts.court_id`. Drives the result's court label and where a click navigates. |
+| `status` | enum `active` \| `senior` | As Table A. |
+| `appointing_president` | string \| null | As Table A. |
+| `president_party` | enum `Republican` \| `Democratic` \| `Other` \| null | As Table A. |
+
+- **Data-only, like every other derived asset here**: re-running `build_assets.py` after a
+  `judges.csv` change regenerates this file automatically — no separate step, no code change.
+
 ## Validation rules (enforced in `build_assets.py`)
 - Every `judges.court_id` and `circuit_justices.circuit_id` exists in `courts.csv`.
 - `fedsoc_reported`/`acs_reported` true ⇒ corresponding `*_source` non-null.

@@ -1333,6 +1333,123 @@ assert(!root.querySelector(".ctt-district-subassembly"), "cafc's feeder view sho
 click(root.querySelector(".ctt-selector-back"));
 await sleep(30);
 
+console.log("header search bar: scoring (exact/prefix/fuzzy/reorder/threshold)");
+{
+  const { scoreJudgeMatch } = mod._dev;
+  const exact = scoreJudgeMatch("Sotomayor", "Sonia Sotomayor");
+  assert(exact && exact.tier === 0 && exact.score === 100, `exact word match -> tier 0, score 100 (got ${JSON.stringify(exact)})`);
+  const typo = scoreJudgeMatch("sotomayer", "Sonia Sotomayor");   // one-letter misspelling
+  assert(typo && typo.score >= 45 && typo.score < 85, `misspelling within tolerance still matches at reduced quality (got ${JSON.stringify(typo)})`);
+  const reordered = scoreJudgeMatch("Coney Amy Barrett", "Amy Coney Barrett");
+  assert(reordered && reordered.tier === 0, "word order doesn't matter — each query word matches independently");
+  const partial = scoreJudgeMatch("Barrett", "Amy Coney Barrett");
+  assert(partial && partial.tier === 0, "a single matching surname alone is enough (not every word required)");
+  const disqualified = scoreJudgeMatch("Barrett Xyzzyworqz", "Amy Coney Barrett");
+  assert(disqualified === null, "a query word that matches NOTHING in the name disqualifies the whole judge, even with a perfect other word");
+  const garbage = scoreJudgeMatch("qqzxzz", "Amy Coney Barrett");
+  assert(garbage === null, "below the minimum-quality threshold is excluded entirely");
+}
+
+console.log("header search bar: result sort order (tier > Supreme > Appellate-by-number > District-by-circuit-then-alpha > feeders)");
+{
+  const { searchAndSort, S } = mod._dev;
+  // A single unique token, exact-matched by every synthetic record, keeps every result at the
+  // SAME tier/score — isolating this test to the hierarchy/circuit/alphabetical ordering rules
+  // (the scoring rules themselves are covered above). Real court_ids (already loaded in S.courts
+  // from the mount above) so byCircuitOrder/short_name context is the real thing, not a stub.
+  const synth = [
+    { full_name: "Zzytestcase Delta", court_id: "cadc", status: "active" },      // Appellate: D.C.
+    { full_name: "Zzytestcase Alpha", court_id: "ca1", status: "active" },       // Appellate: 1st
+    { full_name: "Zzytestcase Beta", court_id: "ca3", status: "active" },        // Appellate: 3rd
+    { full_name: "Zzytestcase EDArk", court_id: "are", status: "active" },       // District: ca8, "E.D. Ark."
+    { full_name: "Zzytestcase DMinn", court_id: "mnd", status: "active" },       // District: ca8, "D. Minn."
+    { full_name: "Zzytestcase NDCal", court_id: "cand", status: "active" },      // District: ca9, "N.D. Cal."
+    { full_name: "Zzytestcase CFC", court_id: "uscfc", status: "active" },       // feeder: "CFC"
+    { full_name: "Zzytestcase CIT", court_id: "cit", status: "active" },         // feeder: "CIT"
+    { full_name: "Zzytestcase Justice", court_id: "scotus", status: "active" }, // Supreme
+  ];
+  const order = searchAndSort("zzytestcase", synth).map((r) => r.rec.full_name);
+  assert(order[0] === "Zzytestcase Justice", `Supreme sorts first (got ${order[0]})`);
+  const appellate = order.slice(1, 4);
+  assert(JSON.stringify(appellate) === JSON.stringify(["Zzytestcase Alpha", "Zzytestcase Beta", "Zzytestcase Delta"]),
+    `Appellate sorts by circuit number, 1st < 3rd < D.C. (got ${JSON.stringify(appellate)})`);
+  const district = order.slice(4, 7);
+  assert(JSON.stringify(district) === JSON.stringify(["Zzytestcase DMinn", "Zzytestcase EDArk", "Zzytestcase NDCal"]),
+    `District sorts by circuit (8th before 9th), alphabetically within a circuit ('D. Minn.' before 'E.D. Ark.') (got ${JSON.stringify(district)})`);
+  const feeders = order.slice(7, 9);
+  assert(JSON.stringify(feeders) === JSON.stringify(["Zzytestcase CFC", "Zzytestcase CIT"]),
+    `Federal-Circuit feeders sort last, alphabetically by their own short label (got ${JSON.stringify(feeders)})`);
+
+  // A worse-tier match must sort AFTER every result in a better tier, even one from a
+  // lower-priority court group (tier is the PRIMARY sort key, per operator spec).
+  const mixed = [
+    { full_name: "Zzytezzcase Weakmatch", court_id: "scotus", status: "active" },  // 1-letter typo -> lower tier
+    { full_name: "Zzytestcase Strongmatch", court_id: "are", status: "active" },   // exact -> top tier, District
+  ];
+  const mixedOrder = searchAndSort("zzytestcase", mixed).map((r) => r.rec.full_name);
+  assert(mixedOrder[0] === "Zzytestcase Strongmatch",
+    `a stronger match on a LOWER-priority court still sorts before a weaker match on a HIGHER-priority one (got ${JSON.stringify(mixedOrder)})`);
+}
+
+console.log("header search bar: end-to-end (lazy index load, live filtering, highlighting, click-to-navigate, click-away, clear)");
+{
+  const { S } = mod._dev;
+  const searchInput = root.querySelector(".ctt-search-input");
+  const searchClear = root.querySelector(".ctt-search-clear");
+  const searchResults = root.querySelector(".ctt-search-results");
+  assert(S.searchIndex === null, "the search index has not been fetched yet (lazy-load contract, CLAUDE.md §6)");
+
+  searchInput.value = "Sotomayor";
+  searchInput.dispatchEvent(new window.Event("input", { bubbles: true }));
+  await waitFor(() => S.searchIndex !== null, 2000);
+  await sleep(20);
+  assert(Array.isArray(S.searchIndex) && S.searchIndex.length > 1000, `search index lazily fetched on first keystroke (${S.searchIndex?.length} judges)`);
+  assert(searchResults.classList.contains("ctt-is-open"), "results list opens after typing");
+  const rows = [...searchResults.querySelectorAll(".ctt-search-result")];
+  const sotoRow = rows.find((r) => r.querySelector(".ctt-search-name").textContent.includes("Sotomayor"));
+  assert(sotoRow, `Sotomayor appears among the results (${rows.length} shown)`);
+  assert(sotoRow.querySelector(".ctt-search-match"), "the matched portion of the name is wrapped for bolding");
+  assert(sotoRow.querySelector(".ctt-search-match").textContent === "Sotomayor", "...specifically the matched substring itself");
+  assert(sotoRow.querySelector(".ctt-search-meta").textContent.includes("Supreme Court"),
+    `result row shows the court (Supreme Court) (got "${sotoRow.querySelector(".ctt-search-meta").textContent}")`);
+  assert(searchClear.classList.contains("ctt-is-visible"), "the × clear button appears once there's a query");
+
+  click(sotoRow);
+  await sleep(30);
+  assert(S.selectedCourt === "scotus", `clicking the result navigated to the Supreme Court pane (got ${S.selectedCourt})`);
+  assert(root.querySelector(".ctt-pane").classList.contains("ctt-is-open"), "...and the pane is open");
+  assert(!searchResults.classList.contains("ctt-is-open"), "...and the results list closed itself on navigation");
+  assert(searchInput.value === "Sotomayor", "...but the typed query text was NOT cleared by navigating (operator spec)");
+  click(root.querySelector(".ctt-pane-close"));
+  await sleep(20);
+
+  console.log("  search across a drill-in: a District result reaches its OWN pane even starting from national view");
+  assert(S.view === "national", "sanity: still on the national view before this click");
+  searchInput.value = "Webber Wright";   // Susan Webber Wright, 'are' (E.D. Ark., 8th Circuit)
+  searchInput.dispatchEvent(new window.Event("input", { bubbles: true }));
+  await sleep(30);
+  const wrightRow = [...searchResults.querySelectorAll(".ctt-search-result")]
+    .find((r) => r.querySelector(".ctt-search-name").textContent.includes("Wright"));
+  assert(wrightRow, "a district-court judge is found by a two-word (reordered) partial query");
+  click(wrightRow);
+  await waitFor(() => S.selectedCourt === "are", 3000);
+  assert(S.view === "circuit" && S.activeCircuit === "ca8", `navigating drilled into the judge's own circuit first (view=${S.view}, circuit=${S.activeCircuit})`);
+  assert(S.selectedCourt === "are", "...then opened the district's own pane");
+  click(root.querySelector(".ctt-selector-back"));
+  await waitFor(() => S.view === "national", 2000);
+
+  console.log("  click-away hides the list without clearing the query; × clears both");
+  searchInput.value = "Sotomayor";
+  searchInput.dispatchEvent(new window.Event("input", { bubbles: true }));
+  await sleep(20);
+  assert(searchResults.classList.contains("ctt-is-open"), "sanity: results open again");
+  document.body.dispatchEvent(new window.MouseEvent("mousedown", { bubbles: true }));
+  assert(!searchResults.classList.contains("ctt-is-open"), "clicking away from the search UI hides the results list");
+  assert(searchInput.value === "Sotomayor", "...but does NOT clear the typed query");
+  click(searchClear);
+  assert(searchInput.value === "" && !searchClear.classList.contains("ctt-is-visible"), "the × button clears the query and hides itself");
+}
+
 console.log("appointments beeswarm widget (separate module, session aj)");
 {
   const chartRoot = document.createElement("div");

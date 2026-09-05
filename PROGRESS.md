@@ -12,6 +12,74 @@ tracker (Phase-4 tail items open, PLUS a brand-new third pane view — "Change",
 (feature-complete first version, operator refinement rounds ongoing; see sessions ai→at, aw).
 **Last updated:** 2026-09-11
 
+> **SESSION (cf), 2026-09-11 — New feature: header search bar (judges searchable by name).**
+> - **Operator ask**: a search bar, right-aligned in the title band (next to "Federal Court
+>   Appointment Tracker / National view · data v..."), searching sitting judges by name —
+>   misspelling-tolerant, word-order-independent, live-filtering per keystroke, matched text
+>   bolded in the results, results grouped by match quality then Supreme > Appellate (by circuit
+>   number) > District (by circuit order, then alphabetically within a circuit), clicking a
+>   result opens that judge's own court pane, click-away hides the list (query text persists —
+>   only the new × button or deleting the text clears it).
+> - **Clarified three design questions with the operator before building** (their spec left them
+>   genuinely open): (1) president shorthand = surname, with initials only for the ambiguous
+>   Bush/Roosevelt/Johnson/Adams/Harrison families (none of which currently occur in the sitting-
+>   judge data, which only goes back to Nixon — `PRESIDENT_SHORTHAND` exists for when it does),
+>   shown with the SAME colored-dot + party-letter convention the docked judge-detail panel
+>   already uses (`showDetail`'s `.ctt-dot`/`ctt-rep`/`ctt-dem` classes, reused verbatim). (2)
+>   District sort = group by the DISTRICT'S OWN CIRCUIT's order (same numbering `byCircuitOrder`
+>   already uses for Appellate), alphabetical within that circuit — confirmed against how the
+>   existing selector bar already groups districts under a circuit. (3) Data source: checked the
+>   pipeline is intact (`build_assets.py` is the single script that derives ALL runtime JSON from
+>   the 3 source CSVs, already the established "data-only update" mechanism CLAUDE.md §6
+>   requires) and where in it a new derived asset belongs, before proposing one — a small
+>   dedicated derived asset **is** the right call, following the SAME pattern as `seat_blocks.json`/
+>   `circuit_justices.json` — CODEBOOK Table G documents it.
+> - **New derived asset: `data/judges_search.json`** (`build_assets.py`, ~250KB for 1,490 judges:
+>   `full_name`/`court_id`/`status`/`appointing_president`/`president_party` only — no photos/
+>   education/affiliations/dates). Deliberately SEPARATE from the 14 per-circuit judge bundles
+>   (~1.9MB combined, built for a different purpose): the search bar needs every sitting judge
+>   available client-side to filter on every keystroke, and pulling all 14 bundles just for name/
+>   court/party/president would defeat the national view's lazy-load contract (CLAUDE.md §6) —
+>   so it's registered in the manifest and fetched ONCE, lazily, on the search box's first use
+>   (confirmed via a jsdom assertion: `S.searchIndex === null` until the first keystroke).
+> - **Matching**: each query word is scored independently against every word in a judge's
+>   `full_name` (exact=100 > prefix=88 > substring=74 (word length ≥3) > Levenshtein-fuzzy
+>   ≤tolerance=45-60, tolerance scaling 1/2/3 by query-word length) — matching every query word
+>   against ALL name words independently, not positionally, is what makes word order not matter.
+>   EVERY query word must find some match or the whole judge is disqualified (so a query word
+>   that matches nothing can't be "outvoted" by a strong match on another word). Overall score =
+>   average of each word's best match; tiers ≥85/≥65/≥45 ("groups of quality match" per operator
+>   spec), <45 excluded. Matched spans are tracked back to the original string for the bolding
+>   (`<span class="ctt-search-match">`, merged if overlapping).
+> - **Navigation reuses existing map primitives rather than reinventing pane/view state**: a
+>   result click calls the SAME `drillOut`/`drillIn`/`selectCourt` the "View districts"/back UI
+>   already uses (a district result drills into its circuit first if not already there; a
+>   circuit/SCOTUS result drills out first if the map is currently in a DIFFERENT circuit's local
+>   view) — this was a deliberate choice after finding that selecting a district while the map
+>   stays on the national view (skipping drillIn) is a state combination nothing else in the app
+>   produces, and would have left the selector bar showing the wrong (national) list while the
+>   pane showed a district. USCIT/CFC results (real sitting judges the app already tracks, court_
+>   level `specialized`) navigate via the same `selectCourt`/`drillIn("cafc")` path the Federal
+>   Circuit's own feeder selector already uses — not named in the operator's District/Appellate/
+>   Supreme spec, so placed as a 4th group after District, sorted alphabetically by short label.
+> - **Verified**: `tests/smoke.mjs` +26 assertions — scoring unit tests (exact/prefix/fuzzy/
+>   reorder/threshold-reject/word-disqualification), a synthetic-index sort-order test (isolates
+>   hierarchy/circuit/alpha ordering from the scoring rules by giving every synthetic record an
+>   identical score), and a full DOM flow (lazy index load, live filtering, highlight markup,
+>   click-to-navigate for both a SCOTUS result and a cross-view District result, click-away,
+>   clear button) — **1490/1490 real judges load, all pass**. `tests/browser-checks.mjs` +4 real-
+>   layout assertions: right-alignment to the header's own padding, the dropdown opens below the
+>   input and actually paints ON TOP of the map (`elementFromPoint` confirms a result row, not the
+>   map, is hit-tested at its own screen position), and **no horizontal overflow at 380px width**
+>   (the still-open mobile checklist item just got one real data point). Also eyeballed via
+>   `tests/shoot.mjs`-style real-Chrome screenshots: a misspelled "sotomayer" query correctly
+>   bolds **Sotomayor** with the Obama/(D) dot; a "wright" query returns 8 real judges spanning a
+>   sitting CIRCUIT judge (Dorothy Wright Nelson, ca9 — correctly ranked ABOVE the district
+>   judges despite an identical exact-match score, confirming the courtRank tie-break), several
+>   district judges correctly grouped/ordered by circuit, and two lower-tier substring matches
+>   (Court**wright**, Cart**wright**) correctly sorted after every exact match.
+> - `smoke.mjs`/`browser-checks.mjs` both ALL PASS; no regressions in either existing suite.
+
 > **SESSION (ce), 2026-09-11 — Territorial-court note bottom-alignment in Timeline mode, and
 > Summary > Supreme Court's FedSoc default + legend key.**
 > - **Territorial-court note, root-caused as a missing stretch, not a missing height formula.**
@@ -1670,6 +1738,9 @@ Prove the whole app shell and asset schema on one circuit with hand-authored sam
   — **MET**. `tests/smoke.mjs` **107/107**.
 
 ## Phase 4 — Polish, mobile, resilience
+- [x] **Header search bar** (session cf, 2026-09-05; feature added this session, beyond the
+      original plan): judges searchable by name, right-aligned in the title band. See session
+      log for the full design.
 - [x] **"Last tracked appointment" header line** (session ay, 2026-08-25): `manifest.json` gains
       `last_appointment` (= max `commission_date` across all judges, data-driven so it only moves
       when a real sweep lands a new appointment); rendered above the title as `.ctt-tracked`.

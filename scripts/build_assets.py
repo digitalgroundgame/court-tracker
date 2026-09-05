@@ -427,6 +427,30 @@ def main() -> int:
         justices_file = "data/circuit_justices.json"
         payloads.append(data)
 
+    # judges_search.json — lightweight global name-search index (name/court/party/president
+    # only, no photos/bios/aba_rating/etc.) for the header search bar. A DELIBERATE separate
+    # asset from the per-circuit judge bundles above: those total ~1.9MB across 14 files
+    # (photos, affiliations, education...) and the search bar needs every sitting judge
+    # available client-side after every keystroke, so it is lazy-fetched ONCE on first use
+    # (not on initial mount, preserving the national view's courts.json+national.svg-only
+    # lazy-load contract — CLAUDE.md §6) rather than pulling all 14 circuit bundles.
+    search_file = None
+    if judges:
+        search_index = [
+            {
+                "full_name": j["full_name"],
+                "court_id": j["court_id"],
+                "status": j["status"],
+                "appointing_president": j.get("appointing_president"),
+                "president_party": j.get("president_party"),
+            }
+            for j in judges
+        ]
+        data = json.dumps(search_index, indent=1).encode("utf-8")
+        (DATA / "judges_search.json").write_bytes(data)
+        search_file = "data/judges_search.json"
+        payloads.append(data)
+
     # president_photos.json — keyed by the exact `name` string in embed/presidencies.js, for
     # the Change-view drag-bar icons and the beeswarm's presidency-band label icon.
     pres_photos_file = None
@@ -450,6 +474,8 @@ def main() -> int:
         files["judges"] = judge_files
     if justices_file:
         files["circuit_justices"] = justices_file
+    if search_file:
+        files["judges_search"] = search_file
     if blocks_file:
         files["seat_blocks"] = blocks_file
     if district_arrangement_file:
