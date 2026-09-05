@@ -29,3 +29,7 @@ __pycache__/
 # scripts/build_district_arrangement_alt.py, which is the actual consumed asset. Left in place,
 # untouched, per the operator's own "make a copy of it, don't move/edit the original" instruction.
 temp_alt_ca1_ca3.txt
+
+# Release bundles built by scripts/build_release.py (attached to GitHub releases,
+# not source of truth — regenerate with `python3 scripts/build_release.py`).
+dist/
