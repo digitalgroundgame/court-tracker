@@ -230,13 +230,19 @@ function courtRank(court) {
   if (court.court_level === "district") return 2;
   return 3;
 }
-function courtLabelFor(court) {
-  if (court.court_level === "scotus") return "Supreme Court";
-  if (court.court_level === "district") {
-    const circuit = S.courts.get(court.parent_id);
-    return circuit ? `${court.short_name} (${circuit.short_name})` : court.short_name;
+/** `courts` is an array — usually one court, but a ROVING judgeship (28 U.S.C. §133 shares a
+ *  seat across same-state districts, e.g. E.D./W.D. Missouri) puts the SAME judge on multiple
+ *  district benches at once, and search merges those into one result (see `searchAndSort`) —
+ *  so its label lists every court, e.g. "E.D. Mo. / W.D. Mo. (8th Cir.)". */
+function courtLabelFor(courts) {
+  const primary = courts[0];
+  if (primary.court_level === "scotus") return "Supreme Court";
+  if (primary.court_level === "district") {
+    const circuit = S.courts.get(primary.parent_id);
+    const names = courts.map((c) => c.short_name).join(" / ");
+    return circuit ? `${names} (${circuit.short_name})` : names;
   }
-  return court.short_name;   // circuit ("8th Cir.") or specialized ("USCIT"/"CFC")
+  return courts.map((c) => c.short_name).join(" / ");   // circuit ("8th Cir.") or specialized
 }
 function searchResultCourtOrderKey(court) {
   if (court.court_level === "district") {
@@ -258,11 +264,16 @@ async function ensureSearchIndex() {
 function searchAndSort(query, index) {
   const results = [];
   for (const rec of index) {
-    const court = S.courts.get(rec.court_id);
-    if (!court) continue;
+    // A roving-judgeship entry (see build_assets.py) carries `court_ids` (plural) instead of
+    // `court_id` — one real judge, multiple simultaneous district seats. `courts[0]` (the FIRST
+    // in the build-time-sorted list, so this is deterministic build-to-build) is the "primary"
+    // court used for sorting and as the click target; the full list is still shown in the label.
+    const courtIds = rec.court_ids || [rec.court_id];
+    const courts = courtIds.map((id) => S.courts.get(id)).filter(Boolean);
+    if (!courts.length) continue;
     const m = scoreJudgeMatch(query, rec.full_name);
     if (!m) continue;
-    results.push({ rec, court, tier: m.tier, score: m.score, ranges: m.ranges });
+    results.push({ rec, courts, court: courts[0], tier: m.tier, score: m.score, ranges: m.ranges });
   }
   results.sort((a, b) => {
     if (a.tier !== b.tier) return a.tier - b.tier;
@@ -289,6 +300,41 @@ async function runSearch(query) {
   if (mySeq !== S.searchSeq) return;   // a newer keystroke already superseded this
   renderSearchResults(searchAndSort(q, index));
 }
+/** A roving judge (multiple simultaneous court seats — see `searchAndSort`) gets one small
+ *  button PER court instead of plain text, so a click jumps to that SPECIFIC one. Rows can't be
+ *  real `<button>` elements any more for this reason (nesting a `<button>` inside a `<button>`
+ *  is invalid HTML and unreliable across browsers) — `renderSearchResults` uses a `role="option"`
+ *  div for every row instead, roving or not, so all rows share one consistent structure. The
+ *  FIRST court starts marked as current (`.ctt-is-selected` — bold/accent text, the operator's
+ *  own "visible marker of text formatting"); ArrowLeft/Right (wired in `buildShell`) move that
+ *  mark via `setRovingSelection`; a direct click on any button jumps straight to that one
+ *  regardless of which is currently marked. Every button carries its own `tabindex="-1"` — they
+ *  are reachable by mouse and by the row's own ArrowLeft/Right, not by Tab, matching how the
+ *  rows themselves are only reachable via ArrowUp/Down (a typeahead-combobox pattern, not a
+ *  plain tab-through list). */
+function buildRovingCourtLabel(row, courts) {
+  const nodes = [];
+  const primary = courts[0];
+  const circuit = primary.court_level === "district" ? S.courts.get(primary.parent_id) : null;
+  courts.forEach((c, i) => {
+    if (i > 0) nodes.push(document.createTextNode(" / "));
+    const btn = el("button", "ctt-search-court-btn" + (i === 0 ? " ctt-is-selected" : ""),
+      { type: "button", tabindex: "-1" });
+    btn.textContent = c.short_name;
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();   // the row itself has no click-to-navigate of its own for a roving judge
+      setRovingSelection(row, i);
+      navigateToSearchResult(c.court_id, row._fullName);
+    });
+    nodes.push(btn);
+  });
+  if (circuit) nodes.push(document.createTextNode(` (${circuit.short_name})`));
+  return nodes;
+}
+function setRovingSelection(row, idx) {
+  row._selectedIdx = idx;
+  row.querySelectorAll(".ctt-search-court-btn").forEach((b, i) => b.classList.toggle("ctt-is-selected", i === idx));
+}
 function renderSearchResults(results) {
   const { searchResults } = S.ui;
   searchResults.innerHTML = "";
@@ -298,7 +344,12 @@ function renderSearchResults(results) {
     searchResults.append(empty);
   } else {
     for (const r of results.slice(0, 60)) {
-      const row = el("button", "ctt-search-result", { type: "button" });
+      const roving = r.courts.length > 1;
+      const row = el("div", "ctt-search-result" + (roving ? " ctt-search-result-roving" : ""),
+        { role: "option", tabindex: "-1" });
+      row._courts = r.courts;
+      row._selectedIdx = 0;
+      row._fullName = r.rec.full_name;
       const nameLine = el("div", "ctt-search-name");
       nameLine.innerHTML = highlightName(r.rec.full_name, r.ranges) +
         (r.rec.status === "senior" ? ` <span class="ctt-search-senior">Senior</span>` : "");
@@ -306,11 +357,15 @@ function renderSearchResults(results) {
       const shorthand = presidentShorthand(r.rec.appointing_president);
       const letter = partyLetter(r.rec.president_party);
       const ring = PARTY_CLASS[r.rec.president_party] || "ctt-other";
-      metaLine.innerHTML = (shorthand
-        ? `<span class="ctt-dot ${ring}"></span>${shorthand}${letter ? ` (${letter})` : ""} · `
-        : "") + courtLabelFor(r.court);
+      if (shorthand) {
+        metaLine.innerHTML = `<span class="ctt-dot ${ring}"></span>${shorthand}${letter ? ` (${letter})` : ""} · `;
+      }
+      if (roving) metaLine.append(...buildRovingCourtLabel(row, r.courts));
+      else metaLine.append(document.createTextNode(courtLabelFor(r.courts)));
       row.append(nameLine, metaLine);
-      row.addEventListener("click", () => navigateToSearchResult(r.court.court_id, r.rec.full_name));
+      // A roving row's own background has NO click-to-navigate — only its per-court buttons do
+      // (operator spec). An ordinary row still jumps on a plain click, same as always.
+      if (!roving) row.addEventListener("click", () => navigateToSearchResult(row._courts[0].court_id, row._fullName));
       searchResults.append(row);
     }
   }
@@ -426,7 +481,50 @@ function buildShell(root) {
     hideSearchResults();
     searchInput.focus();
   });
-  searchInput.addEventListener("keydown", (e) => { if (e.key === "Escape") { hideSearchResults(); searchInput.blur(); } });
+  searchInput.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") { hideSearchResults(); searchInput.blur(); return; }
+    if (!searchResults.classList.contains("ctt-is-open")) return;
+    const rows = [...searchResults.querySelectorAll(".ctt-search-result")];
+    if (!rows.length) return;
+    // ArrowDown/Up hand off keyboard focus INTO the results list (rows then navigate each other
+    // — see the delegated listener below); ArrowUp wraps to the last row, a standard combobox
+    // convenience for "the option just above where I am" when opening upward isn't meaningful.
+    if (e.key === "ArrowDown") { e.preventDefault(); rows[0].focus(); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); rows[rows.length - 1].focus(); }
+  });
+  // Delegated so it works uniformly for every row without N per-row listeners. ArrowUp/Down move
+  // focus between rows (a row IS the current "selection" — up from the first row returns to the
+  // input, matching a standard combobox). ArrowLeft/Right, Enter and Space only matter for a
+  // ROVING-judgeship row (`row._courts.length > 1` — see renderSearchResults/buildRovingCourtLabel):
+  // left/right cycle which of the judge's courts is marked as "current" (the carousel), and
+  // Enter/Space (equivalent to clicking the row) jump to WHICHEVER one is currently marked —
+  // never a fixed default — since for a roving row the row itself has no independent click
+  // target of its own (operator spec: "the usual behavior... is turned off... except through
+  // its buttons", and the keyboard path must respect that same rule, not bypass it).
+  searchResults.addEventListener("keydown", (e) => {
+    const row = e.target.closest(".ctt-search-result");
+    if (!row) return;
+    const rows = [...searchResults.querySelectorAll(".ctt-search-result")];
+    const i = rows.indexOf(row);
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      (rows[i + 1] || rows[0]).focus();
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      if (i === 0) searchInput.focus(); else rows[i - 1].focus();
+    } else if ((e.key === "ArrowLeft" || e.key === "ArrowRight") && row._courts.length > 1) {
+      e.preventDefault();
+      const n = row._courts.length;
+      const next = e.key === "ArrowRight" ? (row._selectedIdx + 1) % n : (row._selectedIdx - 1 + n) % n;
+      setRovingSelection(row, next);
+    } else if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      navigateToSearchResult(row._courts[row._selectedIdx].court_id, row._fullName);
+    } else if (e.key === "Escape") {
+      hideSearchResults();
+      searchInput.focus();
+    }
+  });
 
   titleRow.append(titleGroup, search);
   header.append(tracked, titleRow);

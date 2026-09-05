@@ -12,6 +12,51 @@ tracker (Phase-4 tail items open, PLUS a brand-new third pane view — "Change",
 (feature-complete first version, operator refinement rounds ongoing; see sessions ai→at, aw).
 **Last updated:** 2026-09-11
 
+> **SESSION (cj), 2026-09-11 — Search-bar fix: roving judgeships merge into ONE result, with
+> per-court jump buttons and a keyboard-driven carousel + row navigation.**
+> - **Operator report**: roving judgeships (28 U.S.C. §133 shares one seat across same-state
+> districts — E.D./W.D. Missouri, E.D./W.D. Kentucky, N/E/W.D. Oklahoma; see `DATA_SOURCES.md`'s
+> discrepancy log) give the SAME judge one `judges.csv` row per district they simultaneously sit
+> on, so search showed them as 2-3 separate, near-identical results instead of one.
+> - **Merge is data-driven, not a hardcoded district list.** `build_assets.py` groups
+> `judges.csv` rows by `(full_name, commission_date)` — the same identity key the collector
+> already uses to join a person across sources — when building `judges_search.json`; a group of
+> >1 becomes ONE entry with plural `court_ids` (sorted, deterministic) instead of singular
+> `court_id` (CODEBOOK Table G updated). This is generic: any judge who ends up on more than one
+> court merges the same way, not just the three statutory cases known today. 1490 raw judge rows
+> → 1483 search entries (6 roving judges, 13 rows collapsed to 6).
+> - **UX, refined through the conversation.** Operator's own diagnosis + explicit design ask,
+> not something guessed at: (1) per-court buttons on the right of the result (in the meta line)
+> for direct "jump to this specific court" clicks; (2) the row's OWN background is NOT a click
+> target for a roving row — only its buttons are (a genuinely different interaction rule for
+> this one row type, by design); (3) ArrowLeft/Right cycle a "currently marked" court with
+> wraparound, shown via a visible text-formatting change (bold + underline + accent color) that
+> IS the selection state, not just decoration; (4) Enter/Space (keyboard row-activation)
+> navigates to WHICHEVER court is currently marked, never a fixed default; (5) ArrowUp/Down move
+> focus between result rows generally (not roving-specific) — ArrowDown from the input enters
+> the list at the first row, ArrowUp from the first row returns to the input, matching a
+> standard combobox pattern.
+> - **Rows are no longer `<button>` elements** — a `<button>` cannot validly contain other
+> interactive elements (the per-court buttons), so every row is now a `role="option"` `div`
+> with `tabindex="-1"`, focused/activated entirely via the new arrow-key JS rather than native
+> Tab order (matching the existing typeahead-combobox interaction, not a plain tab-through
+> list). Verified this was a safe, invisible-to-existing-behavior change for ordinary
+> (non-roving) rows: every pre-existing search test (click-to-navigate, click-away, etc.)
+> passed UNCHANGED, since `click` listeners work identically on a div.
+> - **Verified**: `tests/smoke.mjs` — a roving judge (Claria Horn Boom, kyed/kywd) produces
+> exactly one row with two ordered court buttons and a single circuit suffix; clicking the row's
+> background does nothing; clicking a SPECIFIC button (not the initially-marked one) jumps
+> straight there; ArrowRight/Left move the mark with wraparound on a 2-court judge; Enter jumps
+> to whichever is marked; a 3-court judge (John Frederick Heil III, oked/oknd/okwd) gets 3
+> buttons and the same behavior; ArrowDown/Up move focus between rows and back to the input
+> (`document.activeElement` assertions — confirmed jsdom tracks this correctly). **Confirmed the
+> tests fail against the pre-fix code+data** (temporarily reverted every changed file including
+> the regenerated `judges_search.json`: "got 2" rows for Claria Horn Boom, exactly the reported
+> bug — restored after). Also eyeballed a real-browser screenshot: John Frederick Heil III's row
+> shows all three Oklahoma districts, with N.D. Okla. bold/underlined/blue after an ArrowRight,
+> the other two plain.
+> - `smoke.mjs`/`browser-checks.mjs` both ALL PASS; no regressions.
+
 > **SESSION (ci), 2026-09-11 — Search-bar fix: a hidden senior pinned via search is now
 > temporarily revealed in Majority view.**
 > - **Operator ask**: if the searched judge is a senior AND the pane is currently in Majority

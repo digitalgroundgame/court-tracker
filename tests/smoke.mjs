@@ -68,6 +68,9 @@ function click(elm) {
 function hover(elm) {
   elm.dispatchEvent(new window.MouseEvent("mouseenter", { bubbles: true }));
 }
+function key(elm, k) {
+  elm.dispatchEvent(new window.KeyboardEvent("keydown", { key: k, bubbles: true, cancelable: true }));
+}
 
 // Neutralize the module's top-level autoMount so it doesn't race our explicit mount
 // (production runs autoMount exactly once; the test drives mount itself).
@@ -1574,6 +1577,85 @@ console.log("header search bar: end-to-end (lazy index load, live filtering, hig
 
   click(root.querySelector(".ctt-selector-back"));
   await waitFor(() => S.view === "national", 2000);
+
+  console.log("  roving judgeships (one judge, multiple simultaneous court seats) merge into ONE search result (operator spec, 2026-09-05)");
+  searchInput.value = "Horn Boom";   // Claria Horn Boom: E.D. Ky. AND W.D. Ky. simultaneously
+  searchInput.dispatchEvent(new window.Event("input", { bubbles: true }));
+  await sleep(30);
+  const boomRows = [...searchResults.querySelectorAll(".ctt-search-result")];
+  assert(boomRows.length === 1, `exactly ONE row for a roving judge, not one per court (got ${boomRows.length})`);
+  const boomRow = boomRows[0];
+  assert(boomRow.classList.contains("ctt-search-result-roving"), "the row is flagged as a roving-judgeship row");
+  const courtBtns = [...boomRow.querySelectorAll(".ctt-search-court-btn")];
+  assert(courtBtns.length === 2 && courtBtns[0].textContent === "E.D. Ky." && courtBtns[1].textContent === "W.D. Ky.",
+    `both her courts are listed as separate buttons, in order (got ${JSON.stringify(courtBtns.map((b) => b.textContent))})`);
+  assert(boomRow.querySelector(".ctt-search-meta").textContent.includes("(6th Cir.)"), "circuit context still shown once, not duplicated");
+  assert(courtBtns[0].classList.contains("ctt-is-selected") && !courtBtns[1].classList.contains("ctt-is-selected"),
+    "the FIRST court starts as the marked/selected one");
+
+  console.log("  the row's own background is NOT a click target for a roving judge — only its buttons are");
+  const before = S.selectedCourt;
+  click(boomRow);   // clicking the row itself, not a button
+  await sleep(20);
+  assert(S.selectedCourt === before, `clicking the roving row's background did nothing (still ${S.selectedCourt})`);
+
+  console.log("  clicking a SPECIFIC court button jumps straight to that one, regardless of which was marked");
+  click(courtBtns[1]);   // W.D. Ky. — NOT the initially-marked one
+  await waitFor(() => S.selectedCourt === "kywd", 3000);
+  assert(S.selectedCourt === "kywd", `jumped to the SPECIFIC clicked court (got ${S.selectedCourt})`);
+  assert(root.querySelector(".ctt-detail-content .ctt-detail-name").textContent.includes("Boom"), "...and pinned her there");
+  click(root.querySelector(".ctt-selector-back"));
+  await waitFor(() => S.view === "national", 2000);
+
+  console.log("  keyboard: Left/Right cycle the carousel mark (with wraparound); Enter jumps to whichever is currently marked");
+  searchInput.value = "Horn Boom";
+  searchInput.dispatchEvent(new window.Event("input", { bubbles: true }));
+  await sleep(30);
+  const row2 = searchResults.querySelector(".ctt-search-result");
+  row2.focus();
+  key(row2, "ArrowRight");
+  const btns2 = [...row2.querySelectorAll(".ctt-search-court-btn")];
+  assert(!btns2[0].classList.contains("ctt-is-selected") && btns2[1].classList.contains("ctt-is-selected"),
+    "ArrowRight moves the mark from E.D. Ky. to W.D. Ky.");
+  key(row2, "ArrowRight");   // only 2 courts — wraps back to the first
+  assert(btns2[0].classList.contains("ctt-is-selected") && !btns2[1].classList.contains("ctt-is-selected"),
+    "ArrowRight wraps back around to the first court (only 2 exist)");
+  key(row2, "ArrowLeft");   // wraps the OTHER way from the first
+  assert(!btns2[0].classList.contains("ctt-is-selected") && btns2[1].classList.contains("ctt-is-selected"),
+    "ArrowLeft wraps backward to the last court");
+  key(row2, "Enter");
+  await waitFor(() => S.selectedCourt === "kywd", 3000);
+  assert(S.selectedCourt === "kywd", `Enter jumped to whichever court was marked at the time (W.D. Ky. — got ${S.selectedCourt})`);
+  click(root.querySelector(".ctt-selector-back"));
+  await waitFor(() => S.view === "national", 2000);
+
+  console.log("  a THREE-way roving judgeship (John Frederick Heil III: E.D./N.D./W.D. Oklahoma) works the same way");
+  searchInput.value = "Frederick Heil";
+  searchInput.dispatchEvent(new window.Event("input", { bubbles: true }));
+  await sleep(30);
+  const heilRow = searchResults.querySelector(".ctt-search-result");
+  const heilBtns = [...heilRow.querySelectorAll(".ctt-search-court-btn")];
+  assert(heilBtns.length === 3, `three court buttons, not two (got ${heilBtns.length}: ${heilBtns.map((b) => b.textContent)})`);
+  click(heilBtns[2]);
+  await waitFor(() => ["oked", "oknd", "okwd"].includes(S.selectedCourt), 3000);
+  assert(["oked", "oknd", "okwd"].includes(S.selectedCourt), `clicking the 3rd button opened a real Oklahoma district (got ${S.selectedCourt})`);
+  click(root.querySelector(".ctt-selector-back"));
+  await waitFor(() => S.view === "national", 2000);
+
+  console.log("  keyboard: Up/Down move focus between rows in the results list; Up from the first row returns to the input");
+  searchInput.value = "wright";   // multiple ordinary (non-roving) matches — see the earlier sort-order test
+  searchInput.dispatchEvent(new window.Event("input", { bubbles: true }));
+  await sleep(30);
+  const wRows = [...searchResults.querySelectorAll(".ctt-search-result")];
+  assert(wRows.length >= 3, `sanity: several rows to navigate (got ${wRows.length})`);
+  key(searchInput, "ArrowDown");
+  assert(document.activeElement === wRows[0], "ArrowDown from the input focuses the FIRST row");
+  key(wRows[0], "ArrowDown");
+  assert(document.activeElement === wRows[1], "ArrowDown from a row moves to the NEXT row");
+  key(wRows[1], "ArrowUp");
+  assert(document.activeElement === wRows[0], "ArrowUp moves back to the PREVIOUS row");
+  key(wRows[0], "ArrowUp");
+  assert(document.activeElement === searchInput, "ArrowUp from the FIRST row returns focus to the search input");
 
   console.log("  click-away hides the list without clearing the query; × clears both");
   searchInput.value = "Sotomayor";

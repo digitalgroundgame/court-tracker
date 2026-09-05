@@ -70,10 +70,16 @@
 .ctt-search-results.ctt-is-open { display: block; }
 .ctt-search-empty { padding: 10px 8px; font-size: 12px; color: var(--ctt-muted); }
 .ctt-search-result {
-  display: block; width: 100%; text-align: left; padding: 6px 8px; border: 0; border-radius: 6px;
-  background: transparent; color: inherit; font: inherit; cursor: pointer;
+  display: block; width: 100%; text-align: left; padding: 6px 8px; border-radius: 6px;
+  background: transparent; color: inherit; font: inherit; cursor: pointer; outline: none;
 }
-.ctt-search-result:hover, .ctt-search-result:focus-visible { background: var(--ctt-map); }
+.ctt-search-result:hover, .ctt-search-result:focus { background: var(--ctt-map); }
+.ctt-search-result:focus { outline: 2px solid var(--ctt-accent); outline-offset: -2px; }
+/* A roving judge's row has no click-to-navigate of its own (CLAUDE.md-equivalent operator spec:
+   "the usual behavior of the whole result row jumping... is turned off for this one row, except
+   through its buttons") — the plain-row cursor/hover above would misleadingly suggest otherwise. */
+.ctt-search-result-roving { cursor: default; }
+.ctt-search-result-roving:hover { background: transparent; }
 .ctt-search-result + .ctt-search-result { margin-top: 1px; }
 .ctt-search-name { font-size: 13px; font-weight: 500; }
 .ctt-search-match { font-weight: 800; }
@@ -83,6 +89,19 @@
 }
 .ctt-search-meta {
   font-size: 11px; color: var(--ctt-muted); display: flex; align-items: center; gap: 5px; margin-top: 1px;
+  flex-wrap: wrap;
+}
+/* Per-court jump buttons for a roving judgeship (one seat shared across same-state districts).
+   Plain/muted like ordinary meta text until it's the ArrowLeft/Right-selected one — the
+   operator's own "visible marker of text formatting switching" — which turns bold + underlined
+   + accent-colored, doubling as both the visual marker AND the Enter/Space navigation target. */
+.ctt-search-court-btn {
+  border: 0; background: transparent; color: inherit; font: inherit; font-size: 11px;
+  padding: 0; cursor: pointer; text-decoration: underline; text-decoration-color: transparent;
+}
+.ctt-search-court-btn:hover { color: var(--ctt-ink); }
+.ctt-search-court-btn.ctt-is-selected {
+  font-weight: 700; color: var(--ctt-accent); text-decoration-color: var(--ctt-accent);
 }
 
 .ctt-body { flex: 1 1 auto; display: flex; min-height: 0; }
