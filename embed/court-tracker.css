@@ -87,10 +87,17 @@
   font-size: 10px; font-weight: 600; color: var(--ctt-senior); border: 1px solid var(--ctt-senior);
   border-radius: 3px; padding: 0 3px; margin-left: 4px; vertical-align: 1px;
 }
+/* Two separate flex children (`.ctt-search-president` / `.ctt-search-court`), not one run of
+   text: a flex item wraps as a WHOLE unit, never mid-phrase, so when the line doesn't fit — a
+   roving judge's district buttons are the main case — the court half drops to its own line
+   BELOW the president chip, instead of an awkward mid-list wrap. Ordinary rows still read as
+   one line whenever they fit; nothing about this rule fires unless the content actually overflows. */
 .ctt-search-meta {
-  font-size: 11px; color: var(--ctt-muted); display: flex; align-items: center; gap: 5px; margin-top: 1px;
-  flex-wrap: wrap;
+  font-size: 11px; color: var(--ctt-muted); display: flex; align-items: center;
+  column-gap: 5px; row-gap: 1px; flex-wrap: wrap; margin-top: 1px;
 }
+.ctt-search-president { display: inline-flex; align-items: center; white-space: nowrap; }
+.ctt-search-court { min-width: 0; }
 /* Per-court jump buttons for a roving judgeship (one seat shared across same-state districts).
    Plain/muted like ordinary meta text until it's the ArrowLeft/Right-selected one — the
    operator's own "visible marker of text formatting switching" — which turns bold + underlined

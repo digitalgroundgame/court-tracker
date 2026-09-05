@@ -12,6 +12,39 @@ tracker (Phase-4 tail items open, PLUS a brand-new third pane view — "Change",
 (feature-complete first version, operator refinement rounds ongoing; see sessions ai→at, aw).
 **Last updated:** 2026-09-11
 
+> **SESSION (ck), 2026-09-11 — Roving-judgeship UI refinement: click also sets (and PERSISTS)
+> the carousel mark; the president/court meta line splits onto two lines, but only on overflow.**
+> - **(1) Click now also sets the mark, and persists it "over the page session."** Clicking a
+> court button already jumped there; it now also records that choice (`setRovingSelection` calls
+> `S.searchRovingPref.set(fullName, idx)` — the SAME call ArrowLeft/Right already made, so both
+> paths persist identically, "in addition to" rather than instead of arrow keys). Re-searching
+> that judge later in the same session (session = current mount; reset on a fresh `mount()`,
+> same convention as the search index cache) now opens ALREADY marked on the last-picked court,
+> not reset to the first one — `renderSearchResults` reads `S.searchRovingPref` via
+> `rovingSelectedIdx()` when building each roving row's initial `_selectedIdx`, clamped
+> defensively against a stale/out-of-range value.
+> - **(2) The meta line's president/party chip and court label are now SEPARATE flex children**
+> (`.ctt-search-president`, `.ctt-search-court`) instead of one run of text — a flex item wraps
+> as a whole unit, never mid-phrase, so `.ctt-search-meta { flex-wrap: wrap }` puts the court
+> half on its own line BELOW the president chip exactly when (and only when) it doesn't fit on
+> one line; nothing about this needed JS overflow measurement, CSS handles the "only when it
+> overflows" part for free. Directly fixes the reported roving-judge wrapping problem (up to 3
+> district buttons could previously wrap mid-list) without touching the common single-court case
+> at all — verified in a REAL browser (jsdom can't measure this): a 3-district roving judge's
+> court label sits 16px lower than its president chip (a real wrap), while an ordinary short row
+> stays on exactly one line (0px difference).
+> - **Verified**: `tests/smoke.mjs` — clicking a court button now also asserts
+> `S.searchRovingPref.get(fullName) === clickedIndex`; a FRESH re-search of the same judge starts
+> already marked on the persisted court (not the first one), and Enter with NO prior arrow-key
+> press still respects it; the arrow-key carousel test explicitly clears the preference map
+> first (`S.searchRovingPref.clear()`) to isolate the arrow-key mechanism itself from the
+> persistence just proven above — otherwise it would inherit state from the earlier click and
+> its "starts at index 0" assumptions would silently be testing the wrong thing; a structural
+> check confirms `.ctt-search-president` precedes `.ctt-search-court` as separate DOM children.
+> `tests/browser-checks.mjs` — real-layout geometry: Heil's (3-court) row genuinely wraps
+> (court top 204 vs president top 188), Sotomayor's (short) row genuinely doesn't (188 vs 188).
+> - `smoke.mjs`/`browser-checks.mjs` both ALL PASS; no regressions.
+
 > **SESSION (cj), 2026-09-11 — Search-bar fix: roving judgeships merge into ONE result, with
 > per-court jump buttons and a keyboard-driven carousel + row navigation.**
 > - **Operator report**: roving judgeships (28 U.S.C. §133 shares one seat across same-state

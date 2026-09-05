@@ -382,6 +382,33 @@ try {
   const overflow380 = await ev(`document.querySelector('.ctt-root').scrollWidth - document.querySelector('.ctt-root').clientWidth`);
   assert(overflow380 <= 1, `no horizontal overflow in the title/search row at 380px width (scrollWidth-clientWidth=${overflow380})`);
   await send("Emulation.clearDeviceMetricsOverride", {});
+
+  console.log("search result meta line: president/party wraps ABOVE the court label, but only when the line actually doesn't fit (operator ask, 2026-09-05)");
+  await ev(`(() => { const i = document.querySelector('.ctt-search-input'); i.value = 'frederick heil';
+    i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+  await sleep(300);
+  const heilGeom = JSON.parse(await ev(`(() => {
+    const meta = document.querySelector('.ctt-search-result .ctt-search-meta');
+    const p = meta.querySelector('.ctt-search-president').getBoundingClientRect();
+    const c = meta.querySelector('.ctt-search-court').getBoundingClientRect();
+    return JSON.stringify({ presTop: p.top, courtTop: c.top, presLeft: p.left, courtLeft: c.left });
+  })()`));
+  console.log("   heilGeom (3-district roving judge, should wrap):", JSON.stringify(heilGeom));
+  assert(heilGeom.courtTop > heilGeom.presTop + 2,
+    `a 3-district roving judge's court label wraps BELOW the president chip (pres top ${heilGeom.presTop} vs court top ${heilGeom.courtTop})`);
+  await ev(`(() => { const i = document.querySelector('.ctt-search-input'); i.value = 'sotomayor';
+    i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+  await sleep(300);
+  const sotoGeom = JSON.parse(await ev(`(() => {
+    const meta = document.querySelector('.ctt-search-result .ctt-search-meta');
+    const p = meta.querySelector('.ctt-search-president').getBoundingClientRect();
+    const c = meta.querySelector('.ctt-search-court').getBoundingClientRect();
+    return JSON.stringify({ presTop: p.top, courtTop: c.top });
+  })()`));
+  console.log("   sotoGeom (short single-court row, should NOT wrap):", JSON.stringify(sotoGeom));
+  assert(Math.abs(sotoGeom.courtTop - sotoGeom.presTop) < 2,
+    `an ordinary short row stays on ONE line — no unnecessary wrap (pres top ${sotoGeom.presTop} vs court top ${sotoGeom.courtTop})`);
+  await ev(`document.querySelector('.ctt-search-clear').click()`);
 } catch (e) { console.log("*** ", e.message); failures++; }
 finally { try { ws && ws.close(); } catch {} chrome.kill(); }
 

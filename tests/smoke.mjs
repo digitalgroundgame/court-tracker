@@ -1599,15 +1599,33 @@ console.log("header search bar: end-to-end (lazy index load, live filtering, hig
   await sleep(20);
   assert(S.selectedCourt === before, `clicking the roving row's background did nothing (still ${S.selectedCourt})`);
 
-  console.log("  clicking a SPECIFIC court button jumps straight to that one, regardless of which was marked");
+  console.log("  clicking a SPECIFIC court button jumps straight to that one, regardless of which was marked — and also SETS the mark (not just an immediate jump)");
   click(courtBtns[1]);   // W.D. Ky. — NOT the initially-marked one
   await waitFor(() => S.selectedCourt === "kywd", 3000);
   assert(S.selectedCourt === "kywd", `jumped to the SPECIFIC clicked court (got ${S.selectedCourt})`);
   assert(root.querySelector(".ctt-detail-content .ctt-detail-name").textContent.includes("Boom"), "...and pinned her there");
+  assert(S.searchRovingPref.get("Claria Horn Boom") === 1, "clicking recorded W.D. Ky. (index 1) as her preference");
   click(root.querySelector(".ctt-selector-back"));
   await waitFor(() => S.view === "national", 2000);
 
-  console.log("  keyboard: Left/Right cycle the carousel mark (with wraparound); Enter jumps to whichever is currently marked");
+  console.log("  ...and that choice is PRESERVED for the rest of the page session: re-searching her reopens on W.D. Ky., not back to the first court (operator spec, 2026-09-05)");
+  searchInput.value = "Horn Boom";
+  searchInput.dispatchEvent(new window.Event("input", { bubbles: true }));
+  await sleep(30);
+  const boomRowAgain = searchResults.querySelector(".ctt-search-result");
+  const boomBtnsAgain = [...boomRowAgain.querySelectorAll(".ctt-search-court-btn")];
+  assert(boomRowAgain._selectedIdx === 1 && boomBtnsAgain[1].classList.contains("ctt-is-selected") &&
+    !boomBtnsAgain[0].classList.contains("ctt-is-selected"),
+    `the FRESH row already starts marked on W.D. Ky. from the earlier click, not reset to the first court (selectedIdx=${boomRowAgain._selectedIdx})`);
+  boomRowAgain.focus();
+  key(boomRowAgain, "Enter");   // Enter with no prior arrow-key press at all
+  await waitFor(() => S.selectedCourt === "kywd", 3000);
+  assert(S.selectedCourt === "kywd", "Enter alone (no arrow keys touched) still respects the persisted preference");
+  click(root.querySelector(".ctt-selector-back"));
+  await waitFor(() => S.view === "national", 2000);
+
+  console.log("  keyboard: Left/Right cycle the carousel mark (with wraparound), ALSO persisting it; Enter jumps to whichever is currently marked");
+  S.searchRovingPref.clear();   // isolate the arrow-key mechanism itself from the persistence just proven above
   searchInput.value = "Horn Boom";
   searchInput.dispatchEvent(new window.Event("input", { bubbles: true }));
   await sleep(30);
@@ -1636,6 +1654,17 @@ console.log("header search bar: end-to-end (lazy index load, live filtering, hig
   const heilRow = searchResults.querySelector(".ctt-search-result");
   const heilBtns = [...heilRow.querySelectorAll(".ctt-search-court-btn")];
   assert(heilBtns.length === 3, `three court buttons, not two (got ${heilBtns.length}: ${heilBtns.map((b) => b.textContent)})`);
+  // The president chip and the court label are SEPARATE elements (`.ctt-search-president`
+  // before `.ctt-search-court` in DOM order) specifically so CSS can wrap them onto their own
+  // lines — president above, court below — without either breaking mid-phrase (operator spec,
+  // 2026-09-05). jsdom can't measure whether a wrap actually occurs (real layout only — see
+  // tests/browser-checks.mjs for that), but the structure itself is checkable here.
+  const heilMeta = heilRow.querySelector(".ctt-search-meta");
+  const heilPres = heilMeta.querySelector(".ctt-search-president");
+  const heilCourt = heilMeta.querySelector(".ctt-search-court");
+  assert(heilPres && heilCourt && [...heilMeta.children].indexOf(heilPres) < [...heilMeta.children].indexOf(heilCourt),
+    "president/party and the court label are separate flex children, president first");
+  assert(heilCourt.contains(heilBtns[0]), "the court buttons live inside the court-label child specifically");
   click(heilBtns[2]);
   await waitFor(() => ["oked", "oknd", "okwd"].includes(S.selectedCourt), 3000);
   assert(["oked", "oknd", "okwd"].includes(S.selectedCourt), `clicking the 3rd button opened a real Oklahoma district (got ${S.selectedCourt})`);
