@@ -338,20 +338,34 @@ function pinSearchedJudge(courtId, fullName) {
  *  SCOTUS is a special case: it has no standalone selector entry any more (superseded by the
  *  "Summary" button's own SCOTUS sub-tab — CLAUDE.md's "its own selector entry" requirement is
  *  satisfied there now) and `selectCourt("scotus")` reaches a since-orphaned direct pane that
- *  is otherwise UNREACHABLE from the real UI — routing search there was a bug, not a shortcut. */
+ *  is otherwise UNREACHABLE from the real UI — routing search there was a bug, not a shortcut.
+ *
+ *  ALREADY on this exact court/pane (searching a second judge on the same bench, or the same
+ *  judge again): `selectCourt`/`selectSummary` both treat "re-select what's already open" as a
+ *  CLOSE toggle (their normal behavior for a manual re-click of the same selector item — there's
+ *  "nowhere to go"), which is the wrong call here — the reader's intent is "switch/reinstate the
+ *  pin", not "close what I just opened". So that case skips navigation entirely and only re-pins;
+ *  everything else still routes through the same close-then-reopen-guarded functions unchanged. */
 async function navigateToSearchResult(courtId, fullName) {
   const court = S.courts.get(courtId);
   if (!court) return;
   hideSearchResults();
-  if (court.court_level === "scotus") {
-    if (S.view === "circuit") await drillOut();
-    await selectSummary("scotus");
-  } else {
-    const wantsCircuit = (court.court_level === "district" || court.court_level === "specialized")
-      ? circuitOf(court) : null;
-    if (S.view === "circuit" && S.activeCircuit !== wantsCircuit) await drillOut();
-    if (wantsCircuit && !(S.view === "circuit" && S.activeCircuit === wantsCircuit)) await drillIn(wantsCircuit);
-    await selectCourt(courtId);
+  const alreadyOnThisCourt = S.ui.pane.classList.contains("ctt-is-open") && (
+    court.court_level === "scotus"
+      ? (S.selectedCourt === SUMMARY_ID && S.summaryView === "scotus")
+      : S.selectedCourt === courtId
+  );
+  if (!alreadyOnThisCourt) {
+    if (court.court_level === "scotus") {
+      if (S.view === "circuit") await drillOut();
+      await selectSummary("scotus");
+    } else {
+      const wantsCircuit = (court.court_level === "district" || court.court_level === "specialized")
+        ? circuitOf(court) : null;
+      if (S.view === "circuit" && S.activeCircuit !== wantsCircuit) await drillOut();
+      if (wantsCircuit && !(S.view === "circuit" && S.activeCircuit === wantsCircuit)) await drillIn(wantsCircuit);
+      await selectCourt(courtId);
+    }
   }
   pinSearchedJudge(courtId, fullName);
 }

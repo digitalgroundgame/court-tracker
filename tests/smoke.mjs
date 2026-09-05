@@ -1457,6 +1457,61 @@ console.log("header search bar: end-to-end (lazy index load, live filtering, hig
   click(root.querySelector(".ctt-selector-back"));
   await waitFor(() => S.view === "national", 2000);
 
+  console.log("  REGRESSION: searching a SECOND judge on the SAME already-open court switches the pin, it does NOT close the pane (operator report, 2026-09-05)");
+  searchInput.value = "Dorothy Nelson";   // ca9 circuit judge (Dorothy Wright Nelson)
+  searchInput.dispatchEvent(new window.Event("input", { bubbles: true }));
+  await sleep(30);
+  click(searchResults.querySelector(".ctt-search-result"));
+  await waitFor(() => S.selectedCourt === "ca9", 3000);
+  await sleep(20);
+  assert(root.querySelector(".ctt-pane").classList.contains("ctt-is-open"), "sanity: ca9's pane is open");
+  assert(root.querySelector(".ctt-detail-content .ctt-detail-name").textContent.includes("Nelson"),
+    `sanity: Nelson is pinned first (got "${root.querySelector(".ctt-detail-content .ctt-detail-name")?.textContent}")`);
+  searchInput.value = "Clifford Wallace";   // a DIFFERENT ca9 circuit judge (John Clifford Wallace)
+  searchInput.dispatchEvent(new window.Event("input", { bubbles: true }));
+  await sleep(30);
+  click(searchResults.querySelector(".ctt-search-result"));
+  await sleep(30);
+  assert(S.selectedCourt === "ca9" && root.querySelector(".ctt-pane").classList.contains("ctt-is-open"),
+    `the pane is STILL open on ca9, not closed by the same-court re-select toggle (selectedCourt=${S.selectedCourt})`);
+  assert(root.querySelector(".ctt-detail-content .ctt-detail-name").textContent.includes("Wallace"),
+    `...and the pin switched to the newly-searched judge (got "${root.querySelector(".ctt-detail-content .ctt-detail-name")?.textContent}")`);
+
+  console.log("  searching the SAME judge again (pane already open on their court) reinstates the pin rather than closing");
+  searchInput.value = "Clifford Wallace";
+  searchInput.dispatchEvent(new window.Event("input", { bubbles: true }));
+  await sleep(30);
+  click(root.querySelector('.ctt-detail-close'));   // unpin first, so "reinstate" is a real assertion, not a no-op
+  await sleep(10);
+  assert(!S.detailPinned, "sanity: unpinned via the detail panel's own × first");
+  click(searchResults.querySelector(".ctt-search-result"));
+  await sleep(30);
+  assert(S.selectedCourt === "ca9" && root.querySelector(".ctt-pane").classList.contains("ctt-is-open"),
+    "re-searching the SAME judge does not close the pane either");
+  assert(S.detailPinned && root.querySelector(".ctt-detail-content .ctt-detail-name").textContent.includes("Wallace"),
+    "...it reinstates the pin on that judge");
+  click(root.querySelector('.ctt-pane-close[aria-label="Close panel"]'));
+  await sleep(20);
+
+  console.log("  the same regression, for Summary > Supreme Court (searching a second SCOTUS justice while already there)");
+  searchInput.value = "Kavanaugh";
+  searchInput.dispatchEvent(new window.Event("input", { bubbles: true }));
+  await sleep(30);
+  click(searchResults.querySelector(".ctt-search-result"));
+  await sleep(30);
+  assert(S.selectedCourt === "summary" && S.summaryView === "scotus", "sanity: Kavanaugh pinned on Summary > Supreme Court");
+  searchInput.value = "Gorsuch";
+  searchInput.dispatchEvent(new window.Event("input", { bubbles: true }));
+  await sleep(30);
+  click(searchResults.querySelector(".ctt-search-result"));
+  await sleep(30);
+  assert(S.selectedCourt === "summary" && root.querySelector(".ctt-pane").classList.contains("ctt-is-open"),
+    "a second SCOTUS search doesn't close the Summary pane either");
+  assert(root.querySelector(".ctt-detail-content .ctt-detail-name").textContent.includes("Gorsuch"),
+    `...and switches the pin to the newly-searched justice (got "${root.querySelector(".ctt-detail-content .ctt-detail-name")?.textContent}")`);
+  click(root.querySelector('.ctt-pane-close[aria-label="Close panel"]'));
+  await sleep(20);
+
   console.log("  click-away hides the list without clearing the query; × clears both");
   searchInput.value = "Sotomayor";
   searchInput.dispatchEvent(new window.Event("input", { bubbles: true }));
