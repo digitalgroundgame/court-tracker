@@ -331,6 +331,19 @@ try {
   await ev(`[...document.querySelectorAll('.ctt-mode-opt')].find(b=>b.textContent==='District Courts').click()`); await sleep(600);
   const districtHintTop = await ev(`document.querySelector('.ctt-district-detail .ctt-detail-hint').getBoundingClientRect().top`);
   assert(scotusHintTop === districtHintTop, `empty-hint text starts at the SAME y-position in both sub-tabs (SCOTUS ${scotusHintTop} vs District ${districtHintTop})`);
+
+  console.log("Summary > Supreme Court: FedSoc legend key sits right-aligned in the SAME horizontal band as the title/meta text (operator ask, 2026-09-11)");
+  await ev(`[...document.querySelectorAll('.ctt-mode-opt')].find(b=>b.textContent==='Supreme Court').click()`); await sleep(400);
+  const scotusHeaderGeom = JSON.parse(await ev(`(() => {
+    const title = document.querySelector('.ctt-summary-subtitle'), key = document.querySelector('.ctt-scotus-affil-key');
+    const t = title.getBoundingClientRect(), k = key.getBoundingClientRect();
+    const content = document.querySelector('.ctt-summary-content').getBoundingClientRect();
+    return JSON.stringify({ titleTop: t.top, titleBottom: t.bottom, keyTop: k.top, keyBottom: k.bottom, keyRight: k.right, contentRight: content.right });
+  })()`));
+  console.log("   scotusHeaderGeom:", JSON.stringify(scotusHeaderGeom));
+  assert(scotusHeaderGeom.keyTop < scotusHeaderGeom.titleBottom && scotusHeaderGeom.keyBottom > scotusHeaderGeom.titleTop,
+    "the key vertically overlaps the title's own row (same horizontal band)");
+  assert(Math.abs(scotusHeaderGeom.keyRight - scotusHeaderGeom.contentRight) < 1, "the key is right-aligned to the panel's own right edge");
 } catch (e) { console.log("*** ", e.message); failures++; }
 finally { try { ws && ws.close(); } catch {} chrome.kill(); }
 

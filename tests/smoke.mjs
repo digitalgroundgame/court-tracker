@@ -912,6 +912,10 @@ assert(root.querySelector(".ctt-pane").classList.contains("ctt-is-open"),
 click(natBlock("ca2")); await sleep(20);   // deselect -> clean state
 
 console.log("Summary pane (operator ask, 2026-09-03 — replaces the old lone SCOTUS entry)");
+// Reset the affiliation-mark state to a genuinely untouched one (an earlier test already made a
+// real choice via ca8's None|FedSoc|ACS switch) so the assertions below test the SCOTUS FedSoc
+// default's actual firing condition, not whatever that earlier interaction left behind.
+mod._dev.S.affilMark = "none"; mod._dev.S._affilMarkTouched = false;
 click(root.querySelector('.ctt-selector-item[data-court-id="summary"]')); await sleep(60);
 // No separate "Summary" title/subtitle inside the pane (operator ask, 2026-09-04: the
 // enlarged tab labels ARE the heading now) — the Summary selector-BAR entry is unaffected.
@@ -938,6 +942,22 @@ assert(!["Timeline", "Majority", "Change"].some((label) => toggle(label)),
 assert(!root.querySelector(".ctt-majority-note") && !root.querySelector(".ctt-always-note"),
   "Summary > SCOTUS has no majority/senior note (same rule as the old direct SCOTUS pane)");
 assert(root.querySelector(".ctt-majority-count"), "Summary > SCOTUS shows the x/y majority count");
+
+console.log("Summary > SCOTUS: FedSoc defaults ON (operator ask, 2026-09-11), with a legend key");
+assert(mod._dev.S.affilMark === "fedsoc", `visiting Summary > SCOTUS with no prior choice defaults the mark to fedsoc (got ${mod._dev.S.affilMark})`);
+const scotusFSMarked = [...scIcons].filter((n) => n.classList.contains("ctt-affil-marked"));
+const scotusJudgesData = [...scIcons].map((n) => n._judge).filter(Boolean);
+assert(scotusFSMarked.length === scotusJudgesData.filter((j) => j.fedsoc_reported).length && scotusFSMarked.length > 0,
+  `the default is actually applied — dashed rings mark exactly the reported justices (${scotusFSMarked.length})`);
+const affilKey = root.querySelector(".ctt-scotus-affil-key");
+assert(affilKey && affilKey.querySelector(".ctt-scotus-affil-key-swatch"), "the FedSoc legend key exists with its dashed-ring swatch");
+assert(/reported/.test(affilKey.textContent) && /FedSoc/.test(affilKey.textContent) && /affiliation/.test(affilKey.textContent),
+  `legend text explains the convention (got "${affilKey.textContent}")`);
+// A real prior choice must survive a later SCOTUS visit — the default is one-time, not sticky-reapplied.
+mod._dev.S.affilMark = "acs"; mod._dev.S._affilMarkTouched = true;
+click(root.querySelector('.ctt-selector-item[data-court-id="summary"]')); await sleep(20);   // deselect
+click(root.querySelector('.ctt-selector-item[data-court-id="summary"]')); await sleep(60);   // reselect -> re-renders SCOTUS
+assert(mod._dev.S.affilMark === "acs", "a real prior choice (even non-fedsoc) is never overridden by revisiting Summary > SCOTUS");
 
 console.log("Summary > SCOTUS: doubled icons + split double-ring geometry (operator ask)");
 const scaleTx = [...scIcons].find((n) => /scale\(2\)/.test(n.style.transform));
