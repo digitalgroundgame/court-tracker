@@ -1011,8 +1011,19 @@ assert(summaryDeployBtn.textContent === "▼ Set upon map ▼", "button label is
 assert(summaryCaption?.querySelector(".ctt-summary-subtitle")?.textContent === "Party of District Court Appointments, Arranged by Circuit",
   "left-aligned caption title text is present and correct (bolded like a standard title, operator ask, 2026-09-08)");
 const natTotals = mod._dev.districtNationalTotals();
-assert(summaryCaption?.querySelector(".ctt-pane-meta")?.textContent === `${natTotals.authorized} authorized · ${natTotals.active} active · ${natTotals.vacancies} vacant`,
+const expectedMeta = `${natTotals.authorized} authorized · ${natTotals.active} active · ${natTotals.vacancies} vacant` +
+  (natTotals.overAuthorized ? " *" : "");
+assert(summaryCaption?.querySelector(".ctt-pane-meta")?.textContent === expectedMeta,
   `caption's meta line summarizes nation-wide authorized/active/vacant (got "${summaryCaption?.querySelector(".ctt-pane-meta")?.textContent}")`);
+
+console.log("Summary > District: the national totals' apparent 'active+vacant > authorized' discrepancy is explained, not silently shown (operator report, 2026-09-11: 654+27=681 > 673)");
+assert(natTotals.authorized + natTotals.overAuthorized === natTotals.active + natTotals.vacancies,
+  `the gap between authorized and active+vacant is FULLY explained by overAuthorized, no unaccounted residue (${natTotals.authorized}+${natTotals.overAuthorized} should equal ${natTotals.active}+${natTotals.vacancies})`);
+assert(natTotals.overAuthorized > 0, `sanity: this data genuinely has the discrepancy right now (roving judgeships) (got ${natTotals.overAuthorized})`);
+const overageNote = summaryCaption.querySelector(".ctt-district-overage-note");
+assert(overageNote, "a marker with an explanatory tooltip is appended when the totals don't add up at face value");
+assert(overageNote.title.includes(String(natTotals.overAuthorized)) && /shared|roving/i.test(overageNote.title),
+  `the tooltip names the actual count and explains why (shared/roving judgeships) (got "${overageNote.title}")`);
 // Right-alignment/width-matching are CSS-value claims jsdom can't check (no stylesheet loaded in
 // this harness) — covered instead in tests/browser-checks.mjs (real Chrome).
 

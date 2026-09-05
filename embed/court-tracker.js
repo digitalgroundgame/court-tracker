@@ -1446,16 +1446,29 @@ function districtsForCircuit(circuitId) {
 
 /** Nation-wide district-court totals for the Summary > District caption meta line (operator ask,
  *  2026-09-08) — authorized/active/vacant summed across EVERY district court, not any one
- *  circuit. `active` = r+d+o = authorized-vacancies; summed directly from seatBlocks rather than
- *  re-derived, so it can never drift from the same numbers the table/blocks themselves show. */
+ *  circuit. Summed directly from seatBlocks rather than re-derived, so it can never drift from
+ *  the same numbers the table/blocks themselves show.
+ *
+ *  `active = authorized - vacancies` holds PER COURT only when that court isn't over its base
+ *  authorized count — a handful of courts genuinely seat more active judges than §133 assigns
+ *  them (shared/roving judgeships across same-state districts, plus the rare FJC status-lag
+ *  court; see DATA_SOURCES.md's discrepancy log). `build_seat_blocks()` floors THOSE courts'
+ *  `vacancies` at 0 rather than inventing a negative one (a real judge is never "subtracted"
+ *  from the block) — which is correct per-court, but means the three NATIONAL totals don't sum
+ *  cleanly: active+vacancies can exceed authorized by exactly the summed overage, which
+ *  `overAuthorized` reports so the caption can explain the gap instead of just showing numbers
+ *  that look like they don't add up (operator report, 2026-09-11: "654+27=681 > 673"). */
 function districtNationalTotals() {
   return [...S.courts.values()].filter((c) => c.court_level === "district").reduce((acc, c) => {
     const b = S.seatBlocks?.[c.court_id] || {};
-    acc.authorized += b.authorized ?? 0;
-    acc.active += (b.r ?? 0) + (b.d ?? 0) + (b.o ?? 0);
+    const authorized = b.authorized ?? 0;
+    const active = (b.r ?? 0) + (b.d ?? 0) + (b.o ?? 0);
+    acc.authorized += authorized;
+    acc.active += active;
     acc.vacancies += b.vacancies ?? 0;
+    acc.overAuthorized += Math.max(0, active - authorized);
     return acc;
-  }, { authorized: 0, active: 0, vacancies: 0 });
+  }, { authorized: 0, active: 0, vacancies: 0, overAuthorized: 0 });
 }
 
 /** The circuit-wide table (operator spec, 2026-09-05: "in the style of the [District linker]
@@ -1904,6 +1917,21 @@ function renderSummaryDistrict(container) {
   const captionMeta = el("div", "ctt-pane-meta");
   const natTotals = districtNationalTotals();
   captionMeta.textContent = `${natTotals.authorized} authorized · ${natTotals.active} active · ${natTotals.vacancies} vacant`;
+  // The three totals above can look like they don't add up (active+vacant > authorized) because
+  // a handful of courts genuinely seat more active judges than their base authorized count via
+  // shared/roving judgeships (see districtNationalTotals's own doc comment) — a single-character
+  // marker with a native tooltip explains the gap right where a reader would notice it, with
+  // negligible width so it can't threaten this caption's hard-won pixel parity with SCOTUS's own
+  // (see the comment above this function). Present only when the gap is real (defensive: it
+  // silently disappears if a future data refresh ever resolves every such court).
+  if (natTotals.overAuthorized) {
+    const note = el("span", "ctt-district-overage-note", { title:
+      `${natTotals.overAuthorized} of the judges counted "active" above sit via shared/roving ` +
+      `judgeships beyond their own court's base authorized count (28 U.S.C. §133) — those ` +
+      `courts show no vacancy for it, so active + vacant can total more than authorized.` });
+    note.textContent = " *";
+    captionMeta.append(note);
+  }
   const deployBtn = el("button", "ctt-toggle ctt-district-deploy-btn", { type: "button" });
   deployBtn.textContent = districtDeployBtnLabel();
   captionRow.append(captionTitle, captionMeta, deployBtn);
