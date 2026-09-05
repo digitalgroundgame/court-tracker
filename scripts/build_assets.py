@@ -434,18 +434,36 @@ def main() -> int:
     # available client-side after every keystroke, so it is lazy-fetched ONCE on first use
     # (not on initial mount, preserving the national view's courts.json+national.svg-only
     # lazy-load contract — CLAUDE.md §6) rather than pulling all 14 circuit bundles.
+    # Roving judgeships (28 U.S.C. §133 shares a seat across same-state districts — see
+    # DATA_SOURCES.md's "Missouri E&W / Kentucky E&W / Oklahoma N/E/W" discrepancy-log entry)
+    # give the SAME judge one judges.csv row PER district they simultaneously sit on. Grouping
+    # by (full_name, commission_date) — the same identity key the collector itself already uses
+    # to join a person across sources — merges those rows into ONE search entry with plural
+    # `court_ids` instead of `court_id`, so the search bar shows one result, not N near-identical
+    # ones. Not scoped to any hardcoded list of "roving" districts: this is generic — any judge
+    # who happens to hold seats on more than one court merges the same way.
     search_file = None
     if judges:
-        search_index = [
-            {
-                "full_name": j["full_name"],
-                "court_id": j["court_id"],
-                "status": j["status"],
-                "appointing_president": j.get("appointing_president"),
-                "president_party": j.get("president_party"),
+        groups: dict[tuple, list[dict]] = {}
+        for j in judges:
+            key = (j["full_name"], j.get("commission_date"))
+            groups.setdefault(key, []).append(j)
+        search_index = []
+        for rows in groups.values():
+            court_ids = sorted(r["court_id"] for r in rows)
+            rep = rows[0]
+            entry = {
+                "full_name": rep["full_name"],
+                "status": rep["status"],
+                "appointing_president": rep.get("appointing_president"),
+                "president_party": rep.get("president_party"),
             }
-            for j in judges
-        ]
+            if len(court_ids) == 1:
+                entry["court_id"] = court_ids[0]
+            else:
+                entry["court_ids"] = court_ids
+            search_index.append(entry)
+        search_index.sort(key=lambda e: e["full_name"])   # deterministic, diffable output
         data = json.dumps(search_index, indent=1).encode("utf-8")
         (DATA / "judges_search.json").write_bytes(data)
         search_file = "data/judges_search.json"

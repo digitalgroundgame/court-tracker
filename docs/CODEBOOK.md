@@ -190,13 +190,19 @@ first interaction with the search box — never on initial mount.
 | key | type | description |
 |---|---|---|
 | `full_name` | string | As Table A — the string searched and displayed (with the matched portion bolded). |
-| `court_id` | string | FK → `courts.court_id`. Drives the result's court label and where a click navigates. |
+| `court_id` | string | FK → `courts.court_id`. Present when the judge holds exactly one court seat (the vast majority). Drives the result's court label and where a click navigates. |
+| `court_ids` | string[] | FK → `courts.court_id`, one per seat. Present INSTEAD of `court_id` for a **roving judgeship** (28 U.S.C. §133 shares one seat across same-state districts — e.g. E.D./W.D. Missouri, E.D./W.D. Kentucky, N/E/W.D. Oklahoma — see `DATA_SOURCES.md`'s discrepancy log), where the SAME judge has one `judges.csv` row per district. Sorted alphabetically at build time; `court_ids[0]` is the deterministic "primary" court used for sort order and as the click target, but the label lists every court (e.g. "E.D. Mo. / W.D. Mo. (8th Cir.)"). |
 | `status` | enum `active` \| `senior` | As Table A. |
 | `appointing_president` | string \| null | As Table A. |
 | `president_party` | enum `Republican` \| `Democratic` \| `Other` \| null | As Table A. |
 
 - **Data-only, like every other derived asset here**: re-running `build_assets.py` after a
   `judges.csv` change regenerates this file automatically — no separate step, no code change.
+- **Roving-judgeship merge is generic, not a hardcoded district list**: `build_assets.py` groups
+  `judges.csv` rows by `(full_name, commission_date)` — the same identity key the collector
+  itself already uses to join a person across sources — so any judge who ends up holding more
+  than one court seat merges automatically, not just the three statutory pairs/triples known
+  today.
 
 ## Validation rules (enforced in `build_assets.py`)
 - Every `judges.court_id` and `circuit_justices.circuit_id` exists in `courts.csv`.
