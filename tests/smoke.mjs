@@ -1512,6 +1512,69 @@ console.log("header search bar: end-to-end (lazy index load, live filtering, hig
   click(root.querySelector('.ctt-pane-close[aria-label="Close panel"]'));
   await sleep(20);
 
+  console.log("  a hidden senior found via search is temporarily revealed in Majority view (operator spec, 2026-09-05)");
+  searchInput.value = "Webber Wright";   // Susan Webber Wright, 'are' — a senior judge
+  searchInput.dispatchEvent(new window.Event("input", { bubbles: true }));
+  await sleep(30);
+  click(searchResults.querySelector(".ctt-search-result"));
+  await waitFor(() => S.selectedCourt === "are", 3000);
+  await sleep(20);
+  // Force the exact reported precondition: Majority mode, Seniors explicitly Hidden.
+  click([...root.querySelectorAll(".ctt-toggle")].find((b) => b.textContent === "Majority"));
+  await sleep(20);
+  click(root.querySelector('.ctt-foldrow button[data-senior="hide"]'));
+  await sleep(20);
+  assert(S.paneMode === "majority" && S.seniorMode === "hide", "sanity: Majority mode, Seniors: Hide");
+  const wrightJudge = S.judgeCache.get("ca8").find((j) => j.full_name === "Susan Webber Wright");
+  const wrightNode = root.querySelector(".ctt-judge-stage")._model._nodeByJudge.get(wrightJudge);
+  assert(wrightNode.style.opacity === "0", "sanity: her icon is genuinely invisible while Seniors is Hide");
+
+  // Search her again — the pane is already open on 'are', so this hits the "already there" fast
+  // path (session ch); it's still exactly the reported scenario (a senior, Majority, Hide).
+  searchInput.value = "Webber Wright";
+  searchInput.dispatchEvent(new window.Event("input", { bubbles: true }));
+  await sleep(30);
+  click(searchResults.querySelector(".ctt-search-result"));
+  await sleep(30);
+  assert(S.seniorMode === "show", `Seniors auto-flips to Show so she's actually visible (got ${S.seniorMode})`);
+  assert(wrightNode.style.opacity === "1", "...and her icon is now genuinely visible, not just re-pinned invisibly");
+  assert(root.querySelector('.ctt-foldrow button[data-senior="show"]').classList.contains("ctt-is-active"),
+    "...the Seniors toggle control itself reflects the change");
+  assert(S.detailPinned && root.querySelector(".ctt-detail-content .ctt-detail-name").textContent.includes("Wright"),
+    "...and she's (still) pinned");
+  assert(S._seniorModeForced === "hide",
+    "the override is recorded for a later revert (a temporary effect, not a silent permanent change to the Seniors preference)");
+
+  console.log("  ...and reverts once the pane is refreshed (a NEW court selection), not before");
+  click(root.querySelector('.ctt-selector-item[data-court-id="mnd"]'));   // a different ca8 district
+  await sleep(30);
+  assert(S.seniorMode === "hide" && S._seniorModeForced === null,
+    `Seniors reverts to Hide on the next pane render, even for an unrelated court (seniorMode=${S.seniorMode}, forced=${S._seniorModeForced})`);
+  assert(root.querySelector('.ctt-foldrow button[data-senior="hide"]').classList.contains("ctt-is-active"),
+    "...and the fresh pane's own toggle control shows Hide active, matching");
+
+  console.log("  a manual click on the Seniors switch cancels the pending auto-revert (a deliberate choice always wins)");
+  click(root.querySelector('.ctt-selector-item[data-court-id="are"]'));   // re-select 'are' (was closed by the click above)
+  await sleep(30);
+  click([...root.querySelectorAll(".ctt-toggle")].find((b) => b.textContent === "Majority"));
+  await sleep(20);
+  searchInput.value = "Webber Wright";
+  searchInput.dispatchEvent(new window.Event("input", { bubbles: true }));
+  await sleep(30);
+  click(searchResults.querySelector(".ctt-search-result"));   // auto-reveals again (Seniors was back to Hide)
+  await sleep(30);
+  assert(S.seniorMode === "show" && S._seniorModeForced === "hide", "sanity: auto-revealed again, revert pending");
+  click(root.querySelector('.ctt-foldrow button[data-senior="include"]'));   // a deliberate different choice
+  await sleep(20);
+  assert(S.seniorMode === "include" && S._seniorModeForced === null,
+    "a manual choice made after the auto-reveal clears the pending revert, so it can't be clobbered later");
+  click(root.querySelector('.ctt-selector-item[data-court-id="mnd"]'));
+  await sleep(30);
+  assert(S.seniorMode === "include", "...confirmed: the next pane render did NOT revert the manual choice back to Hide");
+
+  click(root.querySelector(".ctt-selector-back"));
+  await waitFor(() => S.view === "national", 2000);
+
   console.log("  click-away hides the list without clearing the query; × clears both");
   searchInput.value = "Sotomayor";
   searchInput.dispatchEvent(new window.Event("input", { bubbles: true }));
