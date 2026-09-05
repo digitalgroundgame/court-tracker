@@ -296,6 +296,12 @@
 .ctt-pane-headtext { flex: 1 1 auto; min-width: 0; }
 .ctt-pane-title { font-size: 16px; font-weight: 650; line-height: 1.25; }
 .ctt-pane-meta { font-size: 12px; color: var(--ctt-muted); margin-top: 2px; }
+/* Summary > District's national totals can look like they don't add up (active+vacant >
+   authorized) — a handful of courts genuinely seat more active judges than authorized via
+   shared/roving judgeships. This single-character marker (native title tooltip explains why)
+   is deliberately just one character so it can't threaten the caption's pixel-parity with
+   Summary > SCOTUS's own meta line (see .ctt-district-caption-row's own comment in the JS). */
+.ctt-district-overage-note { color: var(--ctt-accent); font-weight: 700; cursor: help; }
 /* Circuit Justice chip slot in the header (timeline view) */
 .ctt-justice-slot { flex: 0 0 auto; }
 .ctt-judge.ctt-justice-inhead { position: static; width: auto; display: flex; align-items: center; gap: 6px; }

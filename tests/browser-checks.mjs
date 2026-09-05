@@ -232,8 +232,18 @@ try {
       titleTop: title.getBoundingClientRect().top, metaTop: meta.getBoundingClientRect().top });
   })()`));
   assert(parseInt(captionGeom.weight) >= 600, `caption title is bold-weight (got ${captionGeom.weight})`);
-  assert(/^\d+ authorized · \d+ active · \d+ vacant$/.test(captionGeom.metaText), `meta line matches the standard summary format (got "${captionGeom.metaText}")`);
+  assert(/^\d+ authorized · \d+ active · \d+ vacant( \*)?$/.test(captionGeom.metaText), `meta line matches the standard summary format (got "${captionGeom.metaText}")`);
   assert(captionGeom.metaTop > captionGeom.titleTop, "meta line sits below the title");
+
+  console.log("Summary > District caption: the overage marker (operator report, 2026-09-11) stays a single line — it must not wreck the SCOTUS/District pixel parity checked just below");
+  const overageGeom = JSON.parse(await ev(`(() => {
+    const meta = document.querySelector('.ctt-district-caption-row .ctt-pane-meta');
+    const note = meta.querySelector('.ctt-district-overage-note');
+    return JSON.stringify({ hasNote: !!note, title: note?.title || null, metaHeight: meta.getBoundingClientRect().height });
+  })()`));
+  console.log("   overageGeom:", JSON.stringify(overageGeom));
+  assert(overageGeom.hasNote && /\d+/.test(overageGeom.title || ""), "the discrepancy marker is present with an explanatory tooltip when the totals don't add up at face value");
+  assert(overageGeom.metaHeight < 20, `the meta line is still exactly ONE line tall with the marker appended (got ${overageGeom.metaHeight}px)`);
 
   console.log("REGRESSION (operator report, 2026-09-09): Summary > Supreme Court and District Courts docked panels must align to the SAME position and height, text included");
   // Already on Summary > District from the caption test just above.

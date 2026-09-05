@@ -12,6 +12,39 @@ tracker (Phase-4 tail items open, PLUS a brand-new third pane view — "Change",
 (feature-complete first version, operator refinement rounds ongoing; see sessions ai→at, aw).
 **Last updated:** 2026-09-11
 
+> **SESSION (cm), 2026-09-11 — Explained, not fixed: Summary > District's national totals don't
+> arithmetically add up, and that's correct (operator report: "654+27=681 > 673").**
+> - **Root-caused, not assumed.** Computed the real numbers directly from `seat_blocks.json`:
+> authorized 673, active 654, vacant 27 — active+vacant (681) exceeds authorized by EXACTLY 8,
+> and that 8 is EXACTLY the sum of overage at 6 specific courts (kyed +1, kywd +1, ilnd +1,
+> moed +2, mowd +2, okwd +1) that already appear in `DATA_SOURCES.md`'s "roving judgeships"
+> discrepancy log — 5 of the 6 are the same-state shared-seat districts (cj)'s search-merge
+> feature already knows about, plus `ilnd`'s documented minor FJC status lag. Confirmed the
+> mechanism: `build_seat_blocks()` floors an over-full court's `vacancies` at 0 rather than
+> inventing a negative one (a real judge is never dropped from the block, a deliberate design
+> choice already documented there) — correct PER COURT, but it means the three NATIONAL sums
+> can't reconcile by simple arithmetic when any court is over its base authorized count.
+> - **Not a data bug — a display-clarity gap.** All three numbers were already individually
+> correct; nothing in the underlying data or per-court math changed. Added `overAuthorized` to
+> `districtNationalTotals()` (sum of each court's `max(0, active-authorized)`) and a single-
+> character marker (" *", its own `.ctt-district-overage-note` span with a native `title`
+> tooltip naming the actual count and explaining why) appended to the caption meta line ONLY
+> when `overAuthorized > 0` — self-effacing if a future data refresh ever resolves every such
+> court. Deliberately ONE character, not a longer inline clause: this caption has a hard-won
+> pixel-parity requirement against Summary > SCOTUS's own meta line (broken and fixed twice
+> before — sessions cb/cc), and a native tooltip carries the full explanation with zero risk of
+> the line wrapping to a second row.
+> - **Scope note for later**: individual over-full courts' OWN panes (e.g. `moed`'s "7
+> authorized · 9 active · ... · 0 vacant") show the identical apparent mismatch for the same
+> reason — not addressed this session (the operator's report was specifically about the Summary
+> aggregate), flagging here in case it's wanted next.
+> - **Verified**: `tests/smoke.mjs` asserts `authorized + overAuthorized === active + vacancies`
+> (the gap is FULLY and exactly explained, no unaccounted residue) and that the tooltip names
+> the real count. `tests/browser-checks.mjs` confirms the marker doesn't grow the caption past
+> one line (17px) and that the SCOTUS/District pixel-parity checks alongside it still pass
+> unchanged. Screenshot-confirmed: "673 authorized · 654 active · 27 vacant *", single line.
+> - `smoke.mjs`/`browser-checks.mjs` both ALL PASS; no regressions.
+
 > **SESSION (cl), 2026-09-11 — Roving-judgeship UI: the "· " joiner hides itself once the meta
 > line wraps (operator report).**
 > - **Report**: when (ck)'s wrap landed the president chip above the court label, the leading
