@@ -1416,14 +1416,30 @@ console.log("header search bar: end-to-end (lazy index load, live filtering, hig
 
   click(sotoRow);
   await sleep(30);
-  assert(S.selectedCourt === "scotus", `clicking the result navigated to the Supreme Court pane (got ${S.selectedCourt})`);
+  assert(S.selectedCourt === "summary", `a SCOTUS result navigates to the Summary pane (got ${S.selectedCourt}) — NOT the orphaned direct-scotus pane (operator bugfix, 2026-09-05)`);
+  assert(S.summaryView === "scotus", `...specifically its Supreme Court sub-tab (got ${S.summaryView})`);
   assert(root.querySelector(".ctt-pane").classList.contains("ctt-is-open"), "...and the pane is open");
   assert(!searchResults.classList.contains("ctt-is-open"), "...and the results list closed itself on navigation");
   assert(searchInput.value === "Sotomayor", "...but the typed query text was NOT cleared by navigating (operator spec)");
-  click(root.querySelector(".ctt-pane-close"));
+  assert(S.detailPinned && root.querySelector(".ctt-detail").classList.contains("ctt-pinned"),
+    "the searched judge is auto-pinned in the docked detail panel, same as a real icon click");
+  assert(root.querySelector(".ctt-detail-content .ctt-detail-name").textContent.includes("Sotomayor"),
+    `...and it's the RIGHT judge pinned (got "${root.querySelector(".ctt-detail-content .ctt-detail-name")?.textContent}")`);
+  // NOT `.ctt-pane-close` alone — the stow-only top button shares that class for styling and
+  // comes FIRST in DOM order, so a bare class query silently grabs it instead of the real ×.
+  click(root.querySelector('.ctt-pane-close[aria-label="Close panel"]'));
   await sleep(20);
+  assert(!S.detailPinned, "closing the pane unpins — confirming the auto-pin is a one-time effect, not a lasting state");
 
-  console.log("  search across a drill-in: a District result reaches its OWN pane even starting from national view");
+  console.log("  Summary button still toggles closed on a plain re-click (the forced-view search path didn't break that)");
+  click(root.querySelector('.ctt-selector-item[data-court-id="summary"]'));
+  await sleep(30);
+  assert(S.selectedCourt === "summary" && root.querySelector(".ctt-pane").classList.contains("ctt-is-open"), "sanity: Summary opened");
+  click(root.querySelector('.ctt-selector-item[data-court-id="summary"]'));
+  await sleep(30);
+  assert(!root.querySelector(".ctt-pane").classList.contains("ctt-is-open"), "re-clicking the Summary button closes the pane (unchanged default toggle behavior)");
+
+  console.log("  search across a drill-in: a District result reaches its OWN pane even starting from national view, and pins that judge too");
   assert(S.view === "national", "sanity: still on the national view before this click");
   searchInput.value = "Webber Wright";   // Susan Webber Wright, 'are' (E.D. Ark., 8th Circuit)
   searchInput.dispatchEvent(new window.Event("input", { bubbles: true }));
@@ -1435,6 +1451,9 @@ console.log("header search bar: end-to-end (lazy index load, live filtering, hig
   await waitFor(() => S.selectedCourt === "are", 3000);
   assert(S.view === "circuit" && S.activeCircuit === "ca8", `navigating drilled into the judge's own circuit first (view=${S.view}, circuit=${S.activeCircuit})`);
   assert(S.selectedCourt === "are", "...then opened the district's own pane");
+  await sleep(20);
+  assert(S.detailPinned && root.querySelector(".ctt-detail-content .ctt-detail-name").textContent.includes("Wright"),
+    `the district judge is auto-pinned too (got "${root.querySelector(".ctt-detail-content .ctt-detail-name")?.textContent}")`);
   click(root.querySelector(".ctt-selector-back"));
   await waitFor(() => S.view === "national", 2000);
 

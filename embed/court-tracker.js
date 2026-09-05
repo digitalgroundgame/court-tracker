@@ -307,7 +307,7 @@ function renderSearchResults(results) {
         ? `<span class="ctt-dot ${ring}"></span>${shorthand}${letter ? ` (${letter})` : ""} · `
         : "") + courtLabelFor(r.court);
       row.append(nameLine, metaLine);
-      row.addEventListener("click", () => navigateToSearchResult(r.court.court_id));
+      row.addEventListener("click", () => navigateToSearchResult(r.court.court_id, r.rec.full_name));
       searchResults.append(row);
     }
   }
@@ -316,19 +316,44 @@ function renderSearchResults(results) {
 function hideSearchResults() {
   S.ui.searchResults?.classList.remove("ctt-is-open");
 }
+/** Auto-pins the searched judge in the docked detail panel after navigating there, the same as
+ *  a real click on their icon (onIconClick) — so the reader lands straight on the judge they
+ *  searched for, not just their court. A ONE-TIME effect for this viewing of the pane: every
+ *  render path that gets here (renderPane/renderSummaryPane) already calls unpinDetail() first
+ *  (a fresh court/tab selection always starts unpinned), so this pin does not survive leaving
+ *  and re-opening the pane — it is not a new persistent state, just one extra click done for
+ *  the reader as part of the jump. */
+function pinSearchedJudge(courtId, fullName) {
+  const court = S.courts.get(courtId);
+  if (!court) return;
+  const judge = judgesForCourt(courtId, circuitOf(court)).find((j) => j.full_name === fullName);
+  const model = S.ui.paneBody.querySelector(".ctt-judge-stage")?._model;
+  const node = judge && model?._nodeByJudge?.get(judge);
+  if (judge && node) onIconClick(judge, node);
+}
 /** A search result click can land on a court that isn't reachable from wherever the map
  *  currently is (a different circuit's district, or a district while viewing national) — reuse
  *  the SAME drillIn/drillOut the "View districts"/back UI already uses, so the map/selector/
- *  sub-assembly state stays exactly as consistent as clicking through by hand would leave it. */
-async function navigateToSearchResult(courtId) {
+ *  sub-assembly state stays exactly as consistent as clicking through by hand would leave it.
+ *  SCOTUS is a special case: it has no standalone selector entry any more (superseded by the
+ *  "Summary" button's own SCOTUS sub-tab — CLAUDE.md's "its own selector entry" requirement is
+ *  satisfied there now) and `selectCourt("scotus")` reaches a since-orphaned direct pane that
+ *  is otherwise UNREACHABLE from the real UI — routing search there was a bug, not a shortcut. */
+async function navigateToSearchResult(courtId, fullName) {
   const court = S.courts.get(courtId);
   if (!court) return;
   hideSearchResults();
-  const wantsCircuit = (court.court_level === "district" || court.court_level === "specialized")
-    ? circuitOf(court) : null;
-  if (S.view === "circuit" && S.activeCircuit !== wantsCircuit) await drillOut();
-  if (wantsCircuit && !(S.view === "circuit" && S.activeCircuit === wantsCircuit)) await drillIn(wantsCircuit);
-  await selectCourt(courtId);
+  if (court.court_level === "scotus") {
+    if (S.view === "circuit") await drillOut();
+    await selectSummary("scotus");
+  } else {
+    const wantsCircuit = (court.court_level === "district" || court.court_level === "specialized")
+      ? circuitOf(court) : null;
+    if (S.view === "circuit" && S.activeCircuit !== wantsCircuit) await drillOut();
+    if (wantsCircuit && !(S.view === "circuit" && S.activeCircuit === wantsCircuit)) await drillIn(wantsCircuit);
+    await selectCourt(courtId);
+  }
+  pinSearchedJudge(courtId, fullName);
 }
 
 // ---- shell --------------------------------------------------------------------
@@ -666,7 +691,8 @@ function addSummaryButton(sel) {
   const btn = el("button", "ctt-selector-item ctt-summary-btn",
     { type: "button", "data-court-id": SUMMARY_ID });
   btn.textContent = "Summary";
-  btn.addEventListener("click", selectSummary);
+  btn.addEventListener("click", () => selectSummary());   // NOT `selectSummary` directly — the
+  // click Event would otherwise land in its optional `view` param (see selectSummary's own note).
   if (S.selectedCourt === SUMMARY_ID) btn.classList.add("ctt-is-selected");
   sel.append(btn);
 }
@@ -775,9 +801,19 @@ async function selectCourt(courtId) {
  *  selector entry). Not a real court selection — no map shape, so highlightShape/clearShapeHighlight
  *  are still called (consistent with selectCourt) purely to clear any PREVIOUSLY selected
  *  court's shape highlight; neither matches anything for the "summary" sentinel itself. */
-async function selectSummary() {
+/** `view`, if given, forces a specific Summary sub-tab (used by search navigation, which needs
+ *  to land on SCOTUS specifically, not whatever sub-tab was last viewed — S.summaryView
+ *  otherwise "persists across re-opens" by design). CALLERS: the button click handler passes
+ *  no `view` (must call `selectSummary()`, never bare `selectSummary` as a listener, or the
+ *  click Event itself would land here). */
+async function selectSummary(view) {
+  if (view) S.summaryView = view;
   if (S.selectedCourt === SUMMARY_ID && S.ui.pane.classList.contains("ctt-is-open")) {
-    deselect();
+    // Re-clicking the Summary button while already on it toggles the pane closed (unchanged
+    // default). A forced `view` means this is a JUMP request (e.g. from search), not a toggle —
+    // switch sub-tab in place instead of closing.
+    if (!view) { deselect(); return; }
+    renderSummaryPane();
     return;
   }
   S.selectedCourt = SUMMARY_ID;
