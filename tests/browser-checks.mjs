@@ -344,6 +344,44 @@ try {
   assert(scotusHeaderGeom.keyTop < scotusHeaderGeom.titleBottom && scotusHeaderGeom.keyBottom > scotusHeaderGeom.titleTop,
     "the key vertically overlaps the title's own row (same horizontal band)");
   assert(Math.abs(scotusHeaderGeom.keyRight - scotusHeaderGeom.contentRight) < 1, "the key is right-aligned to the panel's own right edge");
+
+  console.log("header search bar: right-aligned in the title band, dropdown opens over the map, no horizontal overflow at mobile width");
+  await ev(`document.querySelector('.ctt-pane-close')?.click()`); await sleep(300);
+  const searchGeom = JSON.parse(await ev(`(() => {
+    const header = document.querySelector('.ctt-header'), search = document.querySelector('.ctt-search');
+    const h = header.getBoundingClientRect(), s = search.getBoundingClientRect();
+    return JSON.stringify({ headerRight: h.right, searchRight: s.right, headerPaddingRight: parseFloat(getComputedStyle(header).paddingRight) });
+  })()`));
+  console.log("   searchGeom:", JSON.stringify(searchGeom));
+  assert(Math.abs((searchGeom.headerRight - searchGeom.headerPaddingRight) - searchGeom.searchRight) < 1,
+    "the search box's right edge sits flush against the header's own right padding (right-aligned)");
+
+  await ev(`(() => { const i = document.querySelector('.ctt-search-input'); i.value = 'Sotomayor';
+    i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+  await sleep(300);
+  const dropdownGeom = JSON.parse(await ev(`(() => {
+    const results = document.querySelector('.ctt-search-results'), input = document.querySelector('.ctt-search-input');
+    const map = document.querySelector('.ctt-map-viewport');
+    const r = results.getBoundingClientRect(), i = input.getBoundingClientRect(), m = map.getBoundingClientRect();
+    return JSON.stringify({ open: results.classList.contains('ctt-is-open'), top: r.top, inputBottom: i.bottom,
+      overMap: r.top < m.bottom && r.bottom > m.top, zIndex: getComputedStyle(results).zIndex });
+  })()`));
+  console.log("   dropdownGeom:", JSON.stringify(dropdownGeom));
+  assert(dropdownGeom.open && dropdownGeom.top >= dropdownGeom.inputBottom, "the results dropdown opens BELOW the search input");
+  assert(dropdownGeom.overMap, "the dropdown's vertical extent overlaps the map viewport (it must paint over the map, not behind it)");
+  const rowOnTop = await ev(`(() => {
+    const row = document.querySelector('.ctt-search-result'), r = row.getBoundingClientRect();
+    const topEl = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+    return !!(topEl && topEl.closest('.ctt-search-result') === row);
+  })()`);
+  assert(rowOnTop, "a result row is the actual top-painted element at its own screen position (not covered by the map underneath)");
+  await ev(`document.querySelector('.ctt-search-clear').click()`);
+
+  await send("Emulation.setDeviceMetricsOverride", { width: 380, height: 700, deviceScaleFactor: 1, mobile: true });
+  await sleep(400);
+  const overflow380 = await ev(`document.querySelector('.ctt-root').scrollWidth - document.querySelector('.ctt-root').clientWidth`);
+  assert(overflow380 <= 1, `no horizontal overflow in the title/search row at 380px width (scrollWidth-clientWidth=${overflow380})`);
+  await send("Emulation.clearDeviceMetricsOverride", {});
 } catch (e) { console.log("*** ", e.message); failures++; }
 finally { try { ws && ws.close(); } catch {} chrome.kill(); }
 

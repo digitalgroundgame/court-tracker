@@ -84,6 +84,9 @@ const S = {
                                // across show/hide toggles; reset only by a fresh deploy from
                                // Summary ("Set upon map" always replaces — operator confirmed)
   districtDetailPinnedId: null,   // pinned district court_id in Summary > District, or null
+  searchIndex: null,          // data/judges_search.json, lazy-loaded once on first search use
+  searchIndexPromise: null,   // in-flight fetch (dedupes concurrent keystrokes before it resolves)
+  searchSeq: 0,                // guards against a stale (superseded) search render
 };
 // Sentinel selectedCourt value for the Summary pane — not a real courts.csv row (has_geography
 // doesn't apply; it's a fixed pane, never a map shape), so every place that reads S.selectedCourt
@@ -104,6 +107,230 @@ const isoToMDY = (iso) => {
   return `${m}/${d}/${y}`;
 };
 
+// ---- header search bar ---------------------------------------------------------
+// Matches judges by name (misspelling-tolerant, word-order-independent), highlights the
+// matched portion, and sorts by match quality tier, then Supreme > Appellate > District,
+// then circuit order, then alphabetically (operator spec, 2026-09-05).
+
+// Surname alone is ambiguous for these families only; every other appointing_president in the
+// data (Nixon onward — judges.csv covers sitting judges only) resolves to its surname unaided.
+const PRESIDENT_SHORTHAND = {
+  "George H.W. Bush": "G.H.W. Bush",
+  "George W. Bush": "G.W. Bush",
+};
+function presidentShorthand(name) {
+  if (!name || name.startsWith("None")) return null;   // statutory-reassignment rows (no appointer)
+  if (PRESIDENT_SHORTHAND[name]) return PRESIDENT_SHORTHAND[name];
+  const parts = name.trim().split(/\s+/);
+  return parts[parts.length - 1];
+}
+function partyLetter(party) {
+  if (party === "Republican") return "R";
+  if (party === "Democratic") return "D";
+  return party ? "O" : null;
+}
+
+// Word tokenizer with source offsets, so a match can be highlighted back in the original string.
+function nameTokens(str) {
+  const out = [];
+  const re = /[A-Za-z]+/g;
+  let m;
+  while ((m = re.exec(str))) out.push({ text: m[0], lower: m[0].toLowerCase(), start: m.index, end: m.index + m[0].length });
+  return out;
+}
+// Iterative-DP Levenshtein distance (case handled by the caller passing lowercased strings).
+function levenshtein(a, b) {
+  const m = a.length, n = b.length;
+  if (m === 0) return n;
+  if (n === 0) return m;
+  let prev = new Array(n + 1), curr = new Array(n + 1);
+  for (let j = 0; j <= n; j++) prev[j] = j;
+  for (let i = 1; i <= m; i++) {
+    curr[0] = i;
+    for (let j = 1; j <= n; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      curr[j] = Math.min(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + cost);
+    }
+    [prev, curr] = [curr, prev];
+  }
+  return prev[n];
+}
+/** Score one query word against one name word: exact > prefix > substring > misspelling-tolerant
+ *  fuzzy (edit distance), 0 = no match at all. Also returns the substring of the NAME word that
+ *  should be highlighted (best-effort: the whole word for a fuzzy match, since edit distance
+ *  doesn't align to a specific span). */
+function wordMatch(q, t) {
+  if (!q || !t) return null;
+  if (q === t) return { score: 100, start: 0, end: t.length };
+  if (t.startsWith(q)) return { score: 88, start: 0, end: q.length };
+  const idx = t.indexOf(q);
+  if (q.length >= 3 && idx >= 0) return { score: 74, start: idx, end: idx + q.length };
+  if (q.length >= 3) {
+    const tol = q.length <= 5 ? 1 : q.length <= 9 ? 2 : 3;
+    const dist = levenshtein(q, t);
+    if (dist <= tol) return { score: Math.max(45, 60 - dist * 12), start: 0, end: t.length };
+  }
+  return null;
+}
+/** Score a query against a judge's full_name. Every query word must find SOME matching name
+ *  word (any order — this is how word-reordering tolerance works: each query word is matched
+ *  independently against every name word); if any query word matches nothing, the judge fails
+ *  entirely. Overall score is the average of each query word's best match. Returns null below
+ *  the minimum-quality threshold. */
+const SEARCH_MIN_SCORE = 45;
+function scoreJudgeMatch(query, fullName) {
+  const qWords = query.toLowerCase().trim().split(/\s+/).filter(Boolean);
+  if (!qWords.length) return null;
+  const nWords = nameTokens(fullName);
+  if (!nWords.length) return null;
+  let total = 0;
+  const ranges = [];
+  for (const q of qWords) {
+    let best = null, bestWord = null;
+    for (const w of nWords) {
+      const m = wordMatch(q, w.lower);
+      if (m && (!best || m.score > best.score)) { best = m; bestWord = w; }
+    }
+    if (!best) return null;   // this query word matched nothing — whole judge disqualified
+    total += best.score;
+    ranges.push({ start: bestWord.start + best.start, end: bestWord.start + best.end });
+  }
+  const score = total / qWords.length;
+  if (score < SEARCH_MIN_SCORE) return null;
+  const tier = score >= 85 ? 0 : score >= 65 ? 1 : 2;   // "groups of quality match"
+  return { score, tier, ranges };
+}
+/** Wrap the ranges scoreJudgeMatch found in a bolding span, merging any overlaps. */
+function highlightName(fullName, ranges) {
+  const sorted = ranges.slice().sort((a, b) => a.start - b.start);
+  const merged = [];
+  for (const r of sorted) {
+    const last = merged[merged.length - 1];
+    if (last && r.start <= last.end) last.end = Math.max(last.end, r.end);
+    else merged.push({ ...r });
+  }
+  let out = "", pos = 0;
+  for (const r of merged) {
+    out += fullName.slice(pos, r.start);
+    out += `<span class="ctt-search-match">${fullName.slice(r.start, r.end)}</span>`;
+    pos = r.end;
+  }
+  out += fullName.slice(pos);
+  return out;
+}
+// courtRank groups results Supreme(0) > Appellate(1) > District(2) > USCIT/CFC(3, the two
+// Federal-Circuit feeders — not named in the operator's spec, but real sitting judges the app
+// already tracks; placed after District since they're reached the same "drill deeper" way).
+function courtRank(court) {
+  if (court.court_level === "scotus") return 0;
+  if (court.court_level === "circuit") return 1;
+  if (court.court_level === "district") return 2;
+  return 3;
+}
+function courtLabelFor(court) {
+  if (court.court_level === "scotus") return "Supreme Court";
+  if (court.court_level === "district") {
+    const circuit = S.courts.get(court.parent_id);
+    return circuit ? `${court.short_name} (${circuit.short_name})` : court.short_name;
+  }
+  return court.short_name;   // circuit ("8th Cir.") or specialized ("USCIT"/"CFC")
+}
+function searchResultCourtOrderKey(court) {
+  if (court.court_level === "district") {
+    const circuit = S.courts.get(court.parent_id);
+    return circuit ? byCircuitOrderKey(circuit) : "";
+  }
+  return byCircuitOrderKey(court);
+}
+async function ensureSearchIndex() {
+  if (S.searchIndex) return S.searchIndex;
+  if (!S.searchIndexPromise) {
+    const path = S.manifest?.files?.judges_search;
+    S.searchIndexPromise = (path ? fetchJSON(path) : Promise.resolve([]))
+      .then((data) => { S.searchIndex = data; return data; })
+      .catch((err) => { S.searchIndexPromise = null; throw err; });
+  }
+  return S.searchIndexPromise;
+}
+function searchAndSort(query, index) {
+  const results = [];
+  for (const rec of index) {
+    const court = S.courts.get(rec.court_id);
+    if (!court) continue;
+    const m = scoreJudgeMatch(query, rec.full_name);
+    if (!m) continue;
+    results.push({ rec, court, tier: m.tier, score: m.score, ranges: m.ranges });
+  }
+  results.sort((a, b) => {
+    if (a.tier !== b.tier) return a.tier - b.tier;
+    const ra = courtRank(a.court), rb = courtRank(b.court);
+    if (ra !== rb) return ra - rb;
+    if (ra === 0) return b.score - a.score;   // Supreme: only one court, fall back to score
+    if (ra === 1) return byCircuitOrderKey(a.court).localeCompare(byCircuitOrderKey(b.court));
+    if (ra === 2) {
+      const ka = searchResultCourtOrderKey(a.court), kb = searchResultCourtOrderKey(b.court);
+      if (ka !== kb) return ka.localeCompare(kb);
+      return a.court.short_name.localeCompare(b.court.short_name);
+    }
+    return a.court.short_name.localeCompare(b.court.short_name);   // uscit/uscfc
+  });
+  return results;
+}
+async function runSearch(query) {
+  const mySeq = ++S.searchSeq;
+  const q = query.trim();
+  if (!q) { hideSearchResults(); return; }
+  let index;
+  try { index = await ensureSearchIndex(); }
+  catch (err) { console.error("[court-tracker] search index unavailable:", err.message); return; }
+  if (mySeq !== S.searchSeq) return;   // a newer keystroke already superseded this
+  renderSearchResults(searchAndSort(q, index));
+}
+function renderSearchResults(results) {
+  const { searchResults } = S.ui;
+  searchResults.innerHTML = "";
+  if (!results.length) {
+    const empty = el("div", "ctt-search-empty");
+    empty.textContent = "No matching judges.";
+    searchResults.append(empty);
+  } else {
+    for (const r of results.slice(0, 60)) {
+      const row = el("button", "ctt-search-result", { type: "button" });
+      const nameLine = el("div", "ctt-search-name");
+      nameLine.innerHTML = highlightName(r.rec.full_name, r.ranges) +
+        (r.rec.status === "senior" ? ` <span class="ctt-search-senior">Senior</span>` : "");
+      const metaLine = el("div", "ctt-search-meta");
+      const shorthand = presidentShorthand(r.rec.appointing_president);
+      const letter = partyLetter(r.rec.president_party);
+      const ring = PARTY_CLASS[r.rec.president_party] || "ctt-other";
+      metaLine.innerHTML = (shorthand
+        ? `<span class="ctt-dot ${ring}"></span>${shorthand}${letter ? ` (${letter})` : ""} · `
+        : "") + courtLabelFor(r.court);
+      row.append(nameLine, metaLine);
+      row.addEventListener("click", () => navigateToSearchResult(r.court.court_id));
+      searchResults.append(row);
+    }
+  }
+  searchResults.classList.add("ctt-is-open");
+}
+function hideSearchResults() {
+  S.ui.searchResults?.classList.remove("ctt-is-open");
+}
+/** A search result click can land on a court that isn't reachable from wherever the map
+ *  currently is (a different circuit's district, or a district while viewing national) — reuse
+ *  the SAME drillIn/drillOut the "View districts"/back UI already uses, so the map/selector/
+ *  sub-assembly state stays exactly as consistent as clicking through by hand would leave it. */
+async function navigateToSearchResult(courtId) {
+  const court = S.courts.get(courtId);
+  if (!court) return;
+  hideSearchResults();
+  const wantsCircuit = (court.court_level === "district" || court.court_level === "specialized")
+    ? circuitOf(court) : null;
+  if (S.view === "circuit" && S.activeCircuit !== wantsCircuit) await drillOut();
+  if (wantsCircuit && !(S.view === "circuit" && S.activeCircuit === wantsCircuit)) await drillIn(wantsCircuit);
+  await selectCourt(courtId);
+}
+
 // ---- shell --------------------------------------------------------------------
 function buildShell(root) {
   root.classList.add("ctt-root");
@@ -112,10 +339,37 @@ function buildShell(root) {
   const header = el("div", "ctt-header");
   const tracked = el("div", "ctt-tracked");
   const titleRow = el("div", "ctt-title-row");
+  const titleGroup = el("div", "ctt-title-group");
   const title = el("div", "ctt-title");
   title.textContent = "Federal Court Appointment Tracker";
   const subtitle = el("div", "ctt-subtitle");
-  titleRow.append(title, subtitle);
+  titleGroup.append(title, subtitle);
+
+  // Header search bar — right-aligned in the title row (operator spec, 2026-09-05): searches
+  // sitting judges by name as-you-type, click a result to jump to its court's info pane.
+  const search = el("div", "ctt-search");
+  const searchInput = el("input", "ctt-search-input",
+    { type: "text", placeholder: "Search judges…", "aria-label": "Search judges by name", autocomplete: "off" });
+  const searchClear = el("button", "ctt-search-clear", { type: "button", "aria-label": "Clear search", title: "Clear" });
+  searchClear.textContent = "×";
+  const searchResults = el("div", "ctt-search-results", { role: "listbox" });
+  search.append(searchInput, searchClear, searchResults);
+  searchInput.addEventListener("input", () => {
+    searchClear.classList.toggle("ctt-is-visible", !!searchInput.value);
+    runSearch(searchInput.value);
+  });
+  // Refocusing a non-empty box re-shows its last results without retyping (click-away only
+  // HIDES the list — CLAUDE.md-equivalent spec: "queries should not clear automatically").
+  searchInput.addEventListener("focus", () => { if (searchInput.value) runSearch(searchInput.value); });
+  searchClear.addEventListener("click", () => {
+    searchInput.value = "";
+    searchClear.classList.remove("ctt-is-visible");
+    hideSearchResults();
+    searchInput.focus();
+  });
+  searchInput.addEventListener("keydown", (e) => { if (e.key === "Escape") { hideSearchResults(); searchInput.blur(); } });
+
+  titleRow.append(titleGroup, search);
   header.append(tracked, titleRow);
 
   const body = el("div", "ctt-body");
@@ -180,7 +434,8 @@ function buildShell(root) {
   pane.append(detail);
 
   const ui = { root, tracked, subtitle, selector, viewport, svgStack, status, pane, paneBody, stow,
-               tooltip, detail, detailContent, districtOverlay, districtCornerControls, nationalSVG: null };
+               tooltip, detail, detailContent, districtOverlay, districtCornerControls,
+               search, searchInput, searchClear, searchResults, nationalSVG: null };
   S.ui = ui;
   window.addEventListener("resize", () => {
     if (S.selectedCourt) layoutJudges();
@@ -204,6 +459,12 @@ function buildShell(root) {
         if (e.target.closest && e.target.closest(".ctt-district-detail")) return;
         if (e.target.closest && e.target.closest(".ctt-district-sq")) return;
         unpinDistrictDetail();
+      }
+      // Clicking away from the search UI hides the results list (the typed query itself is
+      // NOT cleared — only the × button or deleting the text clears it, operator spec).
+      if (S.ui.searchResults.classList.contains("ctt-is-open")) {
+        if (e.target.closest && e.target.closest(".ctt-search")) return;
+        hideSearchResults();
       }
     });
   }
@@ -415,9 +676,13 @@ function addBackButton(sel) {
   back.addEventListener("click", drillOut);
   sel.append(back);
 }
+// "ca1".."ca11" -> "001".."011" (numeric-first padding), "cadc"/"cafc" -> "0dc"/"0fc" (digits
+// sort before letters, so D.C. then Federal Circuit land after every numbered circuit).
+function byCircuitOrderKey(court) {
+  return court.court_id.replace(/^ca/, "").padStart(3, "0");
+}
 function byCircuitOrder(a, b) {
-  return a.court_id.replace(/^ca/, "").padStart(3, "0")
-    .localeCompare(b.court_id.replace(/^ca/, "").padStart(3, "0"));
+  return byCircuitOrderKey(a).localeCompare(byCircuitOrderKey(b));
 }
 const short = (id) => (S.courts.get(id)?.short_name || id);
 
@@ -3368,6 +3633,7 @@ export async function mount(root) {
   S.appointmentsAll = null; S.presidentPhotos = null;
   S.summaryView = "scotus"; S.districtArrangement = null; S.districtArrangementAlt = null;
   S.districtOnMap = false; S.districtMapState = null; S.districtDetailPinnedId = null;
+  S.searchIndex = null; S.searchIndexPromise = null; S.searchSeq = 0;
 
   const ui = buildShell(root);
   try {
@@ -3439,4 +3705,6 @@ export const _dev = {
   buildStreamModel, valueAt, ensureChangeData, dayNum, isoOfDayNum, PRESIDENCIES, initials, surname,
   selectSummary, layoutScotusRing, deployDistrictOverlayAnimated, deployDistrictOverlay,
   defaultDistrictMapState, DISTRICT_ZOOM_STORAGE_KEY, DISTRICT_SQ_SCALE_HOVER, districtNationalTotals,
+  scoreJudgeMatch, searchAndSort, presidentShorthand, courtLabelFor, navigateToSearchResult,
+  runSearch, ensureSearchIndex,
 };

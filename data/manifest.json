@@ -1,7 +1,7 @@
 {
   "schema": "court-tracker/manifest@1",
-  "version": "9800552afac4",
-  "generated": "2026-09-04T08:57:39Z",
+  "version": "8a84ecb1a4df",
+  "generated": "2026-09-05T09:57:25Z",
   "last_appointment": "2026-06-18",
   "counts": {
     "courts": 110,
@@ -30,6 +30,7 @@
       "scotus": "data/judges/scotus.json"
     },
     "circuit_justices": "data/circuit_justices.json",
+    "judges_search": "data/judges_search.json",
     "seat_blocks": "data/seat_blocks.json",
     "district_arrangement": "data/district_arrangement.json",
     "district_arrangement_alt": "data/district_arrangement_alt.json",
