@@ -263,7 +263,16 @@
 .ctt-toggle.ctt-is-active { background: var(--ctt-accent); color: #fff; border-color: var(--ctt-accent); }
 .ctt-drill { margin-left: auto; color: var(--ctt-accent); font-weight: 600; }
 .ctt-foldrow { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ctt-muted); margin: 2px 0; }
-.ctt-note { font-size: 11px; color: var(--ctt-muted); margin-top: 6px; }
+/* margin-top:auto (not a fixed 6px) pushes the note flush to the BOTTOM of .ctt-stage-main's now-
+   stretched column (see that rule's own comment) instead of sitting wherever the stage's own
+   natural content height happens to end — this is what was missing in Timeline mode specifically
+   (operator report, 2026-09-11): Majority mode's stage height is already explicitly computed to
+   nearly fill the available row (majorityStageHeight()), so its note already landed close to the
+   bottom by construction; Timeline's stage height (timelineStageHeight()) is sized purely from
+   row count, with no such compensation, leaving a gap below a short court's note. Reverts to a
+   fixed 6px on mobile (see media query) where .ctt-stage-row stops being a flex row at all, so
+   there's no stretched column height for auto to push against. */
+.ctt-note { font-size: 11px; color: var(--ctt-muted); margin-top: auto; }
 .ctt-majority-note, .ctt-always-note { font-style: italic; }
 
 /* judge stage + icons */
@@ -320,7 +329,24 @@
    2026-09-05). flex-shrink:1 lets these rows compress to their allotted space instead, which is
    what actually lets min-height:0 + the table wrap's own overflow-y:auto take over. */
 .ctt-pane-body > .ctt-summary-content { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; }
-.ctt-summary-content { min-height: 200px; }
+/* position:relative anchors Summary > Supreme Court's own right-aligned FedSoc key (operator
+   ask, 2026-09-11) — a plain flex property otherwise, doesn't affect layout on its own. */
+.ctt-summary-content { min-height: 200px; position: relative; }
+/* Right-aligned in the SAME header band as the title/meta text above it — same
+   position:absolute + vertical-centering technique .ctt-district-deploy-btn already uses for the
+   analogous "right side of this row" placement in Summary > District. SCOTUS's own title+meta
+   are short enough (no line-wrapping risk the way District's deploy button needed padding-right
+   to guard against) that no text-side accommodation is needed here. */
+.ctt-scotus-affil-key {
+  position: absolute; top: 8px; right: 0; display: flex; align-items: center; gap: 6px;
+  font-size: 12px; color: var(--ctt-muted);
+}
+/* Same dashed-ring convention .ctt-affil-marked .ctt-avatar itself uses, at swatch size — a
+   neutral ink color since the real ring's color varies by appointing party, which isn't the point
+   of this legend. */
+.ctt-scotus-affil-key-swatch {
+  width: 16px; height: 16px; border-radius: 50%; border: 2px dashed var(--ctt-ink); flex: 0 0 auto;
+}
 .ctt-summary-content > .ctt-stage-row { flex: 1 1 auto; min-height: 0; }
 .ctt-summary-subtitle { font-size: 15px; font-weight: 650; margin-bottom: 2px; }
 .ctt-summary-placeholder { color: var(--ctt-muted); font-size: 13px; padding: 24px 0; }
@@ -558,7 +584,14 @@
    dedicated, uninterrupted column; hover updates it in place, click pins it. On mobile the
    row stacks (see the media query): stage, then notes, then detail below them. */
 .ctt-stage-row { display: flex; align-items: flex-start; gap: 14px; }
-.ctt-stage-main { flex: 1 1 auto; min-width: 0; }
+/* align-self:stretch (matching .ctt-detail's own, below) + a column flex so a note that follows
+   the judge stage can be pushed to the BOTTOM of the row's full height via margin-top:auto (see
+   .ctt-note) instead of sitting immediately after wherever the stage's own natural height ends —
+   operator report, 2026-09-11 (a territorial court's always-visible note wasn't bottom-aligned in
+   Timeline mode, unlike Majority mode). Without stretch, .ctt-stage-main (like
+   .ctt-district-cartogram-wrap before its own equivalent fix) would only ever be as tall as its
+   own content, leaving no room for auto to push into. */
+.ctt-stage-main { flex: 1 1 auto; min-width: 0; align-self: stretch; display: flex; flex-direction: column; }
 .ctt-detail {
   flex: 0 0 232px; width: 232px; align-self: stretch; position: relative;
   background: var(--ctt-panel); border: 1px solid var(--ctt-line); border-radius: 8px;
@@ -635,6 +668,7 @@
      free once the row stops being a row) — no more bottom-sheet overlay, no reserved
      padding: the panel is in normal flow and can never cover the bench. */
   .ctt-stage-row { display: block; }
+  .ctt-note { margin-top: 6px; }   /* .ctt-stage-row stops being a flex row here, so there's no stretched column height left for margin-top:auto to push against */
   .ctt-detail { width: auto; margin-top: 10px; }
   .ctt-district-layout { display: block; }
   .ctt-district-detail .ctt-detail-name { min-height: 2.5em; }   /* mobile: 1-2 lines instead of desktop's 2-3 */

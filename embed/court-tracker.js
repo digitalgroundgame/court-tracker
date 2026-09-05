@@ -70,6 +70,8 @@ const S = {
   paneMode: "timeline",       // 'timeline' | 'majority' | 'change'
   seniorMode: "hide",         // 'hide' | 'show' | 'include' — Majority-view senior handling
   affilMark: "none",          // 'none' | 'fedsoc' | 'acs' — mark reported affiliations
+  _affilMarkTouched: false,   // has a real choice been made yet (manual toggle OR the one-time
+                               // SCOTUS FedSoc default)? Gates that default from ever overriding one.
   detailPinned: false,
   appointmentsAll: null,      // data/appointments.json, lazy-loaded once for the Change view
   presidentPhotos: null,      // data/president_photos.json, lazy-loaded once
@@ -623,6 +625,7 @@ function renderPane(court) {
     b.classList.toggle("ctt-is-active", S.affilMark === mode);
     b.addEventListener("click", () => {
       S.affilMark = mode;
+      S._affilMarkTouched = true;   // a real choice — the SCOTUS FedSoc default never overrides this
       affWrap.querySelectorAll(".ctt-affil-opt").forEach((o) =>
         o.classList.toggle("ctt-is-active", o.getAttribute("data-affil") === mode));
       applyAffilMarks();
@@ -830,6 +833,20 @@ function renderSummaryScotus(container) {
   // Article III judge but does not sit, so seniors are never part of this meta line.
   meta.textContent = `${authorized} authorized · ${active.length} active · ${vacancies} vacant`;
   container.append(label, meta);
+
+  // FedSoc-reported affiliation defaults ON here (operator ask, 2026-09-11: "SCOTUS has few
+  // enough judges, it's worth having some custom iconography") — a ONE-TIME session default, not
+  // re-applied every visit, so it never overrides a choice the user has already made (via the
+  // None|FedSoc|ACS switch on an ordinary court pane — SCOTUS's own Summary view has no switch
+  // of its own to toggle this from, which is exactly why a sensible default matters here).
+  if (!S._affilMarkTouched) { S.affilMark = "fedsoc"; S._affilMarkTouched = true; }
+  // Key/legend explaining the dashed-ring convention, right-aligned in the same header band as
+  // the title/meta text above (operator ask, 2026-09-11) — .ctt-summary-content has
+  // position:relative for exactly this anchor.
+  const affilKey = el("div", "ctt-scotus-affil-key");
+  affilKey.innerHTML = `<span class="ctt-scotus-affil-key-swatch"></span>` +
+    `= <em>reported</em> <strong>FedSoc</strong> <em>affiliation</em>`;
+  container.append(affilKey);
 
   const stageRow = el("div", "ctt-stage-row");
   const stageMain = el("div", "ctt-stage-main");
@@ -3347,7 +3364,7 @@ export async function mount(root) {
   S.morphPlans.clear(); S.morphRAF = null; S.morphCancel = null; S.seatBlocks = null;
   S.view = "national"; S.activeCircuit = null; S.selectedCourt = null;
   S.majorityMode = false; S.paneMode = "timeline"; S.seniorMode = "hide";
-  S.detailPinned = false; S.affilMark = "none";
+  S.detailPinned = false; S.affilMark = "none"; S._affilMarkTouched = false;
   S.appointmentsAll = null; S.presidentPhotos = null;
   S.summaryView = "scotus"; S.districtArrangement = null; S.districtArrangementAlt = null;
   S.districtOnMap = false; S.districtMapState = null; S.districtDetailPinnedId = null;

@@ -10,7 +10,52 @@
 tracker (Phase-4 tail items open, PLUS a brand-new third pane view — "Change", built session
 (aw), operator review round addressed session (ax)) and the appointments beeswarm
 (feature-complete first version, operator refinement rounds ongoing; see sessions ai→at, aw).
-**Last updated:** 2026-09-10
+**Last updated:** 2026-09-11
+
+> **SESSION (ce), 2026-09-11 — Territorial-court note bottom-alignment in Timeline mode, and
+> Summary > Supreme Court's FedSoc default + legend key.**
+> - **Territorial-court note, root-caused as a missing stretch, not a missing height formula.**
+>   VI/GU/NMI's always-visible note ("The territorial district courts do not sit en banc...") sat
+>   flush at the docked panel's bottom in Majority mode but floated mid-panel with a gap below it
+>   in Timeline mode. `.ctt-pane-body > .ctt-stage-row { flex: 1 0 auto; }` already forces the
+>   STAGE ROW itself to fill all leftover pane height in BOTH modes — that was never the gap. The
+>   actual cause: `.ctt-stage-main` (the column holding the judge stage + the note) had no
+>   `align-self: stretch`, so — unlike `.ctt-detail`, which does — it sat at `align-items:
+>   flex-start`'s default, taking only its own natural content height within the already-tall
+>   row and leaving the rest of the row empty below it. Majority mode's `majorityStageHeight()`
+>   masked this by explicitly inflating the STAGE to nearly fill the row, landing the note close
+>   to the bottom by construction; Timeline's `timelineStageHeight()` sizes purely from row count,
+>   with no such compensation, so the gap was only ever visible there. Fixed properly:
+>   `align-self: stretch` + `display: flex; flex-direction: column` on `.ctt-stage-main` (now it
+>   actually fills the row, matching `.ctt-detail`), and `margin-top: auto` on `.ctt-note` (pushes
+>   whichever note is present to the bottom of that now-stretched column) — a normal "sticky
+>   footer" flex pattern, reverted to a fixed 6px in the mobile media query where `.ctt-stage-row`
+>   stops being a flex row at all. Verified in a real browser: VI/GU/NMI's note now sits flush at
+>   the panel's bottom in BOTH Timeline and Majority mode; Majority mode's own already-correct
+>   positioning (both territorial and ordinary courts) is unaffected; a regular court's stage
+>   still doesn't overflow.
+> - **Summary > Supreme Court: FedSoc defaults ON, with a legend key.** SCOTUS's own Summary
+>   pane has no None|FedSoc|ACS switch of its own to toggle this from (unlike every ordinary
+>   court pane) — operator ask: since SCOTUS has few enough justices to make the affiliation
+>   iconography genuinely legible, default it on rather than leaving it undiscoverable there.
+>   Implemented as a ONE-TIME session default (`S._affilMarkTouched`, mirroring how other
+>   one-time app defaults already work): `renderSummaryScotus` sets `S.affilMark = "fedsoc"` only
+>   if no REAL choice (a manual toggle click on any ordinary court pane, or this default itself)
+>   has happened yet — so it never overrides a choice the operator has already made, wherever
+>   they made it. Added a right-aligned legend key (`.ctt-scotus-affil-key`) in the SAME
+>   horizontal band as the "Supreme Court of the United States / 9 authorized · 9 active · 0
+>   vacant" title+meta text, via `position: absolute` on the now-`position: relative`
+>   `.ctt-summary-content` (same technique `.ctt-district-deploy-btn` already uses for its own
+>   analogous right-side placement) — a small dashed-ring swatch (the SAME visual convention
+>   `.ctt-affil-marked .ctt-avatar` itself already uses) followed by "= *reported* **FedSoc**
+>   *affiliation*".
+> - **Tested**: extended `tests/smoke.mjs` (the FedSoc default firing condition — reset to an
+>   untouched state first, since an earlier ordinary-court test in the same run already makes a
+>   real choice — the legend key's presence/text, and that a real prior choice is never
+>   overridden by revisiting SCOTUS) and `tests/browser-checks.mjs` (the territorial-note
+>   bottom-alignment regression in both modes plus a no-regression check for ordinary courts, and
+>   the legend key's same-band/right-aligned geometry — all real-browser checks, since jsdom
+>   reports 0 for every box). `smoke.mjs`/`browser-checks.mjs`/`stress.mjs` (12 cycles) all pass.
 
 > **SESSION (cd), 2026-09-10 — Deploy-button arrow direction, click-to-pin from the circuit
 > table, an alternate ca1/ca3 drill-in sub-assembly layout, and an empty-hint alignment fix.**
@@ -1796,6 +1841,28 @@ Prove the whole app shell and asset schema on one circuit with hand-authored sam
 - Next: ...
 - Blockers: ...
 -->
+
+### 2026-09-11 (ce) — Territorial-court note bottom-alignment in Timeline mode, Summary > Supreme Court FedSoc default + legend key
+- Phase: 4, continuing (cd). Territorial note (VI/GU/NMI): root cause was .ctt-stage-main lacking
+  align-self:stretch, unlike .ctt-detail — it sat at align-items:flex-start's natural content
+  height within the already-tall stage row (forced tall by .ctt-pane-body > .ctt-stage-row's own
+  flex:1 0 auto, in BOTH modes), leaving a gap below in Timeline mode. Majority mode masked this
+  by explicitly inflating the stage via majorityStageHeight() to nearly fill the row; Timeline's
+  timelineStageHeight() sizes purely from row count with no such compensation. Fixed with
+  align-self:stretch + flex-column on .ctt-stage-main and margin-top:auto on .ctt-note (a sticky-
+  footer flex pattern), reverted to a fixed 6px on mobile where the row stops being flex at all.
+- Summary > Supreme Court: FedSoc now defaults ON (SCOTUS's own Summary pane has no None|FedSoc|
+  ACS switch of its own to toggle it from) as a ONE-TIME session default (S._affilMarkTouched)
+  that never overrides a real choice made anywhere, plus a right-aligned legend key
+  (.ctt-scotus-affil-key) in the same horizontal band as the title/meta text, using the same
+  position:absolute technique the District deploy button already uses.
+- Verified: extended tests/smoke.mjs and tests/browser-checks.mjs for both fixes (note alignment
+  in both modes across territorial/ordinary courts, FedSoc default firing/non-override, legend key
+  geometry). smoke.mjs/browser-checks.mjs/stress.mjs (12 cycles) all pass.
+- Next: no open item from this bug report. Resume the Phase-4 tail list above as the next task.
+  (Operator also dropped prompt_09_04_2026.txt in the repo root — a search-bar feature request —
+  not yet actioned; it wasn't raised in conversation this session.)
+- Blockers: none.
 
 ### 2026-09-10 (cd) — Deploy-button arrow direction, click-to-pin from the circuit table, alternate ca1/ca3 sub-assembly layout, empty-hint alignment fix
 - Phase: 4, continuing (cc). Deploy button arrows now flip with the label (down for "Set upon
