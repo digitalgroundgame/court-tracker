@@ -90,6 +90,9 @@ const S = {
   searchIndex: null,          // data/judges_search.json, lazy-loaded once on first search use
   searchIndexPromise: null,   // in-flight fetch (dedupes concurrent keystrokes before it resolves)
   searchSeq: 0,                // guards against a stale (superseded) search render
+  searchRovingPref: new Map(), // full_name -> last court index picked for a roving judgeship,
+                                // persisted for this page session (survives re-searching, reset
+                                // only on a fresh mount — NOT scoped to one render of the row)
 };
 // Sentinel selectedCourt value for the Summary pane — not a real courts.csv row (has_geography
 // doesn't apply; it's a fixed pane, never a map shape), so every place that reads S.selectedCourt
@@ -305,20 +308,21 @@ async function runSearch(query) {
  *  real `<button>` elements any more for this reason (nesting a `<button>` inside a `<button>`
  *  is invalid HTML and unreliable across browsers) — `renderSearchResults` uses a `role="option"`
  *  div for every row instead, roving or not, so all rows share one consistent structure. The
- *  FIRST court starts marked as current (`.ctt-is-selected` — bold/accent text, the operator's
- *  own "visible marker of text formatting"); ArrowLeft/Right (wired in `buildShell`) move that
- *  mark via `setRovingSelection`; a direct click on any button jumps straight to that one
- *  regardless of which is currently marked. Every button carries its own `tabindex="-1"` — they
- *  are reachable by mouse and by the row's own ArrowLeft/Right, not by Tab, matching how the
- *  rows themselves are only reachable via ArrowUp/Down (a typeahead-combobox pattern, not a
- *  plain tab-through list). */
+ *  court at `row._selectedIdx` (already resolved by the caller — see `rovingSelectedIdx`) starts
+ *  marked as current (`.ctt-is-selected` — bold/accent text, the operator's own "visible marker
+ *  of text formatting"); ArrowLeft/Right (wired in `buildShell`) and a direct click on ANY
+ *  button both move that mark via `setRovingSelection`, which also PERSISTS the choice — a click
+ *  is not just an immediate jump, it is also "set this as the mark" (operator spec). Every
+ *  button carries its own `tabindex="-1"` — they are reachable by mouse and by the row's own
+ *  ArrowLeft/Right, not by Tab, matching how the rows themselves are only reachable via
+ *  ArrowUp/Down (a typeahead-combobox pattern, not a plain tab-through list). */
 function buildRovingCourtLabel(row, courts) {
   const nodes = [];
   const primary = courts[0];
   const circuit = primary.court_level === "district" ? S.courts.get(primary.parent_id) : null;
   courts.forEach((c, i) => {
     if (i > 0) nodes.push(document.createTextNode(" / "));
-    const btn = el("button", "ctt-search-court-btn" + (i === 0 ? " ctt-is-selected" : ""),
+    const btn = el("button", "ctt-search-court-btn" + (i === row._selectedIdx ? " ctt-is-selected" : ""),
       { type: "button", tabindex: "-1" });
     btn.textContent = c.short_name;
     btn.addEventListener("click", (e) => {
@@ -331,8 +335,18 @@ function buildRovingCourtLabel(row, courts) {
   if (circuit) nodes.push(document.createTextNode(` (${circuit.short_name})`));
   return nodes;
 }
+/** The court most recently picked (by click OR arrow key — `setRovingSelection` records both
+ *  identically) for THIS judge, so re-searching them later in the same page session reopens on
+ *  the same court rather than resetting to the first one every time (operator spec: "preserved
+ *  over the page session"). Clamped in case stale data ever disagreed with a live court count
+ *  (defensive only — within one session `judges_search.json` never changes underneath itself). */
+function rovingSelectedIdx(fullName, count) {
+  const saved = S.searchRovingPref.get(fullName);
+  return typeof saved === "number" && saved >= 0 && saved < count ? saved : 0;
+}
 function setRovingSelection(row, idx) {
   row._selectedIdx = idx;
+  S.searchRovingPref.set(row._fullName, idx);
   row.querySelectorAll(".ctt-search-court-btn").forEach((b, i) => b.classList.toggle("ctt-is-selected", i === idx));
 }
 function renderSearchResults(results) {
@@ -348,20 +362,32 @@ function renderSearchResults(results) {
       const row = el("div", "ctt-search-result" + (roving ? " ctt-search-result-roving" : ""),
         { role: "option", tabindex: "-1" });
       row._courts = r.courts;
-      row._selectedIdx = 0;
       row._fullName = r.rec.full_name;
+      row._selectedIdx = roving ? rovingSelectedIdx(r.rec.full_name, r.courts.length) : 0;
       const nameLine = el("div", "ctt-search-name");
       nameLine.innerHTML = highlightName(r.rec.full_name, r.ranges) +
         (r.rec.status === "senior" ? ` <span class="ctt-search-senior">Senior</span>` : "");
+      // Two SEPARATE flex children, not one string of text — president/party and the court
+      // label wrap as whole units (never mid-phrase) when the line doesn't fit, landing the
+      // president chip on its own line ABOVE the court name (`.ctt-search-meta`'s flex-wrap:
+      // wrap does this for free, since a flex item never breaks internally to wrap). This is
+      // what keeps a roving judge's (up to three) district buttons from wrapping mid-list
+      // (operator spec) while an ordinary single-court row still reads as one line whenever it
+      // fits — no JS overflow measurement needed, CSS wraps only when it actually has to.
       const metaLine = el("div", "ctt-search-meta");
       const shorthand = presidentShorthand(r.rec.appointing_president);
       const letter = partyLetter(r.rec.president_party);
       const ring = PARTY_CLASS[r.rec.president_party] || "ctt-other";
       if (shorthand) {
-        metaLine.innerHTML = `<span class="ctt-dot ${ring}"></span>${shorthand}${letter ? ` (${letter})` : ""} · `;
+        const presWrap = el("span", "ctt-search-president");
+        presWrap.innerHTML = `<span class="ctt-dot ${ring}"></span>${shorthand}${letter ? ` (${letter})` : ""}`;
+        metaLine.append(presWrap);
       }
-      if (roving) metaLine.append(...buildRovingCourtLabel(row, r.courts));
-      else metaLine.append(document.createTextNode(courtLabelFor(r.courts)));
+      const courtWrap = el("span", "ctt-search-court");
+      if (shorthand) courtWrap.append(document.createTextNode("· "));
+      if (roving) courtWrap.append(...buildRovingCourtLabel(row, r.courts));
+      else courtWrap.append(document.createTextNode(courtLabelFor(r.courts)));
+      metaLine.append(courtWrap);
       row.append(nameLine, metaLine);
       // A roving row's own background has NO click-to-navigate — only its per-court buttons do
       // (operator spec). An ordinary row still jumps on a plain click, same as always.
@@ -3807,7 +3833,7 @@ export async function mount(root) {
   S.appointmentsAll = null; S.presidentPhotos = null;
   S.summaryView = "scotus"; S.districtArrangement = null; S.districtArrangementAlt = null;
   S.districtOnMap = false; S.districtMapState = null; S.districtDetailPinnedId = null;
-  S.searchIndex = null; S.searchIndexPromise = null; S.searchSeq = 0;
+  S.searchIndex = null; S.searchIndexPromise = null; S.searchSeq = 0; S.searchRovingPref = new Map();
 
   const ui = buildShell(root);
   try {
