@@ -1,0 +1,78 @@
+name: Pages
+
+# Publishes the widget as a live page at https://digitalgroundgame.github.io/court-tracker/.
+# The site tree is the SAME derivation as the release zip (scripts/build_release.py --dir),
+# so what the page serves is byte-identical to what people download, and a data-only refresh
+# (new CSV/SVG -> scripts/build_assets.py -> push to main) republishes with no workflow edit.
+#
+# ONE-TIME SETUP: repo Settings -> Pages -> Source: "GitHub Actions". Pages on a private repo
+# requires a paid plan, and unless the account is Enterprise Cloud with private Pages, the
+# published site is PUBLIC even while the repo stays private.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Let a running deploy finish rather than cancelling it — a half-published site is worse
+# than a slightly stale one.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Build the site tree
+        run: |
+          set -euo pipefail
+          python3 scripts/build_release.py --version "pages-${GITHUB_SHA::7}" --dir site
+          # Belt and braces: this workflow uploads a static artifact, so Pages never runs
+          # Jekyll — but the marker keeps that true if the source is ever switched to a branch.
+          touch site/.nojekyll
+
+      - name: Verify the site boots
+        # Runs against a COPY so the published tree stays pristine (no tests/, no node_modules).
+        # A file the app fetches but the derivation missed fails here, not in a visitor's browser.
+        run: |
+          set -euo pipefail
+          npm ci
+          VERIFY="${RUNNER_TEMP}/verify"
+          cp -r site "$VERIFY"
+          mkdir -p "$VERIFY/tests"
+          cp tests/smoke.mjs "$VERIFY/tests/"
+          ln -s "$PWD/node_modules" "$VERIFY/node_modules"
+          cd "$VERIFY" && node tests/smoke.mjs
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

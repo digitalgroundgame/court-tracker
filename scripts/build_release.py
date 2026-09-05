@@ -19,15 +19,21 @@ Deliberately excluded (they are in the git source tarball GitHub attaches automa
 and the app never fetches them): the source-of-truth CSVs, `scripts/`, `docs/`, `tests/`,
 `tools/`, and `data/census|nps/` build inputs.
 
+The same derived tree is both the release zip and the GitHub Pages site — `--dir` writes
+it out as a plain directory so `.github/workflows/pages.yml` can publish it, which keeps the
+live page byte-identical to what people download.
+
 Usage:
   python3 scripts/build_release.py                 # version from the git tag on HEAD
   python3 scripts/build_release.py --version v0.1.0
+  python3 scripts/build_release.py --dir site      # write the tree to ./site (for Pages)
   python3 scripts/build_release.py --list          # dry run: print the file list only
 """
 from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import subprocess
 import sys
 import zipfile
@@ -150,6 +156,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="Bundle the static-download release zip.")
     ap.add_argument("--version", help="Release version, e.g. v0.1.0 (default: git tag on HEAD)")
     ap.add_argument("--output", help="Output .zip path (default: dist/court-tracker-<version>.zip)")
+    ap.add_argument("--dir", help="Write the tree to this directory instead of a zip (GitHub Pages)")
     ap.add_argument("--list", action="store_true", help="Print the file list and exit, writing nothing")
     args = ap.parse_args()
 
@@ -180,10 +187,27 @@ def main() -> int:
               f"{total / 1e6:.1f} MB uncompressed — nothing written (--list)")
         return 0
 
+    manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
+
+    if args.dir:
+        site = Path(args.dir)
+        # Rebuild from scratch: a file dropped from the data must not linger on the site.
+        if site.exists():
+            shutil.rmtree(site)
+        for p in paths:
+            dest = site / p
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(ROOT / p, dest)
+        (site / "README.txt").write_text(
+            readme_text(version, manifest, len(paths), len(photos)), encoding="utf-8")
+        print(f"[build_release] wrote {len(paths) + 1} files to {site}/ "
+              f"({total / 1e6:.1f} MB) — data version {manifest.get('version')}, "
+              f"last appointment {manifest.get('last_appointment')}")
+        return 0
+
     out = Path(args.output) if args.output else ROOT / "dist" / f"court-tracker-{version}.zip"
     out.parent.mkdir(parents=True, exist_ok=True)
     root_name = f"court-tracker-{version}"
-    manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
 
     with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
         for p in paths:
