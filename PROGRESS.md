@@ -10,7 +10,7 @@
 tracker (Phase-4 tail items open, PLUS a brand-new third pane view — "Change", built session
 (aw), operator review round addressed session (ax)) and the appointments beeswarm
 (feature-complete first version, operator refinement rounds ongoing; see sessions ai→at, aw).
-**Last updated:** 2026-09-05 (session (cn))
+**Last updated:** 2026-09-05 (session (cn), incl. Pages follow-up)
 
 > **SESSION (cn), 2026-09-05 — Release packaging: static-download bundler, notes, and a
 > tag-driven GitHub Actions release workflow.**
@@ -48,6 +48,38 @@ tracker (Phase-4 tail items open, PLUS a brand-new third pane view — "Change",
 > (`git tag -a v0.1.0 && git push origin v0.1.0` triggers the workflow).
 > - Also noted: this log's recent entries are dated 2026-09-11 while the commits they describe
 > are dated 2026-09-05. Used the real date here.
+
+> - **FOLLOW-UP, same session — GitHub **Pages**, which is what the operator actually wanted
+> ("pages instead of a github release").** A release publishes a downloadable zip; it does NOT
+> put the app at a URL. Added `.github/workflows/pages.yml`: on every push to `main` it builds
+> the site, verifies it, and deploys to `https://digitalgroundgame.github.io/court-tracker/`.
+> - **The site tree is the same derivation as the release zip** — `build_release.py` gained
+> `--dir <path>`, which writes the identical file set out as a directory instead of zipping it
+> (rebuilt from scratch each run, so a file dropped from the data can't linger on the site).
+> So the live page and the download are byte-identical, and a data-only refresh republishes
+> with no workflow edit — same contract as everywhere else in this repo.
+> - **Verified for real, not just headlessly**: built the site tree, served it over
+> `http.server`, and loaded it in **headless Chromium** (`/opt/pw-browsers/chromium`).
+> Screenshot confirms the national map, seat blocks, selector, search bar and the beeswarm
+> below all render from a plain static server. The access log shows **45 requests, zero 404s**
+> (only the browser's own `/favicon.ico`) — which ALSO confirms the lazy-loading contract:
+> 45 requests for the national view, not the 1,321 files in the tree. `smoke.mjs` ALL PASS
+> against the site tree too. This is the first time the app has been eyeballed in a real
+> browser over HTTP rather than through jsdom.
+> - CI verification runs against a COPY of the site tree, so `tests/` and a `node_modules`
+> symlink never reach the published artifact.
+> - **Kept the release tooling** (`release.yml`, `RELEASE_NOTES.md`) rather than deleting it:
+> it is inert unless a `v*` tag is pushed, and `CLAUDE.md` §6 requires the widget to work as a
+> static download, which the zip is the natural vehicle for. Flagged to the operator as
+> removable on request.
+> - **Blocked, needs the operator**: (1) repo Settings -> Pages -> Source: "GitHub Actions" is
+> a one-time manual step no workflow can do for itself; (2) Pages on a **private** repo needs a
+> paid plan, and the published site is PUBLIC unless the account is Enterprise Cloud with
+> private Pages — a real decision, since every judge row is still `data_verified=false`;
+> (3) the workflow only fires once it is on `main` (PR #1).
+> - Earlier in this session: `git push origin v0.1.0` was **refused by GitHub with 403** on
+> `git-receive-pack` — this session's credentials can push its own branch but not `refs/tags/*`.
+> The tag was never created on the remote. Moot now if Pages replaces the release.
 
 > **SESSION (cm), 2026-09-11 — Explained, not fixed: Summary > District's national totals don't
 > arithmetically add up, and that's correct (operator report: "654+27=681 > 673").**
@@ -2173,16 +2205,22 @@ Prove the whole app shell and asset schema on one circuit with hand-authored sam
       layout has never been eyeballed — carried since Phase 1, now self-serve via `tests/shoot.mjs`.
       Note seat blocks are constant-px, so they read relatively larger on a small map.
 - [ ] Lazy-load/perf tuning; verify only-needed assets load per view.
-- [x] **Release packaging** (session cn, 2026-09-05): `scripts/build_release.py` derives the
-      static-download zip from `manifest.json` (+ `photo_thumb` refs), and
-      `.github/workflows/release.yml` publishes it on a `v*` tag after re-running the smoke
-      suite against the *unpacked bundle*. `RELEASE_NOTES.md` drafted for v0.1.0. Nothing
-      tagged yet — that's the operator's call.
+- [x] **Release packaging + GitHub Pages publishing** (session cn, 2026-09-05):
+      `scripts/build_release.py` derives the shippable file set from `manifest.json` (+
+      `photo_thumb` refs) and emits it either as a zip (`--version`) or as a directory
+      (`--dir`, for Pages). `.github/workflows/pages.yml` deploys that tree to
+      `digitalgroundgame.github.io/court-tracker` on every push to `main`;
+      `.github/workflows/release.yml` publishes the zip on a `v*` tag. Both verify by running
+      the smoke suite against the built tree, not the repo. `RELEASE_NOTES.md` drafted for
+      v0.1.0. BLOCKED on the operator: Pages must be enabled in repo Settings (Source:
+      "GitHub Actions"), and Pages on a private repo needs a paid plan + makes the site public.
 - [ ] Verify static-download + archive.org behavior (relative paths, offline image fallback).
-      PARTIAL (session cn): the release bundle is proven complete headlessly — smoke 482/482
-      against the unpacked zip — and photo coverage is now fully local (1,255 cached thumbs,
-      235 judges on the initials fallback, zero remote hotlinks), so the offline story no
-      longer depends on Wikimedia. STILL OPEN: an actual `file://` open in a real browser.
+      PARTIAL (session cn): the bundle is proven complete — smoke 482/482 against the unpacked
+      zip AND against the Pages site tree — and photo coverage is now fully local (1,255 cached
+      thumbs, 235 judges on the initials fallback, zero remote hotlinks), so the offline story
+      no longer depends on Wikimedia. The tree also renders correctly in headless Chromium over
+      a static HTTP server (45 requests, zero 404s — lazy-loading confirmed). STILL OPEN: an
+      actual `file://` open (HTTP is not the same as `file://` for module/CORS behavior).
       NOTE: 1,094 judge photos are **remote** Wikimedia URLs -> initials fallback offline (allowed
       by contract). Consider caching to `assets/photos/` if the download story needs better.
 - [ ] Final QA against the UX contract in `CLAUDE.md` §5.
