@@ -12,7 +12,7 @@ tracker (Phase-4 tail items open, PLUS a brand-new third pane view — "Change",
 (feature-complete first version, operator refinement rounds ongoing; see sessions ai→at, aw).
 **Last updated:** 2026-09-11
 
-> **SESSION (cn), 2026-09-06 — Issue #9: personal contact info and one machine's absolute paths
+> **SESSION (c0), 2026-09-06 — Issue #9: personal contact info and one machine's absolute paths
 > out of `scripts/`.**
 > - **The PII.** Four collection scripts hardcoded a personal university email in their
 > User-Agent (`collect_courtlistener.py` `FJC_HTML_UA`, `enrich_wikipedia.py`, `cache_photos.py`,
