@@ -52,9 +52,14 @@ keeps working offline / when archived. Update data or boundaries by replacing fi
 
 ## Syncing the data package (for external consumers)
 Every push to `main` that changes `data/manifest.json` triggers `.github/workflows/release-data.yml`,
-which tags the commit `data-v<manifest.version>` and cuts a GitHub Release containing `embed/` + the
-runtime `data/*.json` files + `assets/geo/` + `assets/photos/` — nothing from `data/cache/` or the
-geometry-source inputs.
+which tags the commit `data-v<manifest.version>` and cuts a GitHub Release. Nothing from
+`data/cache/` or the geometry-source inputs is ever published. The release carries two assets, cut
+from the same run and the same commit, so they are always the same `manifest.version`:
+
+| asset | size | contains |
+| --- | --- | --- |
+| `data-package.tar.gz` | ~21MB | `embed/` + the runtime `data/*.json` + `assets/geo/` + `assets/photos/` |
+| `data-json.tar.gz` | ~364KB | the runtime `data/*.json` only, same `data/` paths |
 
 **Poll the releases (or tags) API, not the manifest on a branch.** The manifest lands on `main`
 *before* the workflow cuts the release, so a consumer watching the manifest can see a version whose
@@ -62,11 +67,20 @@ release does not exist yet — and never will, if that run fails. Watching relea
 learn about a version once its artifact actually exists. It is also one request: the version is in
 the tag name, so nothing needs fetching to detect a change.
 
-**Pinning to the tag is a first-class alternative to downloading the tarball.** The atomicity comes
-from the tag being immutable, not from the archive, so fetching individual files at the tag ref is
-equally safe. Prefer it if you do not need photos or geometry: those are ~98% of the package (21MB
-compressed, versus ~364KB for the runtime JSON alone). Whichever you pull, apply it atomically on
-your side — land it somewhere new and swap a pointer, so a reader never sees a half-updated set.
+**Then pick whichever of three shapes fits, in this order:**
+
+1. **Pin to the tag** and fetch the files you need at that ref — the recommended default, and what
+   the first consumer (Pragmatic Papers) does. The atomicity comes from the tag being immutable, not
+   from an archive, so this is exactly as safe as downloading one, and you transfer only what you
+   actually read.
+2. **`data-json.tar.gz`** if you want a single immutable file to store, checksum, mirror, or hand to
+   an offline process, and you render your own map and supply your own images. Photos and geometry
+   are ~98% of the full package's bytes.
+3. **`data-package.tar.gz`** if you need the photos and geometry too, or you are running the
+   reference widget in `embed/` as shipped.
+
+Whichever you pull, apply it atomically on your side — land it somewhere new and swap a pointer, so
+a reader never sees a half-updated set.
 
 ## Scope at a glance
 13 courts of appeals + 94 district courts (incl. territorial) + USCIT & CFC as Federal-Circuit

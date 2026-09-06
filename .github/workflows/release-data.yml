@@ -4,9 +4,19 @@ name: Release data package
 # `version` field changes on `main` — the artifact a scheduled external puller should pull,
 # instead of racing `main` mid-push.
 #
-# The release contains exactly what a renderer needs at runtime: embed/ + data/ + assets/geo/
-# + assets/photos/ — deliberately excluding data/cache/, data/census/, data/nps/, and any
-# other pipeline-only or geometry-source inputs that never ship to a reader.
+# Two assets are published per release, from the same run and the same commit, so they are
+# always the same manifest.version by construction:
+#
+#   data-package.tar.gz  embed/ + the runtime data/*.json + assets/geo/ + assets/photos/ —
+#                        everything a renderer needs at runtime. Deliberately excludes
+#                        data/cache/, data/census/, data/nps/, and any other pipeline-only or
+#                        geometry-source input that never ships to a reader.
+#   data-json.tar.gz     the runtime data/*.json only, same data/-prefixed paths, for a
+#                        consumer that renders its own map and supplies its own images —
+#                        photos and geometry are ~98% of the full package's bytes.
+#
+# RUNTIME_JSON below is the single source of truth for that file list: both tarballs are built
+# from it, so the JSON-only asset cannot drift from the full one as derived files are added.
 
 on:
   push:
@@ -42,14 +52,30 @@ jobs:
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Build release tarball
+      - name: Build release tarballs
+        id: build
         if: steps.check.outputs.exists == 'false'
         run: |
           set -euo pipefail
-          tar czf data-package.tar.gz embed data/manifest.json data/courts.json data/judges \
-            data/circuit_justices.json data/judges_search.json data/seat_blocks.json \
-            data/district_arrangement.json data/district_arrangement_alt.json \
-            data/appointments.json data/president_photos.json assets/geo assets/photos
+          # Single source of truth for the runtime JSON payload — used by both tarballs.
+          RUNTIME_JSON=(
+            data/manifest.json
+            data/courts.json
+            data/judges
+            data/circuit_justices.json
+            data/judges_search.json
+            data/seat_blocks.json
+            data/district_arrangement.json
+            data/district_arrangement_alt.json
+            data/appointments.json
+            data/president_photos.json
+          )
+          tar czf data-package.tar.gz embed "${RUNTIME_JSON[@]}" assets/geo assets/photos
+          tar czf data-json.tar.gz "${RUNTIME_JSON[@]}"
+          {
+            echo "full_size=$(du -h data-package.tar.gz | cut -f1)"
+            echo "json_size=$(du -h data-json.tar.gz | cut -f1)"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Tag and publish release
         if: steps.check.outputs.exists == 'false'
@@ -63,7 +89,9 @@ jobs:
           git push origin "$TAG"
           COUNTS=$(jq -r '.counts | "\(.courts) courts (\(.circuits) circuits, \(.districts) districts, \(.specialized) specialized), \(.judges) judges, \(.photo_thumbs) cached photos."' data/manifest.json)
           LAST_APPT=$(jq -r '.last_appointment // "n/a"' data/manifest.json)
-          NOTES=$(printf 'Automated data-package release (manifest.version=%s), cut because `data/manifest.json` changed on `main`.\n\n%s\nLast tracked appointment: %s.\n\nContains `embed/` plus the runtime `data/*.json` files, `assets/geo/`, and `assets/photos/` -- everything a renderer needs, nothing a build pipeline does not ship. See `docs/CODEBOOK.md` for the schema and `README.md` for how this release is meant to be synced.' "$VERSION" "$COUNTS" "$LAST_APPT")
-          gh release create "$TAG" data-package.tar.gz \
+          NOTES=$(printf 'Automated data-package release (manifest.version=%s), cut because `data/manifest.json` changed on `main`.\n\n%s\nLast tracked appointment: %s.\n\n## Assets\n\n| asset | size | contains |\n| --- | --- | --- |\n| `data-package.tar.gz` | %s | `embed/` + the runtime `data/*.json` + `assets/geo/` + `assets/photos/` — everything a renderer needs, nothing the build pipeline does not ship. |\n| `data-json.tar.gz` | %s | the runtime `data/*.json` only, same `data/` paths — for a consumer that renders its own map and supplies its own images. |\n\nBoth are cut from this same commit, so they are always the same `manifest.version`. If you do not need an archive at all, pinning to the immutable tag `%s` and fetching files at that ref is equally atomic and cheaper still.\n\nSee `docs/CODEBOOK.md` for the schema and `README.md` for how this release is meant to be synced.' \
+            "$VERSION" "$COUNTS" "$LAST_APPT" \
+            "${{ steps.build.outputs.full_size }}" "${{ steps.build.outputs.json_size }}" "$TAG")
+          gh release create "$TAG" data-package.tar.gz data-json.tar.gz \
             --title "Data $TAG" \
             --notes "$NOTES"
