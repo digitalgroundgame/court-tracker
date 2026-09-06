@@ -1,5 +1,19 @@
 {
-  "dependencies": {
+  "name": "court-tracker",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Embeddable federal court appointment tracker \u2014 a zero-runtime-dependency ES-module widget plus the data pipeline behind it.",
+  "license": "SEE LICENSE IN LICENSE",
+  "type": "module",
+  "scripts": {
+    "test": "node tests/smoke.mjs",
+    "test:browser": "node scripts/serve_and_run.mjs tests/browser-checks.mjs",
+    "test:dist": "CT_BUILD=dist node tests/smoke.mjs",
+    "build": "node scripts/build_embed.mjs",
+    "test:browser:dist": "node scripts/serve_and_run.mjs tests/browser-checks.mjs --url http://localhost:8777/tests/dist-host.html"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.10",
     "jsdom": "^29.1.1"
   }
 }
