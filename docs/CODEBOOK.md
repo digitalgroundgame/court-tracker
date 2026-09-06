@@ -204,31 +204,6 @@ first interaction with the search box — never on initial mount.
   than one court seat merges automatically, not just the three statutory pairs/triples known
   today.
 
-## Table H — `manifest.json`'s `national_totals`  (derived; nation-wide reconciliation)
-
-Computed by `build_national_totals()` in `build_assets.py` and written into `data/manifest.json`
-directly (no separate file) — small enough to ride along with the version/counts already there.
-Ported out of the reference widget (`embed/court-tracker.js` used to compute this at render time)
-so any consumer of the raw data package, not just this repo's own widget, gets the correct
-nation-wide authorized/active/vacant numbers without reimplementing the reconciliation below.
-
-| key | type | description |
-|---|---|---|
-| `authorized` | integer | Sum of `authorized_judgeships` across every `court_level = district` court. |
-| `active` | integer | Sum of active R+D+other judges across the same courts, from `seat_blocks.json`. |
-| `vacancies` | integer | Sum of each court's `authorized - active`, floored at 0 per court (see below). |
-| `over_authorized` | integer | Sum of each court's `max(0, active - authorized)` — the amount by which a court seats MORE active judges than it is authorized (roving judgeships — 28 U.S.C. §133 shared seats across same-state districts — plus rare FJC status lag; see `docs/DATA_SOURCES.md`'s discrepancy log). |
-
-`authorized + over_authorized` always equals `active + vacancies` exactly — `over_authorized` is
-what makes the three headline numbers reconcile instead of silently not summing (a handful of
-courts are over their base authorized count, and `build_seat_blocks()` deliberately floors THEIR
-`vacancies` at 0 rather than inventing a negative one, since a real judge is never dropped from
-the block).
-
-- **Data-only, like every other derived asset here**: re-running `build_assets.py` regenerates
-  this automatically whenever `seat_blocks.json`'s underlying counts change — no separate step.
-- Present only when `seat_blocks.json` is (i.e. `null` in a build with no courts/judges at all).
-
 ## Validation rules (enforced in `build_assets.py`)
 - Every `judges.court_id` and `circuit_justices.circuit_id` exists in `courts.csv`.
 - `fedsoc_reported`/`acs_reported` true ⇒ corresponding `*_source` non-null.

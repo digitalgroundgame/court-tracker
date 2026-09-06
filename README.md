@@ -32,6 +32,9 @@ the app across phases. It is not the finished app yet.
 
 ## Getting started
 1. Set a CourtListener API token: `export COURTLISTENER_TOKEN=...`
+   Optional, but polite when running the collection scripts: `export COURT_TRACKER_CONTACT=...`
+   (an email or URL a site operator could reach you at — it is appended to the scripts'
+   User-Agent at run time, so no personal address is stored in the repo).
 2. Open `INITIAL_PROMPT.md`, paste the "First session" block into Claude Code at the repo root.
 3. Let it run Phase 0 → Phase 1 (an 8th-Circuit vertical slice). Review, then continue phases.
 4. In parallel, produce geometry per `docs/GEOMETRY_CONTRACT.md` and drop it into `assets/geo/`.
@@ -46,24 +49,6 @@ The widget is a scoped ES module + stylesheet plus a root div:
 All selectors are `ctt-`-prefixed and asset paths are relative, so it won't disturb the host page and
 keeps working offline / when archived. Update data or boundaries by replacing files in `data/` /
 `assets/geo/` and bumping the manifest version — no code edits.
-
-## Syncing the data package (for external consumers)
-Every push to `main` that changes `data/manifest.json` triggers `.github/workflows/release-data.yml`,
-which tags the commit `data-v<manifest.version>` and cuts a GitHub Release containing `embed/` + the
-runtime `data/*.json` files + `assets/geo/` + `assets/photos/` — nothing from `data/cache/` or the
-geometry-source inputs.
-
-**Poll the releases (or tags) API, not the manifest on a branch.** The manifest lands on `main`
-*before* the workflow cuts the release, so a consumer watching the manifest can see a version whose
-release does not exist yet — and never will, if that run fails. Watching releases means you only
-learn about a version once its artifact actually exists. It is also one request: the version is in
-the tag name, so nothing needs fetching to detect a change.
-
-**Pinning to the tag is a first-class alternative to downloading the tarball.** The atomicity comes
-from the tag being immutable, not from the archive, so fetching individual files at the tag ref is
-equally safe. Prefer it if you do not need photos or geometry: those are ~98% of the package (21MB
-compressed, versus ~364KB for the runtime JSON alone). Whichever you pull, apply it atomically on
-your side — land it somewhere new and swap a pointer, so a reader never sees a half-updated set.
 
 ## Scope at a glance
 13 courts of appeals + 94 district courts (incl. territorial) + USCIT & CFC as Federal-Circuit

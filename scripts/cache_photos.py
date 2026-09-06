@@ -50,7 +50,10 @@ ORIG_CACHE = DATA / "cache" / "photos_orig"
 THUMBS_OUT = ROOT / "assets" / "photos"
 LOOKUP_FILE = DATA / "cache" / "photo_thumbs.json"
 
-UA = "FederalCourtTracker/0.1 (https://github.com/; scapper@u.rochester.edu)"
+sys.path.insert(0, str(ROOT / "scripts"))
+from _useragent import user_agent  # noqa: E402
+
+UA = user_agent()
 SLEEP = 0.2
 
 # The smallest CSS size either widget ever displays an avatar at (court-tracker.js's
