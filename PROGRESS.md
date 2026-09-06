@@ -10,7 +10,26 @@
 tracker (Phase-4 tail items open, PLUS a brand-new third pane view — "Change", built session
 (aw), operator review round addressed session (ax)) and the appointments beeswarm
 (feature-complete first version, operator refinement rounds ongoing; see sessions ai→at, aw).
-**Last updated:** 2026-09-11
+**Last updated:** 2026-09-06
+
+> **SESSION (cp), 2026-09-06 — Formalized branch → PR → merge as the standing git workflow
+> (operator ask), instead of committing straight to `main`.**
+> - Operator wants issues/PRs actually worked and visible, not blithe direct-to-main commits.
+> `gh` was already authenticated with `repo` scope against `digitalgroundgame/court-tracker`.
+> Found the repo already has **12 open issues** (#2–#12 concrete gaps, #13 an epic tracking an
+> eventual "Pragmatic Papers" rendering-ownership handoff) and **2 open PRs** from prior sessions
+> — (cn)'s #14 (publishing prerequisites) and (co)'s #15 (Issue #9 PII/machine-path cleanup) —
+> that had already independently adopted a branch+PR pattern ahead of this being formalized.
+> - Updated `CLAUDE.md` §7 point 6: superseded the (br) "commit and push to main every time" rule
+> with branch(`claude/<slug>`)→PR→merge, a session-start check of `gh issue list`/`gh pr list`
+> (an open issue or review comment can supersede whatever `PROGRESS.md` says is next), and
+> case-by-case merge authority per operator decision — merge routine/low-risk PRs directly; leave
+> anything touching data correctness, scope, the UX contract, or a PR from a different/prior
+> session for the operator's explicit go-ahead.
+> - Fast-forwarded local `main` to `origin/main` (picked up already-merged PR #16, `LICENSE`).
+> - **Next**: review PR #15 (Issue #9) with the operator first — one existing PR at a time, per
+> operator instruction — before merging anything.
+> - Blockers: none.
 
 > **SESSION (cm), 2026-09-11 — Explained, not fixed: Summary > District's national totals don't
 > arithmetically add up, and that's correct (operator report: "654+27=681 > 673").**
