@@ -87,7 +87,10 @@ def load_manual_photo_registry() -> tuple[set[str], set[tuple[str, str]]]:
 WD_SPARQL = "https://query.wikidata.org/sparql"
 COMMONS_API = "https://commons.wikimedia.org/w/api.php"
 ENWIKI_API = "https://en.wikipedia.org/w/api.php"
-UA = "FederalCourtTracker/0.1 (https://github.com/; scapper@u.rochester.edu)"
+sys.path.insert(0, str(ROOT / "scripts"))
+from _useragent import user_agent  # noqa: E402
+
+UA = user_agent()
 
 THUMB_WIDTH = 320
 SLEEP = 0.2  # polite delay between API calls
