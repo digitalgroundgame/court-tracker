@@ -39,7 +39,10 @@ OUT_CSV = DATA / "president_photos.csv"
 
 WIKI_API = "https://en.wikipedia.org/w/api.php"
 COMMONS_API = "https://commons.wikimedia.org/w/api.php"
-UA = "FederalCourtTracker/0.1 (https://github.com/; 47438924+EmilyCapper@users.noreply.github.com)"
+sys.path.insert(0, str(ROOT / "scripts"))
+from _useragent import user_agent  # noqa: E402
+
+UA = user_agent()
 SLEEP = 0.2
 
 FREE_LICENSE = re.compile(r"^(pd|cc0|cc-by)", re.I)
