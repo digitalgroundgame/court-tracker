@@ -165,19 +165,37 @@ archived (e.g. archive.org). No build step at runtime; plain ES modules + fetch.
      is whatever `PROGRESS.md` says next — an open issue or a review comment on your own PR can
      supersede it.
    - **Per unit of work**: branch off `main` as `claude/<slug>` (matches the naming already in use
-     in this repo's history). Commit there — including that session's `PROGRESS.md` ledger entry in
-     the *same* branch/PR, not a separate direct-to-main commit. `git add -A` (check `git status`
-     first — verify nothing under `data/cache/`, `traces/`, or `node_modules/` snuck past
-     `.gitignore`, and that no unexpected file is staged).
+     in this repo's history). Commit CODE/DATA there only — **not** the `PROGRESS.md` ledger entry
+     (see below for why and where that goes instead). `git add -A` (check `git status` first —
+     verify nothing under `data/cache/`, `traces/`, or `node_modules/` snuck past `.gitignore`, and
+     that no unexpected file is staged).
    - **Open a PR** (`gh pr create`) once the unit of work is done; reference the issue it addresses
-     (`Fixes #N`) when there is one. The PR title should echo the session-log entry's heading (e.g.
-     `(br) — GitHub linking + auto-commit protocol`) so GitHub's PR/commit history reads as the same
-     log as `PROGRESS.md`'s session log, browsable either place.
+     (`Fixes #N`) when there is one. Write the full session-log write-up (what changed, verification,
+     what's next, blockers) into the **PR description** — this is where it lives while the branch is
+     open, and it's the source text for the ledger commit below. The PR title should echo the
+     write-up's heading (e.g. `(br) — GitHub linking + auto-commit protocol`) so GitHub's PR history
+     reads as the same log as `PROGRESS.md`'s session log, browsable either place.
    - **Merge authority is case-by-case** (operator decision, 2026-09-06): merge routine/low-risk PRs
      yourself once clean (no CLAUDE.md boundary violations, tests pass). Leave anything touching
      data correctness, scope, or the UX contract — and any PR from a prior/different session you
      didn't just write — for the operator's explicit go-ahead; when in doubt, summarize the diff and
      ask rather than merge.
+   - **The `PROGRESS.md` ledger entry is its own tiny branch → PR → merge, cut fresh at merge time**
+     (added 2026-09-06, session (cp), after (cn)/(co)/(cp) all independently prepended an entry at
+     the same top-of-log line and collided in a real 3-way merge conflict on `main`). Every session
+     writes to the identical insertion point (right after `**Last updated:**`), so bundling that edit
+     into a feature branch that might sit open for a while is what causes the collision — two
+     branches cut around the same time will always fight over that line. The fix is **not** an
+     exception that allows a direct commit to `main` (that would defeat the whole point of this
+     section) — it's doing the ledger update through the *same* branch → PR → merge discipline, just
+     on a branch with a lifespan of seconds instead of a whole session: immediately after merging the
+     code PR, branch off the now-current `main`, add only the `PROGRESS.md` entry (adapted from that
+     PR's description), push, open a PR, merge it. A branch that's created and merged in one breath
+     essentially never overlaps with another one doing the same thing.
+   - **Backstop**: `.gitattributes` sets `PROGRESS.md merge=union`, so even a genuine same-instant
+     collision (or a hand-edit while a session is mid-flight) auto-resolves by keeping both sides'
+     text instead of blocking on conflict markers — chronological ordering between two such entries
+     may need a quick manual nudge afterward, but no merge should ever get stuck on this file again.
    - Skip opening a PR only if there is truly nothing to commit (pure investigation, no file
      changes) — but still check issues/PRs at session start regardless.
 
