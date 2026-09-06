@@ -12,6 +12,34 @@ tracker (Phase-4 tail items open, PLUS a brand-new third pane view — "Change",
 (feature-complete first version, operator refinement rounds ongoing; see sessions ai→at, aw).
 **Last updated:** 2026-09-06
 
+> **SESSION (cp) cont'd, 2026-09-06 — PR #14 exposed a real merge-conflict source in this
+> session's own new workflow; fixed it and tested the fix (PR #19).**
+> - **What happened**: reviewing PR #14 for merge surfaced a genuine 3-way conflict in
+> `PROGRESS.md` — (cn), (co), and this session's own (cp) entry (below) had all independently
+> prepended a session-log entry at the identical top-of-log anchor (right after
+> `**Last updated:**`) on branches that sat open concurrently. Resolved it manually for #14
+> (reordered the three same-day entries chronologically, fixed a `(co)`/`(c0)` typo picked up
+> along the way) — but operator correctly flagged that bundling the ledger edit into every
+> feature branch is what causes this, and would keep recurring under the new workflow.
+> - **Fix (PR #19, merged)**: kept the "never commit straight to main" rule intact rather than
+> carving an exception into it. `CLAUDE.md` §7 point 6 now says the `PROGRESS.md` ledger entry
+> gets its OWN branch → PR → merge, cut fresh off `main` right when the code PR merges — a
+> lifespan of seconds instead of a whole session, so it essentially never overlaps another
+> branch doing the same thing. Added `.gitattributes` (`PROGRESS.md merge=union`) as a backstop
+> for a genuine same-instant collision or a hand-edit.
+> - **Actually tested, not just asserted**: simulated the exact collision with three throwaway
+> local branches (never pushed to origin, deleted after) — two branches cut from the same base,
+> each independently inserting a different dummy entry at the identical anchor, merged in
+> sequence. Result: auto-merged, zero conflict markers, both entries' distinct content survived
+> (one identical boilerplate line across the two dedup'd to a single copy — expected `union`
+> behavior, not a concern for real prose). Full method + result in PR #19's description.
+> - **This very entry is the first live (non-simulated) use of the new convention**: written on
+> a branch cut fresh from `main` after #19 merged, going up as its own PR rather than riding on
+> a feature branch.
+> - Blockers: none. Operator separately asked how to flag PR #19 as a standing/critical
+> reference — addressed live in conversation (cross-referenced from PR #14 and a pinned tracking
+> issue), not repeated here since it's process, not code.
+
 > **SESSION (cp), 2026-09-06 — Formalized branch → PR → merge as the standing git workflow
 > (operator ask), instead of committing straight to `main`.**
 > - Operator wants issues/PRs actually worked and visible, not blithe direct-to-main commits.
