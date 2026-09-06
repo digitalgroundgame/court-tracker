@@ -1,0 +1,69 @@
+name: Release data package
+
+# Cuts a versioned, atomic GitHub Release whenever data/manifest.json's content-hashed
+# `version` field changes on `main` — the artifact a scheduled external puller should pull,
+# instead of racing `main` mid-push.
+#
+# The release contains exactly what a renderer needs at runtime: embed/ + data/ + assets/geo/
+# + assets/photos/ — deliberately excluding data/cache/, data/census/, data/nps/, and any
+# other pipeline-only or geometry-source inputs that never ship to a reader.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "data/manifest.json"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read manifest version
+        id: manifest
+        run: |
+          set -euo pipefail
+          VERSION=$(python3 -c "import json; print(json.load(open('data/manifest.json'))['version'])")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=data-v$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Skip if this version was already released
+        id: check
+        run: |
+          set -euo pipefail
+          if git ls-remote --exit-code --tags origin "refs/tags/${{ steps.manifest.outputs.tag }}" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build release tarball
+        if: steps.check.outputs.exists == 'false'
+        run: |
+          set -euo pipefail
+          tar czf data-package.tar.gz embed data/manifest.json data/courts.json data/judges \
+            data/circuit_justices.json data/judges_search.json data/seat_blocks.json \
+            data/district_arrangement.json data/district_arrangement_alt.json \
+            data/appointments.json data/president_photos.json assets/geo assets/photos
+
+      - name: Tag and publish release
+        if: steps.check.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.manifest.outputs.version }}"
+          TAG="${{ steps.manifest.outputs.tag }}"
+          git tag "$TAG"
+          git push origin "$TAG"
+          COUNTS=$(jq -r '.counts | "\(.courts) courts (\(.circuits) circuits, \(.districts) districts, \(.specialized) specialized), \(.judges) judges, \(.photo_thumbs) cached photos."' data/manifest.json)
+          LAST_APPT=$(jq -r '.last_appointment // "n/a"' data/manifest.json)
+          NOTES=$(printf 'Automated data-package release (manifest.version=%s), cut because `data/manifest.json` changed on `main`.\n\n%s\nLast tracked appointment: %s.\n\nContains `embed/` plus the runtime `data/*.json` files, `assets/geo/`, and `assets/photos/` -- everything a renderer needs, nothing a build pipeline does not ship. See `docs/CODEBOOK.md` for the schema and `README.md` for how this release is meant to be synced.' "$VERSION" "$COUNTS" "$LAST_APPT")
+          gh release create "$TAG" data-package.tar.gz \
+            --title "Data $TAG" \
+            --notes "$NOTES"

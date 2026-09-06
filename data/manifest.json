@@ -54,6 +54,12 @@
       }
     }
   },
+  "national_totals": {
+    "authorized": 673,
+    "active": 654,
+    "vacancies": 27,
+    "over_authorized": 8
+  },
   "sources": {
     "courts_csv": true,
     "judges_csv": true,

@@ -186,6 +186,36 @@ def build_seat_blocks(courts: list[dict], judges: list[dict], anchor_rows: list[
     return out
 
 
+def build_national_totals(courts: list[dict], blocks: dict) -> dict:
+    """Nation-wide district-court authorized/active/vacant reconciliation — moved here from
+    embed/court-tracker.js's districtNationalTotals(), since this is correctness-sensitive logic
+    a headless data consumer shouldn't have to reverse-engineer. Summed directly from `blocks`
+    so it can never drift from the same numbers seat_blocks.json itself shows.
+
+    `active = authorized - vacancies` holds PER COURT only when that court isn't over its base
+    authorized count — a handful of courts genuinely seat more active judges than §133 assigns
+    them (shared/roving judgeships across same-state districts, plus the rare FJC status-lag
+    court; see DATA_SOURCES.md's discrepancy log). `build_seat_blocks()` floors THOSE courts'
+    `vacancies` at 0 rather than inventing a negative one (a real judge is never "subtracted"
+    from the block) — correct per-court, but it means the three NATIONAL sums don't add up
+    cleanly: active+vacancies can exceed authorized by exactly the summed overage, which
+    `over_authorized` reports so a consumer can explain the gap instead of showing numbers that
+    look like they don't add up (operator report, 2026-09-11: "654+27=681 > 673").
+    """
+    totals = {"authorized": 0, "active": 0, "vacancies": 0, "over_authorized": 0}
+    for c in courts:
+        if c["court_level"] != "district":
+            continue
+        b = blocks.get(c["court_id"], {})
+        authorized = b.get("authorized", 0)
+        active = b.get("r", 0) + b.get("d", 0) + b.get("o", 0)
+        totals["authorized"] += authorized
+        totals["active"] += active
+        totals["vacancies"] += b.get("vacancies", 0)
+        totals["over_authorized"] += max(0, active - authorized)
+    return totals
+
+
 def validate(courts: list[dict], judges: list[dict], justices: list[dict],
              blocks: dict | None = None) -> list[str]:
     """Codebook validation rules (docs/CODEBOOK.md §Validation rules). Returns errors."""
@@ -374,6 +404,11 @@ def main() -> int:
         blocks_file = "data/seat_blocks.json"
         payloads.append(data)
 
+    # national_totals — precomputed nation-wide reconciliation for the manifest (see
+    # build_national_totals()'s docstring). Pure function of `blocks`, whose bytes are already
+    # folded into `payloads` above, so no separate version-stamping is needed here.
+    national_totals = build_national_totals(courts, blocks) if blocks else None
+
     # appointments.json — historical appointment events since Nixon (collect_appointments.py),
     # for the future beeswarm feature. Lazy-loaded; nothing in the current widget reads it.
     appts_file = None
@@ -541,6 +576,7 @@ def main() -> int:
             "photo_thumbs": len(photo_thumbs),
         },
         "files": files,
+        "national_totals": national_totals,
         "sources": {
             "courts_csv": COURTS_CSV.exists(),
             "judges_csv": JUDGES_CSV.exists(),
