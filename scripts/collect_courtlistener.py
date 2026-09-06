@@ -64,7 +64,10 @@ TERRITORIAL_DRIFT_URL = {
     "vid": "https://www.vid.uscourts.gov/judges-info",
 }
 OUT = DATA / "judges.csv"
-FJC_HTML_UA = "FederalCourtTracker/0.1 (data collection; https://github.com/; scapper@u.rochester.edu)"
+sys.path.insert(0, str(ROOT / "scripts"))
+from _useragent import user_agent  # noqa: E402
+
+FJC_HTML_UA = user_agent("data collection")
 
 FIXED_TERM_YEARS = {"gud": 10, "nmid": 10, "vid": 10}   # uscfc moved to fjc_cfc_rows() (§DATA_SOURCES 2026-07-16)
 
