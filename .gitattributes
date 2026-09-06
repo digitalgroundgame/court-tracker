@@ -1,0 +1,8 @@
+# PROGRESS.md's session log has one shared insertion point (right after
+# **Last updated:**, at the top) that every session writes to. The `union`
+# merge driver is git's built-in strategy for append-style logs: on a
+# same-spot collision it keeps both sides' lines instead of raising a
+# conflict. See CLAUDE.md section 7 point 6 for the full policy this backs up
+# (the ledger entry's own fresh, short-lived branch is the primary fix; this
+# is the backstop for a genuine same-instant collision or a hand-edit).
+PROGRESS.md merge=union
