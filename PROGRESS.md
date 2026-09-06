@@ -12,6 +12,32 @@ tracker (Phase-4 tail items open, PLUS a brand-new third pane view — "Change",
 (feature-complete first version, operator refinement rounds ongoing; see sessions ai→at, aw).
 **Last updated:** 2026-09-06
 
+> **SESSION (cq), 2026-09-06 — JSON-only release asset (issue #23, PR #24).**
+> - **Origin**: operator flagged the "possible follow-on" paragraph in the as-built comment on
+> epic #13 (PP-side sync notes, 2026-09-06) as worth its own issue. Filed #23, then built it.
+> - **Problem**: `release-data.yml` cut exactly one asset, `data-package.tar.gz` (~21MB
+> compressed), of which ~98% is `assets/photos/` + `assets/geo/`. A consumer rendering its own
+> map with its own images — the Phase B end state — could only download 21MB and discard nearly
+> all of it each cycle, or skip archives entirely and pin to the tag. No small *archive* existed
+> for anyone wanting one immutable file to store, checksum, mirror, or feed an offline process.
+> - **Change**: every release now also carries `data-json.tar.gz` — the runtime `data/*.json`
+> only (`manifest.json` included), same `data/`-prefixed paths so the two extract compatibly.
+> Both are cut from the same run and commit, so they are always the same `manifest.version` by
+> construction. The path list lives once in a `RUNTIME_JSON` bash array feeding both tarballs, so
+> the JSON-only asset cannot drift as new derived JSON is added. Release notes gained an assets
+> table with measured sizes; `README.md`'s sync section now documents three consumer shapes in
+> preference order (pin to tag → JSON archive → full archive) instead of two.
+> - **Deliberately unchanged**: full-package contents, tag naming, and the standing
+> recommendation to poll the releases API and pin to the tag. This adds an option, it does not
+> replace pinning — nothing changes for PP as built.
+> - **Verified locally** against current data: both tarballs build from the shared array (21M /
+> 364K, matching the figures measured in #13); the JSON tarball extracts to the same `data/`
+> layout with `manifest.json` present; workflow parses as YAML; release-notes `printf` renders
+> correctly with real manifest values substituted for the step outputs.
+> - **Next**: workflow only fires on a `data/manifest.json` change on `main`, so the next data
+> refresh is its first real exercise (`workflow_dispatch` can force one sooner). Epic #13's open
+> items are unchanged: #2, #3, #4, #5, #10, plus the Phase-4 tail. No blockers.
+
 > **SESSION (cp) cont'd, 2026-09-06 — PR #14 exposed a real merge-conflict source in this
 > session's own new workflow; fixed it and tested the fix (PR #19).**
 > - **What happened**: reviewing PR #14 for merge surfaced a genuine 3-way conflict in
