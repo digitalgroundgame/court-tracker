@@ -1446,8 +1446,10 @@ function districtsForCircuit(circuitId) {
 
 /** Nation-wide district-court totals for the Summary > District caption meta line (operator ask,
  *  2026-09-08) — authorized/active/vacant summed across EVERY district court, not any one
- *  circuit. Summed directly from seatBlocks rather than re-derived, so it can never drift from
- *  the same numbers the table/blocks themselves show.
+ *  circuit. Precomputed by `build_national_totals()` in `build_assets.py` and shipped in
+ *  `manifest.national_totals` (CODEBOOK.md Table H) — moved out of this widget so any consumer
+ *  of the raw data package gets the same correct numbers without reimplementing the
+ *  reconciliation below.
  *
  *  `active = authorized - vacancies` holds PER COURT only when that court isn't over its base
  *  authorized count — a handful of courts genuinely seat more active judges than §133 assigns
@@ -1459,16 +1461,9 @@ function districtsForCircuit(circuitId) {
  *  `overAuthorized` reports so the caption can explain the gap instead of just showing numbers
  *  that look like they don't add up (operator report, 2026-09-11: "654+27=681 > 673"). */
 function districtNationalTotals() {
-  return [...S.courts.values()].filter((c) => c.court_level === "district").reduce((acc, c) => {
-    const b = S.seatBlocks?.[c.court_id] || {};
-    const authorized = b.authorized ?? 0;
-    const active = (b.r ?? 0) + (b.d ?? 0) + (b.o ?? 0);
-    acc.authorized += authorized;
-    acc.active += active;
-    acc.vacancies += b.vacancies ?? 0;
-    acc.overAuthorized += Math.max(0, active - authorized);
-    return acc;
-  }, { authorized: 0, active: 0, vacancies: 0, overAuthorized: 0 });
+  const t = S.manifest?.national_totals;
+  return { authorized: t?.authorized ?? 0, active: t?.active ?? 0, vacancies: t?.vacancies ?? 0,
+    overAuthorized: t?.over_authorized ?? 0 };
 }
 
 /** The circuit-wide table (operator spec, 2026-09-05: "in the style of the [District linker]
