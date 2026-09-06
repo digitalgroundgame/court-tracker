@@ -32,6 +32,9 @@ the app across phases. It is not the finished app yet.
 
 ## Getting started
 1. Set a CourtListener API token: `export COURTLISTENER_TOKEN=...`
+   Optional, but polite when running the collection scripts: `export COURT_TRACKER_CONTACT=...`
+   (an email or URL a site operator could reach you at — it is appended to the scripts'
+   User-Agent at run time, so no personal address is stored in the repo).
 2. Open `INITIAL_PROMPT.md`, paste the "First session" block into Claude Code at the repo root.
 3. Let it run Phase 0 → Phase 1 (an 8th-Circuit vertical slice). Review, then continue phases.
 4. In parallel, produce geometry per `docs/GEOMETRY_CONTRACT.md` and drop it into `assets/geo/`.
