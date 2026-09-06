@@ -12,6 +12,88 @@ tracker (Phase-4 tail items open, PLUS a brand-new third pane view — "Change",
 (feature-complete first version, operator refinement rounds ongoing; see sessions ai→at, aw).
 **Last updated:** 2026-09-06
 
+> **SESSION (cp) cont'd, 2026-09-06 — PR #14 exposed a real merge-conflict source in this
+> session's own new workflow; fixed it and tested the fix (PR #19).**
+> - **What happened**: reviewing PR #14 for merge surfaced a genuine 3-way conflict in
+> `PROGRESS.md` — (cn), (co), and this session's own (cp) entry (below) had all independently
+> prepended a session-log entry at the identical top-of-log anchor (right after
+> `**Last updated:**`) on branches that sat open concurrently. Resolved it manually for #14
+> (reordered the three same-day entries chronologically, fixed a `(co)`/`(c0)` typo picked up
+> along the way) — but operator correctly flagged that bundling the ledger edit into every
+> feature branch is what causes this, and would keep recurring under the new workflow.
+> - **Fix (PR #19, merged)**: kept the "never commit straight to main" rule intact rather than
+> carving an exception into it. `CLAUDE.md` §7 point 6 now says the `PROGRESS.md` ledger entry
+> gets its OWN branch → PR → merge, cut fresh off `main` right when the code PR merges — a
+> lifespan of seconds instead of a whole session, so it essentially never overlaps another
+> branch doing the same thing. Added `.gitattributes` (`PROGRESS.md merge=union`) as a backstop
+> for a genuine same-instant collision or a hand-edit.
+> - **Actually tested, not just asserted**: simulated the exact collision with three throwaway
+> local branches (never pushed to origin, deleted after) — two branches cut from the same base,
+> each independently inserting a different dummy entry at the identical anchor, merged in
+> sequence. Result: auto-merged, zero conflict markers, both entries' distinct content survived
+> (one identical boilerplate line across the two dedup'd to a single copy — expected `union`
+> behavior, not a concern for real prose). Full method + result in PR #19's description.
+> - **This very entry is the first live (non-simulated) use of the new convention**: written on
+> a branch cut fresh from `main` after #19 merged, going up as its own PR rather than riding on
+> a feature branch.
+> - Blockers: none. Operator separately asked how to flag PR #19 as a standing/critical
+> reference — addressed live in conversation (cross-referenced from PR #14 and a pinned tracking
+> issue), not repeated here since it's process, not code.
+
+> **SESSION (cp), 2026-09-06 — Formalized branch → PR → merge as the standing git workflow
+> (operator ask), instead of committing straight to `main`.**
+> - Operator wants issues/PRs actually worked and visible, not blithe direct-to-main commits.
+> `gh` was already authenticated with `repo` scope against `digitalgroundgame/court-tracker`.
+> Found the repo already has **12 open issues** (#2–#12 concrete gaps, #13 an epic tracking an
+> eventual "Pragmatic Papers" rendering-ownership handoff) and **2 open PRs** from prior sessions
+> — (cn)'s #14 (publishing prerequisites) and (co)'s #15 (Issue #9 PII/machine-path cleanup) —
+> that had already independently adopted a branch+PR pattern ahead of this being formalized.
+> - Updated `CLAUDE.md` §7 point 6: superseded the (br) "commit and push to main every time" rule
+> with branch(`claude/<slug>`)→PR→merge, a session-start check of `gh issue list`/`gh pr list`
+> (an open issue or review comment can supersede whatever `PROGRESS.md` says is next), and
+> case-by-case merge authority per operator decision — merge routine/low-risk PRs directly; leave
+> anything touching data correctness, scope, the UX contract, or a PR from a different/prior
+> session for the operator's explicit go-ahead.
+> - Fast-forwarded local `main` to `origin/main` (picked up already-merged PR #16, `LICENSE`).
+> - **Next**: review PR #15 (Issue #9) with the operator first — one existing PR at a time, per
+> operator instruction — before merging anything.
+> - Blockers: none.
+
+> **SESSION (co), 2026-09-06 — Issue #9: personal contact info and one machine's absolute paths
+> out of `scripts/`.**
+> - **The PII.** Four collection scripts hardcoded a personal university email in their
+> User-Agent (`collect_courtlistener.py` `FJC_HTML_UA`, `enrich_wikipedia.py`, `cache_photos.py`,
+> `collect_president_photos.py`), alongside a placeholder `https://github.com/` with no repo path.
+> New `scripts/_useragent.py` builds the UA from two constants (project + the real repo URL) and
+> appends `$COURT_TRACKER_CONTACT` **only if the operator exports it** — so the contact lives in a
+> shell, never in the tree, and doesn't go stale when the contact person changes. Both forms are
+> valid descriptive UAs; setting it is what Wikimedia's UA policy actually asks for. Documented in
+> `README.md` and `START_HERE.md` next to `COURTLISTENER_TOKEN`.
+> - **The machine paths.** `qgis_export.py`'s five path constants pointed into one operator's home
+> directory (`/home/…/MAD_project/…`); every other script in `scripts/` already derives `ROOT` from
+> `Path(__file__)`. They now derive from a `_find_repo_root()` that resolves in three steps:
+> `$COURT_TRACKER_ROOT` → this file's `__file__` → a walk up from the CWD looking for
+> `data/courts.csv` + `scripts/`, with a loud, instructive `RuntimeError` if all three miss. The
+> three-step dance exists because this script is `exec()`'d in the QGIS console, where **there is
+> no `__file__` at all** — the docstring's invocation line now uses
+> `exec(compile(src, p, 'exec'), {..., '__file__': p})` to supply one, and names the env var as the
+> fallback for anyone who runs the old plain-`exec` form. All five paths resolved to in-repo
+> locations anyway (`data/census/`, `data/county_to_district.csv`, `data/courts.csv`,
+> `data/out/assets/geo`, `data/nps/`), so this is a pure relocation, no behaviour change.
+> - Also redacted the one other personal email in a tracked file (a `(br)` session-log line naming
+> the operator's git identity); `git grep` for email addresses and for `/home/*` paths across all
+> tracked files now returns nothing.
+> - **Verified**: all four patched scripts import cleanly and print the new UA (`cache_photos`
+> compiles; its import needs PIL, absent in this container — pre-existing, unrelated).
+> `_find_repo_root()` exercised standalone through all five branches (env var, `__file__`, CWD
+> walk, bad env var, nothing-found). `python3 scripts/check_geometry.py` → PASS, 0 warnings.
+> `tests/smoke.mjs` can't run here (no `node_modules`, gitignored) and fails identically on
+> unmodified `main` — this change touches no widget code.
+> - **NOT done, needs an operator decision**: the email is still in **git history** (introduced in
+> the root commit `9d9746d`, so all 23 commits would be rewritten). Removing it means a
+> `git filter-repo` + force-push of `main`, which invalidates every existing clone. Flagged, not
+> performed.
+
 > **SESSION (cn), 2026-09-06 — Publishing prerequisites: national totals precomputed into the
 > build, and every manifest bump now cuts a tagged, atomic data release.**
 > - **Context.** An operator-requested repo review (what this app owns vs. what a downstream
@@ -2537,7 +2619,7 @@ Prove the whole app shell and asset schema on one circuit with hand-authored sam
   private, empty before this session). `gh` wasn't installed and the sandbox has no sudo — installed
   it as a **user-local binary** (`~/.local/bin/gh`, no package manager / root needed); operator ran
   `gh auth login` themselves (device-code browser flow, out of agent reach) as `EmilyCapper`,
-  matching the pre-existing global git identity (Emily Capper / 47438924+EmilyCapper@users.noreply.github.com) — no
+  matching the pre-existing global git identity (same account as the commit author) — no
   identity mismatch to reconcile. Push needed `gh auth setup-git` first (no HTTPS credential
   helper was registered yet even though `gh auth status` showed logged-in).
 - **What's tracked vs. gitignored** — of ~821MB working-tree size, 87.3MB is tracked. Excluded via
