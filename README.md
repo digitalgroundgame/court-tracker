@@ -50,6 +50,32 @@ All selectors are `ctt-`-prefixed and asset paths are relative, so it won't dist
 keeps working offline / when archived. Update data or boundaries by replacing files in `data/` /
 `assets/geo/` and bumping the manifest version — no code edits.
 
+**In production, point at `dist/` instead.** `embed/` is the readable, heavily-commented source;
+`dist/` is the same code minified (`court-tracker.js` 212KB → 71KB, its stylesheet 51KB → 21KB):
+```html
+<link rel="stylesheet" href="dist/court-tracker.min.css">
+<script type="module" src="dist/court-tracker.min.js"></script>
+```
+`dist/` is committed, so a clone, a static download, and the data release all carry it without a
+build step — and CI fails if it drifts from `embed/`. It must stay exactly one directory below the
+repo root: both copies resolve their assets as `new URL("../", import.meta.url)`, which is what lets
+either one find `data/`, `assets/geo/` and `assets/photos/`. The second widget embeds identically
+(`appointments-chart[.min].{js,css}` into `<div id="appointments-chart-root">`).
+
+## Development (tests and build)
+```
+npm install            # dev-only deps: jsdom (headless smoke) + esbuild (minifier)
+npm test               # jsdom smoke suite against embed/
+npm run build          # regenerate dist/ from embed/  — commit the result
+npm run test:dist      # the same smoke suite against the minified build
+npm run test:browser   # real-browser (CDP) checks jsdom structurally cannot make
+```
+`npm run test:browser` serves the repo on `localhost:8777` itself and drives headless Chrome; set
+`CHROME_BIN` if your Chrome is not on `PATH` as `google-chrome-stable`. `npm run test:browser:dist`
+runs those same checks against `dist/`. `.github/workflows/ci.yml` runs all of it on every push to
+`main` and every pull request. The widgets themselves have **zero runtime dependencies** — nothing
+in `node_modules/` ships to a reader.
+
 ## Syncing the data package (for external consumers)
 Every push to `main` that changes `data/manifest.json` triggers `.github/workflows/release-data.yml`,
 which tags the commit `data-v<manifest.version>` and cuts a GitHub Release. Nothing from
@@ -58,7 +84,7 @@ from the same run and the same commit, so they are always the same `manifest.ver
 
 | asset | size | contains |
 | --- | --- | --- |
-| `data-package.tar.gz` | ~21MB | `embed/` + the runtime `data/*.json` + `assets/geo/` + `assets/photos/` |
+| `data-package.tar.gz` | ~21MB | `embed/` (readable source) + `dist/` (minified build) + the runtime `data/*.json` + `assets/geo/` + `assets/photos/` |
 | `data-json.tar.gz` | ~364KB | the runtime `data/*.json` only, same `data/` paths |
 
 **Poll the releases (or tags) API, not the manifest on a branch.** The manifest lands on `main`
