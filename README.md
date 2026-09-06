@@ -50,6 +50,24 @@ All selectors are `ctt-`-prefixed and asset paths are relative, so it won't dist
 keeps working offline / when archived. Update data or boundaries by replacing files in `data/` /
 `assets/geo/` and bumping the manifest version — no code edits.
 
+## Syncing the data package (for external consumers)
+Every push to `main` that changes `data/manifest.json` triggers `.github/workflows/release-data.yml`,
+which tags the commit `data-v<manifest.version>` and cuts a GitHub Release containing `embed/` + the
+runtime `data/*.json` files + `assets/geo/` + `assets/photos/` — nothing from `data/cache/` or the
+geometry-source inputs.
+
+**Poll the releases (or tags) API, not the manifest on a branch.** The manifest lands on `main`
+*before* the workflow cuts the release, so a consumer watching the manifest can see a version whose
+release does not exist yet — and never will, if that run fails. Watching releases means you only
+learn about a version once its artifact actually exists. It is also one request: the version is in
+the tag name, so nothing needs fetching to detect a change.
+
+**Pinning to the tag is a first-class alternative to downloading the tarball.** The atomicity comes
+from the tag being immutable, not from the archive, so fetching individual files at the tag ref is
+equally safe. Prefer it if you do not need photos or geometry: those are ~98% of the package (21MB
+compressed, versus ~364KB for the runtime JSON alone). Whichever you pull, apply it atomically on
+your side — land it somewhere new and swap a pointer, so a reader never sees a half-updated set.
+
 ## Scope at a glance
 13 courts of appeals + 94 district courts (incl. territorial) + USCIT & CFC as Federal-Circuit
 feeders. Judges = active + senior (life-tenured) and in-term (fixed-term). Article III focus, with

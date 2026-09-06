@@ -59,7 +59,7 @@ tracker (Phase-4 tail items open, PLUS a brand-new third pane view — "Change",
 > operator instruction — before merging anything.
 > - Blockers: none.
 
-> **SESSION (c0), 2026-09-06 — Issue #9: personal contact info and one machine's absolute paths
+> **SESSION (co), 2026-09-06 — Issue #9: personal contact info and one machine's absolute paths
 > out of `scripts/`.**
 > - **The PII.** Four collection scripts hardcoded a personal university email in their
 > User-Agent (`collect_courtlistener.py` `FJC_HTML_UA`, `enrich_wikipedia.py`, `cache_photos.py`,
@@ -93,6 +93,64 @@ tracker (Phase-4 tail items open, PLUS a brand-new third pane view — "Change",
 > the root commit `9d9746d`, so all 23 commits would be rewritten). Removing it means a
 > `git filter-repo` + force-push of `main`, which invalidates every existing clone. Flagged, not
 > performed.
+
+> **SESSION (cn), 2026-09-06 — Publishing prerequisites: national totals precomputed into the
+> build, and every manifest bump now cuts a tagged, atomic data release.**
+> - **Context.** An operator-requested repo review (what this app owns vs. what a downstream
+> publisher should own) produced a backlog of integration gaps. This session works the two that
+> specifically block an EXTERNAL consumer syncing this repo's data on a schedule — the goal being
+> that the consuming side is a dumb "check version → pull → swap" job, never something that has to
+> reimplement our logic or race a moving branch.
+> - **(1) The national-totals reconciliation moved from the widget into the build step.** Session
+> (cm)'s `districtNationalTotals()` math — authorized/active/vacant plus the `overAuthorized`
+> adjustment that explains why they don't sum at face value — was computed at RENDER time, so any
+> consumer of the raw data package other than our own widget would have had to reverse-engineer
+> it to get the same right numbers. `build_national_totals()` in `build_assets.py` now computes it
+> once from the same `seat_blocks` data and ships it as `manifest.national_totals` (**CODEBOOK
+> Table H**, including the `authorized + over_authorized == active + vacancies` invariant);
+> `districtNationalTotals()` just reads it. Same return shape, so the caption and every existing
+> assertion are untouched. Rebuilt against real data and confirmed the documented 673 / 654 / 27 / 8.
+> - **(2) `.github/workflows/release-data.yml` — the repo's first CI.** `manifest.version` was
+> already a content hash that moves exactly when the data does, but nothing tagged or released at
+> that moment, so a scheduled puller reading `main` could catch a commit mid-push, or catch `data/`
+> and `assets/geo/` briefly disagreeing across two commits. The workflow fires on any push to
+> `main` touching `data/manifest.json`, SKIPS if a `data-v<version>` tag already exists (idempotent
+> against re-runs and reverts), else tags and publishes a Release carrying exactly `embed/` + the
+> runtime `data/*.json` + `assets/geo/` + `assets/photos/` — deliberately NOT `data/cache/`,
+> `data/census/`, `data/nps/`, or anything else pipeline-only.
+> - **The documented consumer contract was corrected mid-session, from the first real consumer's
+> feedback.** `README.md` originally said to poll `data/manifest.json`'s `version` and pull the
+> matching tag. That has a race we missed: the manifest lands on `main` BEFORE the workflow cuts
+> the release, so a manifest-poller can observe a version whose release does not exist yet — and
+> never will, if that run fails. The contract now says to **poll the releases/tags API instead**:
+> a version is only ever observed once its artifact exists, and it's one request since the version
+> is in the tag name. Second correction: **pinning to the tag is documented as a first-class
+> alternative to downloading the tarball** — the atomicity comes from the tag being immutable, not
+> from the archive, and the package is ~21MB compressed almost entirely because of
+> `assets/photos/` + `assets/geo/` (the runtime JSON alone is ~364KB), so a consumer that renders
+> its own map and images should pin and skip ~98% of the bytes. Measured both, numbers are in the
+> README. Possible follow-on: publish a JSON-only asset alongside the full package for consumers
+> who want an archive rather than a tag-pin.
+> - **A real landmine surfaced while doing this, and it is NOT fixed yet.** Rebuilding in a clean
+> clone silently nulled `photo_thumb` on all 1,490 judges (plus appointments/justices/presidents):
+> `data/cache/` is gitignored, and `photo_thumbs.json` is the url→local-path lookup
+> `build_assets.py` reads — absent, every photo reverts to hotlinking Wikimedia even though all
+> 2,391 licensed JPEGs are committed in `assets/photos/`. Nothing errors; the manifest hash just
+> changes. Reconstructed the lookup from already-committed output before rebuilding, and verified
+> the final diff touches only the intended files — but the underlying trap stands for anyone
+> rebuilding from a fresh checkout. `territorial_judges_manual.csv`, `manual_photos.json` and
+> `fjc_manual_overrides.csv` are in the same position: hand-authored, irreplaceable, untracked.
+> Worth promoting all four into tracked `data/` before the refresh pipeline is handed to anyone.
+> - **Verified**: `tests/smoke.mjs` **482/482**, `tests/browser-checks.mjs` **55/55**, both ALL
+> PASS; `scripts/check_geometry.py` PASS with 0 warnings; `actionlint` on the new workflow, 0
+> findings. Dry-ran every shell step of the workflow locally against the real repo — version/tag
+> derivation, the tarball build (2,437 files, ~21MB), and the release-notes generation.
+> - **Next**: this work sits on a branch with a PR open against `main`, not yet merged. The
+> workflow triggers on `main` only, so it stays untested live until that merge — which itself
+> touches `data/manifest.json` and should therefore cut the first `data-v05d95d9fcf1b` release,
+> making the merge its own first real test. Remaining backlog from the review (the cache-tracking
+> trap above, a base-URL override for the asset root, `destroy()`/unmount, touch affordances,
+> trimming the committed geometry-source shapefiles) is filed and unstarted.
 
 > **SESSION (cm), 2026-09-11 — Explained, not fixed: Summary > District's national totals don't
 > arithmetically add up, and that's correct (operator report: "654+27=681 > 673").**
