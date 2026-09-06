@@ -1,0 +1,15 @@
+
+
+new large feature request: a search bar, right-aligned in the upper horizontal layout band which has the text "Federal Court Appointment Tracker" "National view · data v9800552afac4", which can be used to search for judges by-name. searches should be able to account for some misspellings, different letter casing, and different word ordering, then partial matching results should show up as a bolding the part(s) of the name of the judge (in the search results) which corresponds to the text of the search query. searches should update after each letter is typed, and show in a scrollable (if needed) list of row results (first sorted by quality of match above a certain threshold of matching, then within groups of quality match by Supreme > Appellate > District and then among Appellate, sorted by number, and then among District, sorted alphabetically within district number sorting; abbreviated district name and circuit number for the district is how the court should be indicated for judge results). judge results should further show the name of the judge, party and shorthand name for president of appointment, and which court they serve on. clicking a search result should take the user to the info pane that shows the supreme, circuit, or district court which the judge belongs to. when the search ui is clicked away from, it should hide the list of results, but queries should not clear automatically. instead, it should also be possible to clear a search query with an x button (in addition to just deleting it).
+
+please ask me implementation/clarification questions if needed when emerging-major details are left unclear. also ensure you've checked PROGRESS.md for information about our judge data standards, how judge data has been displayed in lists in other elements of the interactive, and how the interactive's information is centered around pop down/info pane elements, since that will be required to implement the feature.
+
+
+
+
+
+
+
+
+
+
