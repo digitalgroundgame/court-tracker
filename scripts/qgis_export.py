@@ -3,7 +3,11 @@ qgis_export.py — federal-court map geometry, per docs/GEOMETRY_CONTRACT.md
 
 Run in the QGIS Python console (QGIS 4.x / GRASS 8):
 
-    exec(open('/path/to/qgis_export.py').read())
+    p = '/path/to/court-tracker/scripts/qgis_export.py'
+    exec(compile(open(p).read(), p, 'exec'), {**globals(), '__file__': p})
+
+(plain exec(open(p).read()) leaves the script with no __file__ to locate the repo
+from; if you use that form, export COURT_TRACKER_ROOT=/path/to/court-tracker first.)
 
 Pipeline (canonical order — do not reorder):
     1. load TIGER county-equivalents, drop FIPS 60/74 (no Art. III district)
@@ -24,6 +28,7 @@ Insets are exempt (they never morph) and are simplified in their own CRS.
 
 import os, csv, json, math, shutil, subprocess, tempfile
 from collections import defaultdict, OrderedDict
+from pathlib import Path
 
 from qgis.core import (
     QgsApplication, QgsVectorLayer, QgsProject, QgsFeature, QgsGeometry, QgsField,
@@ -32,6 +37,52 @@ from qgis.core import (
 from qgis.PyQt.QtCore import QVariant
 from qgis.PyQt.QtGui import QTransform
 import processing
+
+# =============================================================================
+# WHERE THE REPO IS
+# =============================================================================
+# Every path below is derived from the repo root, matching the
+# `ROOT = Path(__file__).resolve().parent.parent` pattern the other scripts/ use —
+# nothing here is tied to one operator's machine. Resolution order:
+#   1. $COURT_TRACKER_ROOT, if set (the escape hatch; also the only option when the
+#      script is exec()'d without a __file__, see the module docstring)
+#   2. this file's own location, when there is one
+#   3. a walk up from the current working directory, looking for the repo markers
+# The Census county file ships in the repo under data/census/. The NPS boundary is a
+# separate download and is NOT tracked — drop it at data/nps/nps_boundary.shp (or point
+# YNP_BOUNDARY elsewhere); see docs/GEOMETRY_CONTRACT.md.
+
+def _find_repo_root() -> Path:
+    def is_root(p: Path) -> bool:
+        return (p / "data" / "courts.csv").is_file() and (p / "scripts").is_dir()
+
+    env = os.environ.get("COURT_TRACKER_ROOT", "").strip()
+    if env:
+        cand = Path(env).expanduser().resolve()
+        if not is_root(cand):
+            raise RuntimeError(
+                f"COURT_TRACKER_ROOT={cand} is not a court-tracker checkout "
+                "(expected data/courts.csv and scripts/ under it)")
+        return cand
+
+    here = globals().get("__file__")
+    if here:
+        cand = Path(here).resolve().parent.parent
+        if is_root(cand):
+            return cand
+
+    for cand in [Path.cwd().resolve(), *Path.cwd().resolve().parents]:
+        if is_root(cand):
+            return cand
+
+    raise RuntimeError(
+        "cannot locate the court-tracker checkout. Either exec() this file with a "
+        "__file__ (see the module docstring), run QGIS with the repo as the working "
+        "directory, or set COURT_TRACKER_ROOT=/path/to/court-tracker.")
+
+
+ROOT = _find_repo_root()
+DATA = ROOT / "data"
 
 # =============================================================================
 # CONFIG — everything you are meant to tune lives in this block
@@ -43,10 +94,10 @@ import processing
 # come out joined across Lake Michigan. The CB file is the same geography clipped to the
 # shoreline, with identical GEOIDs, so county_to_district.csv joins unchanged.
 # The shoreline check in validate_shoreline() will fail loudly if you point this at TIGER.
-COUNTY_SHAPEFILE = "/home/stardog/claude-code/scratch/MAD_project/federal_courts/data/census/cb_2024_us_county_500k.shp"   # 2022+ vintage required
-CROSSWALK_CSV  = "/home/stardog/claude-code/scratch/MAD_project/federal_courts/data/county_to_district.csv"
-COURTS_CSV     = "/home/stardog/claude-code/scratch/MAD_project/federal_courts/data/courts.csv"
-OUT_DIR        = "/home/stardog/claude-code/scratch/MAD_project/federal_courts/data/out/assets/geo"                # national.svg + circuits/
+COUNTY_SHAPEFILE = str(DATA / "census" / "cb_2024_us_county_500k.shp")   # 2022+ vintage required
+CROSSWALK_CSV  = str(DATA / "county_to_district.csv")
+COURTS_CSV     = str(DATA / "courts.csv")
+OUT_DIR        = str(DATA / "out" / "assets" / "geo")                # national.svg + circuits/
 
 # --- Yellowstone (28 U.S.C. 92, 106, 131) ------------------------------------
 # The ONLY sub-county carve-out we honour. Sections 92 and 106 exclude Yellowstone
@@ -57,7 +108,7 @@ OUT_DIR        = "/home/stardog/claude-code/scratch/MAD_project/federal_courts/d
 # Boundary source: NPS "Administrative Boundaries of National Park System Units"
 # (NGDA / NPS Land Resources Division). Filter to UNIT_CODE = 'YELL'.
 YELLOWSTONE = True
-YNP_BOUNDARY   = "/home/stardog/claude-code/scratch/MAD_project/federal_courts/data/nps/nps_boundary.shp"
+YNP_BOUNDARY   = str(DATA / "nps" / "nps_boundary.shp")
 YNP_UNIT_FIELD = "UNIT_CODE"
 YNP_UNIT_VALUE = "YELL"
 YNP_MIN_PIECE_M2 = 1_000_000.0     # discard <1 km^2 fragments (digitising noise)

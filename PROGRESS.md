@@ -31,6 +31,41 @@ tracker (Phase-4 tail items open, PLUS a brand-new third pane view — "Change",
 > operator instruction — before merging anything.
 > - Blockers: none.
 
+> **SESSION (c0), 2026-09-06 — Issue #9: personal contact info and one machine's absolute paths
+> out of `scripts/`.**
+> - **The PII.** Four collection scripts hardcoded a personal university email in their
+> User-Agent (`collect_courtlistener.py` `FJC_HTML_UA`, `enrich_wikipedia.py`, `cache_photos.py`,
+> `collect_president_photos.py`), alongside a placeholder `https://github.com/` with no repo path.
+> New `scripts/_useragent.py` builds the UA from two constants (project + the real repo URL) and
+> appends `$COURT_TRACKER_CONTACT` **only if the operator exports it** — so the contact lives in a
+> shell, never in the tree, and doesn't go stale when the contact person changes. Both forms are
+> valid descriptive UAs; setting it is what Wikimedia's UA policy actually asks for. Documented in
+> `README.md` and `START_HERE.md` next to `COURTLISTENER_TOKEN`.
+> - **The machine paths.** `qgis_export.py`'s five path constants pointed into one operator's home
+> directory (`/home/…/MAD_project/…`); every other script in `scripts/` already derives `ROOT` from
+> `Path(__file__)`. They now derive from a `_find_repo_root()` that resolves in three steps:
+> `$COURT_TRACKER_ROOT` → this file's `__file__` → a walk up from the CWD looking for
+> `data/courts.csv` + `scripts/`, with a loud, instructive `RuntimeError` if all three miss. The
+> three-step dance exists because this script is `exec()`'d in the QGIS console, where **there is
+> no `__file__` at all** — the docstring's invocation line now uses
+> `exec(compile(src, p, 'exec'), {..., '__file__': p})` to supply one, and names the env var as the
+> fallback for anyone who runs the old plain-`exec` form. All five paths resolved to in-repo
+> locations anyway (`data/census/`, `data/county_to_district.csv`, `data/courts.csv`,
+> `data/out/assets/geo`, `data/nps/`), so this is a pure relocation, no behaviour change.
+> - Also redacted the one other personal email in a tracked file (a `(br)` session-log line naming
+> the operator's git identity); `git grep` for email addresses and for `/home/*` paths across all
+> tracked files now returns nothing.
+> - **Verified**: all four patched scripts import cleanly and print the new UA (`cache_photos`
+> compiles; its import needs PIL, absent in this container — pre-existing, unrelated).
+> `_find_repo_root()` exercised standalone through all five branches (env var, `__file__`, CWD
+> walk, bad env var, nothing-found). `python3 scripts/check_geometry.py` → PASS, 0 warnings.
+> `tests/smoke.mjs` can't run here (no `node_modules`, gitignored) and fails identically on
+> unmodified `main` — this change touches no widget code.
+> - **NOT done, needs an operator decision**: the email is still in **git history** (introduced in
+> the root commit `9d9746d`, so all 23 commits would be rewritten). Removing it means a
+> `git filter-repo` + force-push of `main`, which invalidates every existing clone. Flagged, not
+> performed.
+
 > **SESSION (cm), 2026-09-11 — Explained, not fixed: Summary > District's national totals don't
 > arithmetically add up, and that's correct (operator report: "654+27=681 > 673").**
 > - **Root-caused, not assumed.** Computed the real numbers directly from `seat_blocks.json`:
@@ -2498,7 +2533,7 @@ Prove the whole app shell and asset schema on one circuit with hand-authored sam
   private, empty before this session). `gh` wasn't installed and the sandbox has no sudo — installed
   it as a **user-local binary** (`~/.local/bin/gh`, no package manager / root needed); operator ran
   `gh auth login` themselves (device-code browser flow, out of agent reach) as `EmilyCapper`,
-  matching the pre-existing global git identity (Emily Capper / 47438924+EmilyCapper@users.noreply.github.com) — no
+  matching the pre-existing global git identity (same account as the commit author) — no
   identity mismatch to reconcile. Push needed `gh auth setup-git` first (no HTTPS credential
   helper was registered yet even though `gh auth status` showed logged-in).
 - **What's tracked vs. gitignored** — of ~821MB working-tree size, 87.3MB is tracked. Excluded via

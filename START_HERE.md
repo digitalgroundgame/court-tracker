@@ -24,7 +24,9 @@ They only converge later, at Phase 3. Nothing before Phase 3 needs real geometry
 3. **CourtListener token.** Register for a free Free Law Project / CourtListener API token, then in the
    terminal you'll launch Claude Code from:
    `export COURTLISTENER_TOKEN=...` (add it to your shell profile so it persists). Needed for Phase 2,
-   but set it now.
+   but set it now. While you're there, optionally `export COURT_TRACKER_CONTACT=...` — an email or
+   URL the collection scripts append to their User-Agent so Wikimedia et al. can reach whoever is
+   crawling. It stays in your shell, never in the repo.
 4. **Install Claude Code** if you haven't (`npm install -g @anthropic-ai/claude-code`; requires Node.js
    — check the Claude Code docs for the current minimum). You'll need a Claude subscription or API key
    for auth.
