@@ -12,6 +12,42 @@ tracker (Phase-4 tail items open, PLUS a brand-new third pane view — "Change",
 (feature-complete first version, operator refinement rounds ongoing; see sessions ai→at, aw).
 **Last updated:** 2026-09-06
 
+> **SESSION (cp) cont'd (3), 2026-09-06 — PR #26 review, schema-2.0 tracking issue (#28), and an
+> onboarding-doc accuracy audit (PR #30).**
+> - **PR #26 (issue #10 — data schema as a versioned public API) reviewed and merged.** Verified
+> the one factual correctness claim directly (`courts.court_level`'s `scotus` value really is
+> branched on at `build_assets.py:310`, and CODEBOOK's enum really did omit it). Walked the operator
+> through why `appointments.json` is tiered `provisional` rather than `stable` — confirmed directly
+> against live data (`"sitting": "false"` as a string vs. real `null` on `photo_thumb` in the same
+> record) that it's a genuine shape defect, not caution, and that `stable`/`provisional` share the
+> *same* MAJOR-gated enforcement — the tier is an honesty signal about a change already anticipated,
+> not a different technical promise. Operator confirmed the call; the 90-day deprecation default
+> stood unchallenged. Logged its own ledger entry as session (cr), via the fresh-branch convention.
+> - **The changelog-vs-issue gap, caught by the operator's question.** `SCHEMA_CHANGELOG.md`'s
+> Proposed section (3 known 2.0-breaking items) would never have resurfaced at a future session
+> start — the protocol only checks `gh issue list`/`gh pr list`, not changelog prose. Filed **#28**
+> as ONE combined issue rather than three: `DATA_CONTRACT.md` §6 already states breaking changes are
+> batched into one migration, so one issue tracking the batch matches how the work will actually
+> ship.
+> - **Onboarding-doc accuracy audit (PR #30), prompted by the operator asking whether new sessions
+> get essential info they wouldn't otherwise.** Found and fixed a real, verified staleness bug
+> spanning FOUR files: `CLAUDE.md`, `README.md`, `START_HERE.md`, and `docs/DATA_SOURCES.md`'s own
+> top summary all still described CourtListener's live REST API as primary and told a new operator
+> to get a `COURTLISTENER_TOKEN` — true through Phase 2, false since 2026-07-16 (FJC bulk export
+> became primary; confirmed via `grep -rn COURTLISTENER_TOKEN scripts/` finding no script that reads
+> it). Also corrected a parallel photo-sourcing claim (no script pulls images from CourtListener,
+> only Wikidata/Wikimedia Commons — confirmed against `enrich_wikipedia.py`'s actual API constants).
+> Added the `SCHEMA_VERSION`/`DATA_CONTRACT.md` bump requirement to `CLAUDE.md` §4. Added a caution
+> to §7.6 from this session's own earlier incident (a merge resolution silently lost content across
+> a careless branch switch before committing — see the (cp) cont'd entries below). Rewrote
+> `INITIAL_PROMPT.md`'s Resume block to include the git-workflow session-start check; marked the
+> First-session block historical.
+> - **Verified**: `tests/smoke.mjs` ALL PASS after each merge (documentation/schema-only changes,
+> no widget code touched by #26 or #30).
+> - Blockers: none. Two open PRs remain from this refresh: #27 (Issue #5 — CI/tests/dist build) is
+> next; will very likely conflict with #26's changes to `release-data.yml`/`README.md` the same way
+> #14/#15 did, given both already independently rebased around #24 while open.
+
 > **SESSION (cr), 2026-09-06 — Data schema as a versioned public API (issue #10, PR #26).**
 > - **Origin**: sub-issue of the Pragmatic Papers epic (#13) — `docs/CODEBOOK.md` documents field
 > meaning but says nothing about what a consumer outside this repo may rely on, what can change
