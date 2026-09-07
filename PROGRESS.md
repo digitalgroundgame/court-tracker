@@ -12,6 +12,23 @@ tracker (Phase-4 tail items open, PLUS a brand-new third pane view — "Change",
 (feature-complete first version, operator refinement rounds ongoing; see sessions ai→at, aw).
 **Last updated:** 2026-09-07
 
+> **SESSION (cp) cont'd (5), 2026-09-07 — Issue #4 fixed (PR #39): recorded real download URLs
+> for the two manual bulk data inputs.**
+> - Added a section to `docs/DATA_SOURCES.md` naming exactly where `fjc_judges.csv` and
+> `cl_people.csv` come from — **verified live via WebSearch/WebFetch, not recalled from memory**
+> (CLAUDE.md's "never fabricate" principle applied to source URLs, not just judge data). FJC:
+> confirmed the export page states "updated nightly" with no version number shown, so a download
+> date is the only versioning signal available. CourtListener: the docs page itself doesn't
+> disclose the bulk-file naming pattern — had to fetch the actual S3 bucket's XML listing directly
+> to find `people-db-people-<YYYY-MM-DD>.csv.bz2`, confirmed quarterly refresh (last day of
+> Mar/Jun/Sep/Dec, 3AM PST). `2026-06-30` came back as the latest — matching the date `PROGRESS.md`
+> had already referenced once in passing, a good independent cross-check that the finding is right.
+> - Documentation-only; no CLAUDE.md/core-file touch this time. `tests/smoke.mjs` ALL PASS.
+> - Operator reviewed and approved before merge (per the stricter review-before-merge preference
+> for this backlog push).
+> - **Next**: issue #8 (59MB of unused Census/NPS geometry-source shapefiles + a stray temp file).
+> - Blockers: none.
+
 > **SESSION (cp) cont'd (4), 2026-09-07 — Repo confirmed public (operator: for Pages + a
 > branch-protection ruleset); filed the git-history PII scrub as issue #36; fixed issue #3
 > (irreplaceable manual data files, PR #37, merged).**
