@@ -210,6 +210,15 @@ public-API policy, and `docs/DATA_SOURCES.md` for full collection methodology + 
      check a PR's file list for these specifically, call out that part on its own, and get an
      explicit go-ahead on it before merging any of it. Session behavior is something the operator
      consciously signs off on, not a side effect of merging a feature PR.
+     **This has two distinct triggers, not one** (clarified same day): a PR's own diff touching one
+     of these files is the obvious case, but a PR can also *imply* a needed change without ever
+     touching them — it establishes a new standard, policy, or invariant that a core file now
+     describes incompletely or incorrectly unless updated. (Concrete example: PR #26 added the
+     `SCHEMA_VERSION`/`docs/DATA_CONTRACT.md` policy without touching `CLAUDE.md` at all, but a
+     future session changing the published JSON shape now needs to know to bump it — so this file
+     needed a new paragraph regardless.) Recognizing the implied case takes reading a PR for what
+     it's establishing, not just diffing its file list — flag it and get the operator's go-ahead the
+     same way as the direct case, as its own explicit step, before implementing or merging it.
    - **The `PROGRESS.md` ledger entry is its own tiny branch → PR → merge, cut fresh at merge time**
      (added 2026-09-06, session (cp), after (cn)/(co)/(cp) all independently prepended an entry at
      the same top-of-log line and collided in a real 3-way merge conflict on `main`). Every session
