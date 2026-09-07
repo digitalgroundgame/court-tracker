@@ -201,6 +201,15 @@ public-API policy, and `docs/DATA_SOURCES.md` for full collection methodology + 
      data correctness, scope, or the UX contract — and any PR from a prior/different session you
      didn't just write — for the operator's explicit go-ahead; when in doubt, summarize the diff and
      ask rather than merge.
+   - **Hard stop, stricter than the above: any change to `CLAUDE.md`, `PROGRESS.md`'s
+     instance-protocol block, `INITIAL_PROMPT.md`, or any other file a session reads before doing
+     work, always needs explicit operator discussion before merging** (operator decision, 2026-09-06
+     — prompted by the risk that a PR from a different contributor could bundle a change to one of
+     these files alongside unrelated work, altering how *future* sessions behave without the
+     operator ever weighing in). This applies even when the rest of the PR is otherwise routine —
+     check a PR's file list for these specifically, call out that part on its own, and get an
+     explicit go-ahead on it before merging any of it. Session behavior is something the operator
+     consciously signs off on, not a side effect of merging a feature PR.
    - **The `PROGRESS.md` ledger entry is its own tiny branch → PR → merge, cut fresh at merge time**
      (added 2026-09-06, session (cp), after (cn)/(co)/(cp) all independently prepended an entry at
      the same top-of-log line and collided in a real 3-way merge conflict on `main`). Every session
