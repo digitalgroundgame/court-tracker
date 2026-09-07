@@ -11,7 +11,10 @@ import { spawn } from "node:child_process";
 const PORT = 9877, MARK = `/tmp/ctbc-${process.pid}`;
 const URL_ = process.argv.includes("--url") ? process.argv[process.argv.indexOf("--url") + 1]
                                             : "http://localhost:8777/index.html";
-const chrome = spawn("google-chrome-stable", ["--headless=new", "--no-sandbox", "--hide-scrollbars",
+// Binary is overridable (CHROME_BIN) so CI runners and containers that ship Chromium under
+// another name can run this without patching the test.
+const CHROME = process.env.CHROME_BIN || "google-chrome-stable";
+const chrome = spawn(CHROME, ["--headless=new", "--no-sandbox", "--hide-scrollbars",
   "--enable-unsafe-swiftshader", `--user-data-dir=${MARK}`, `--remote-debugging-port=${PORT}`,
   "--window-size=1180,760", "about:blank"], { stdio: "ignore" });
 

@@ -5,15 +5,22 @@
 // toggle (x/y over active, fold seniors) -> drill into districts -> district pane -> back.
 //
 // Requires jsdom on the module resolution path. Run e.g.:
-//   npm i jsdom && node tests/smoke.mjs
+//   npm install && npm test
 // (or from a dir where `jsdom` resolves). Exits non-zero on any failed assertion.
+//
+// CT_BUILD=dist (npm run test:dist) points the same assertions at the minified production
+// build in dist/ instead of the readable source in embed/, so the bundle a publisher actually
+// embeds is exercised by this suite too, not just the source it was generated from.
 import { JSDOM } from "jsdom";
 import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 
 import { fileURLToPath } from "node:url";
 const REPO = fileURLToPath(new URL("..", import.meta.url));
-const MODULE = REPO + "/embed/court-tracker.js";
+const BUILD = process.env.CT_BUILD === "dist" ? { dir: "dist", ext: ".min.js" }
+                                              : { dir: "embed", ext: ".js" };
+const mods = (name) => `${REPO}/${BUILD.dir}/${name}${BUILD.ext}`;
+const MODULE = mods("court-tracker");
 
 const dom = new JSDOM(`<!DOCTYPE html><body><div id="court-tracker-root"></div></body>`, {
   url: "https://example.test/host/",
@@ -1714,7 +1721,7 @@ console.log("appointments beeswarm widget (separate module, session aj)");
   const chartRoot = document.createElement("div");
   chartRoot.id = "appointments-chart-root-test";
   document.body.append(chartRoot);
-  const chart = await import(pathToFileURL(REPO + "/embed/appointments-chart.js").href);
+  const chart = await import(pathToFileURL(mods("appointments-chart")).href);
   await chart.mount(chartRoot);
   await sleep(30);
   const A = chart._dev.A;

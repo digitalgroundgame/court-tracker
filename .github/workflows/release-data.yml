@@ -7,10 +7,12 @@ name: Release data package
 # Two assets are published per release, from the same run and the same commit, so they are
 # always the same manifest.version by construction:
 #
-#   data-package.tar.gz  embed/ + the runtime data/*.json + assets/geo/ + assets/photos/ —
-#                        everything a renderer needs at runtime. Deliberately excludes
-#                        data/cache/, data/census/, data/nps/, and any other pipeline-only or
-#                        geometry-source input that never ships to a reader.
+#   data-package.tar.gz  embed/ + dist/ + the runtime data/*.json + assets/geo/ +
+#                        assets/photos/ — everything a renderer needs at runtime.
+#                        Deliberately excludes data/cache/, data/census/, data/nps/, and any
+#                        other pipeline-only or geometry-source input that never ships to a
+#                        reader. (dist/ is the minified build of embed/; CI keeps the two in
+#                        sync, so nothing is built here.)
 #   data-json.tar.gz     the runtime data/*.json only, same data/-prefixed paths, for a
 #                        consumer that renders its own map and supplies its own images —
 #                        photos and geometry are ~98% of the full package's bytes.
@@ -72,7 +74,7 @@ jobs:
             data/appointments.json
             data/president_photos.json
           )
-          tar czf data-package.tar.gz embed "${RUNTIME_JSON[@]}" assets/geo assets/photos
+          tar czf data-package.tar.gz embed dist "${RUNTIME_JSON[@]}" assets/geo assets/photos
           tar czf data-json.tar.gz "${RUNTIME_JSON[@]}"
           {
             echo "full_size=$(du -h data-package.tar.gz | cut -f1)"
@@ -92,7 +94,7 @@ jobs:
           COUNTS=$(jq -r '.counts | "\(.courts) courts (\(.circuits) circuits, \(.districts) districts, \(.specialized) specialized), \(.judges) judges, \(.photo_thumbs) cached photos."' data/manifest.json)
           LAST_APPT=$(jq -r '.last_appointment // "n/a"' data/manifest.json)
           SCHEMA="${{ steps.manifest.outputs.schema }}"
-          NOTES=$(printf 'Automated data-package release (manifest.version=%s, schema_version=%s), cut because `data/manifest.json` changed on `main`.\n\n%s\nLast tracked appointment: %s.\n\n## Assets\n\n| asset | size | contains |\n| --- | --- | --- |\n| `data-package.tar.gz` | %s | `embed/` + the runtime `data/*.json` + `assets/geo/` + `assets/photos/` — everything a renderer needs, nothing the build pipeline does not ship. |\n| `data-json.tar.gz` | %s | the runtime `data/*.json` only, same `data/` paths — for a consumer that renders its own map and supplies its own images. |\n\nBoth are cut from this same commit, so they are always the same `manifest.version`. If you do not need an archive at all, pinning to the immutable tag `%s` and fetching files at that ref is equally atomic and cheaper still.\n\n`schema_version` is semver over the SHAPE of the data and moves only when the contract does; `manifest.version` above is a content hash and moves whenever the data does. Gate compatibility on the former, change detection on the latter -- see `docs/DATA_CONTRACT.md` (policy + stability tiers), `docs/SCHEMA_CHANGELOG.md` (shape history), `docs/CODEBOOK.md` (field reference), and `README.md` (how to sync).' \
+          NOTES=$(printf 'Automated data-package release (manifest.version=%s, schema_version=%s), cut because `data/manifest.json` changed on `main`.\n\n%s\nLast tracked appointment: %s.\n\n## Assets\n\n| asset | size | contains |\n| --- | --- | --- |\n| `data-package.tar.gz` | %s | `embed/` (readable source) + `dist/` (minified production build) + the runtime `data/*.json` + `assets/geo/` + `assets/photos/` — everything a renderer needs, nothing the build pipeline does not ship. |\n| `data-json.tar.gz` | %s | the runtime `data/*.json` only, same `data/` paths — for a consumer that renders its own map and supplies its own images. |\n\nBoth are cut from this same commit, so they are always the same `manifest.version`. If you do not need an archive at all, pinning to the immutable tag `%s` and fetching files at that ref is equally atomic and cheaper still.\n\n`schema_version` is semver over the SHAPE of the data and moves only when the contract does; `manifest.version` above is a content hash and moves whenever the data does. Gate compatibility on the former, change detection on the latter -- see `docs/DATA_CONTRACT.md` (policy + stability tiers), `docs/SCHEMA_CHANGELOG.md` (shape history), `docs/CODEBOOK.md` (field reference), and `README.md` (how to sync).' \
             "$VERSION" "$SCHEMA" "$COUNTS" "$LAST_APPT" \
             "${{ steps.build.outputs.full_size }}" "${{ steps.build.outputs.json_size }}" "$TAG")
           gh release create "$TAG" data-package.tar.gz data-json.tar.gz \

@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Court tracker — minified build host (test fixture)</title>
+  <!--
+    Same host page as index.html, pointed at dist/ instead of embed/, so tests/browser-checks.mjs
+    can be run against the MINIFIED production bundle in a real browser:
+      npm run test:browser:dist
+    Both dist/ and embed/ sit one directory below the repo root, so the widgets' asset
+    resolution (`new URL("../", import.meta.url)`) lands on the same data/ and assets/ either way.
+  -->
+  <link rel="stylesheet" href="../dist/court-tracker.min.css">
+  <link rel="stylesheet" href="../dist/appointments-chart.min.css">
+  <style>
+    body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+           background: #eef1f5; color: #1b1f24; }
+    .demo-wrap { max-width: 1100px; margin: 0 auto; padding: 24px 16px 48px; }
+    h1 { font-size: 20px; margin: 0 0 20px; }
+  </style>
+</head>
+<body>
+  <div class="demo-wrap">
+    <h1>Federal Court Appointment Tracker — minified build</h1>
+    <div id="court-tracker-root"></div>
+    <div id="appointments-chart-root"></div>
+  </div>
+  <script type="module" src="../dist/court-tracker.min.js"></script>
+  <script type="module" src="../dist/appointments-chart.min.js"></script>
+</body>
+</html>
