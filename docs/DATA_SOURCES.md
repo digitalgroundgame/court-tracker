@@ -18,6 +18,28 @@ write new collection code, read that section before assuming this summary is the
 4. **Web search** — to substantiate affiliation claims with a citable `*_source`, and to fill gaps.
 5. **Statute (28 U.S.C. §44, §133)** — `authorized_judgeships` per court.
 
+## Where the two bulk downloads actually come from (added 2026-09-07, issue #4)
+Both are manual downloads — no API key, but re-fetching means visiting the page/bucket by hand.
+Verified directly against each source at the time of writing, not recalled from memory.
+
+- **`data/cache/fjc_judges.csv`** — the FJC Biographical Directory's flat-file export, from
+  **https://www.fjc.gov/history/judges/biographical-directory-article-iii-federal-judges-export**.
+  Direct CSV link on that page: `https://www.fjc.gov/sites/default/files/history/judges.csv` (an
+  Excel `.xlsx` of the same data is also offered, plus a per-category breakdown into six separate
+  CSVs — this project uses the single flat file). The FJC states the export is regenerated
+  **nightly**; the page carries no version number or "last updated" date, so record the date you
+  downloaded it as the only versioning signal you'll get. No dated filename convention — save it
+  as `fjc_judges.csv` (the name `scripts/collect_courtlistener.py` expects) however you like
+  otherwise.
+- **`data/cache/cl_people.csv`** — CourtListener/Free Law Project's bulk `people-db-people` table.
+  Browse **https://com-courtlistener-storage.s3-us-west-2.amazonaws.com/list.html?prefix=bulk-data/**
+  for the current listing, or construct the direct URL once you know the date:
+  `https://com-courtlistener-storage.s3-us-west-2.amazonaws.com/bulk-data/people-db-people-<YYYY-MM-DD>.csv.bz2`.
+  Confirmed via the bucket's own listing: files are regenerated **quarterly, on the last day of
+  March/June/September/December at 3AM PST** — e.g. `people-db-people-2026-06-30.csv.bz2` was the
+  latest as of this writing (2026-09-07); `2026-09-30` will be the next. Decompress the `.bz2`
+  before use; `cl_people.csv` is the plain-CSV name the scripts expect.
+
 ## Collection rules
 - Cache every API/web response to disk (e.g. `scripts/.cache/`) keyed by request, so runs are
   resumable and cheap to re-run. Respect rate limits; back off on 429.
