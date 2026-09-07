@@ -40,7 +40,9 @@ DISTRICT_ARRANGEMENT_JSON = DATA / "district_arrangement.json"
 # docstring for why). Same schema as the file above; produced by that script, not hand-authored.
 DISTRICT_ARRANGEMENT_ALT_JSON = DATA / "district_arrangement_alt.json"
 PRESIDENT_PHOTOS_CSV = DATA / "president_photos.csv"  # scripts/collect_president_photos.py
-PHOTO_THUMBS_FILE = DATA / "cache" / "photo_thumbs.json"  # scripts/cache_photos.py output
+PHOTO_THUMBS_FILE = DATA / "manual" / "photo_thumbs.json"  # scripts/cache_photos.py output; tracked
+                                                            # in git (issue #3) since it isn't
+                                                            # regenerable from a fresh checkout
 
 
 def _load_photo_thumbs() -> dict[str, str]:

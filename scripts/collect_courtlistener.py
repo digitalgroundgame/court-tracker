@@ -48,12 +48,15 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "data"
 CACHE = DATA / "cache"
+# MANUAL is tracked in git (unlike CACHE) — these are hand-authored/curated inputs with no
+# automated source, not regenerable bulk-response caches. See CLAUDE.md's repo map + issue #3.
+MANUAL = DATA / "manual"
 FJC_CSV = CACHE / "fjc_judges.csv"
 CL_PEOPLE_CSV = CACHE / "cl_people.csv"   # CourtListener bulk people table (not rate-limited)
 FJC_HTML_CACHE = CACHE / "fjc_html"
-FJC_MANUAL_OVERRIDES = CACHE / "fjc_manual_overrides.csv"
+FJC_MANUAL_OVERRIDES = MANUAL / "fjc_manual_overrides.csv"
 CFC_PARSE_GAPS = FJC_HTML_CACHE / "cfc_parse_gaps.csv"
-TERRITORIAL_MANUAL_CSV = CACHE / "territorial_judges_manual.csv"
+TERRITORIAL_MANUAL_CSV = MANUAL / "territorial_judges_manual.csv"
 # Roster page checked for the drift warning in territorial_manual_rows() - NOT parsed for
 # data (each court's page layout differs too much to be worth a bespoke scraper for a combined
 # 4 judgeships; see DATA_SOURCES.md 2026-07-16), just substring-checked so a name quietly
@@ -353,7 +356,7 @@ def fjc_cfc_rows(allow_net: bool) -> list[dict]:
 # No FJC equivalent exists for these three courts (checked directly 2026-07-16 - no
 # listing/succession page, no bulk product), and each court's own site has a different,
 # inconsistent small-page layout not worth a bespoke parser for a combined 4 judgeships. This is
-# the documented "necessary fallback": data/cache/territorial_judges_manual.csv, every row cited
+# the documented "necessary fallback": data/manual/territorial_judges_manual.csv, every row cited
 # and dated, read here instead of CL (whose roster also turned out unreliable for vid - it
 # entirely missed a May 2026 appointment). Their own CL positions ARE still queried, just only to
 # feed the drift check below, not as the source of truth.

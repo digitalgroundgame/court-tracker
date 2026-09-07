@@ -48,6 +48,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 DATA = ROOT / "data"
 CACHE = DATA / "cache" / "wiki"
+MANUAL = DATA / "manual"   # tracked in git, unlike CACHE — see CLAUDE.md's repo map + issue #3
 FJC_CSV = DATA / "cache" / "fjc_judges.csv"
 JUDGES_CSV = DATA / "judges.csv"
 
@@ -71,7 +72,7 @@ JUDGES_CSV = DATA / "judges.csv"
 # court_id) only for the rare judge with no resolvable nid (outside the FJC bulk directory
 # entirely, e.g. uscfc/territorial - not reappointment-proof for those, but nothing better exists
 # without a bigger schema change, and none of the current entries are in that situation anyway.
-MANUAL_PHOTOS_FILE = DATA / "cache" / "manual_photos.json"
+MANUAL_PHOTOS_FILE = MANUAL / "manual_photos.json"
 
 
 def load_manual_photo_registry() -> tuple[set[str], set[tuple[str, str]]]:
