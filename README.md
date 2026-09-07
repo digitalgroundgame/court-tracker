@@ -14,7 +14,9 @@ the app across phases. It is not the finished app yet.
 | `CLAUDE.md` | Project brief the instance reads every session (scope, UX contract, boundaries). |
 | `PROGRESS.md` | Resumable ledger — phase status + session log. The instance updates it. |
 | `INITIAL_PROMPT.md` | The message to paste into Claude Code, plus recommended settings. |
-| `docs/CODEBOOK.md` | Authoritative schema for the three data CSVs. |
+| `docs/CODEBOOK.md` | Authoritative schema for the three data CSVs (field-by-field reference). |
+| `docs/DATA_CONTRACT.md` | The published data as a versioned public API — stability tiers, `schema_version` policy, deprecation path, how to request a field. Read this first if you consume the data. |
+| `docs/SCHEMA_CHANGELOG.md` | History of `manifest.schema_version`. |
 | `docs/BUILD_SEQUENCE.md` | Phases 0–4 with Definitions of Done. |
 | `docs/GEOMETRY_CONTRACT.md` | Interface for the externally-produced QGIS map SVGs (morph invariant). |
 | `docs/GEOMETRY_PROMPT.md` | Paste-ready prompt for the separate web-Claude session that guides QGIS SVG creation. |
@@ -81,6 +83,14 @@ the tag name, so nothing needs fetching to detect a change.
 
 Whichever you pull, apply it atomically on your side — land it somewhere new and swap a pointer, so
 a reader never sees a half-updated set.
+
+**Version the shape separately from the data.** `manifest.version` is a content hash — it changes
+every time a judge moves, which is often, and says nothing about whether the *shape* changed.
+`manifest.schema_version` is semver over the shape (fields, types, enums, file layout) and changes
+rarely. Gate compatibility on the schema version's MAJOR; use `version` for change detection.
+`manifest.stability` tags each file `stable` / `provisional` / `reference-renderer`, so you can
+assert in your own CI that you depend on nothing renderer-specific. Full policy, including how to
+request a field you need: `docs/DATA_CONTRACT.md`.
 
 ## Scope at a glance
 13 courts of appeals + 94 district courts (incl. territorial) + USCIT & CFC as Federal-Circuit
