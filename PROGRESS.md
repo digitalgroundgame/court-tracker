@@ -10,7 +10,56 @@
 tracker (Phase-4 tail items open, PLUS a brand-new third pane view — "Change", built session
 (aw), operator review round addressed session (ax)) and the appointments beeswarm
 (feature-complete first version, operator refinement rounds ongoing; see sessions ai→at, aw).
-**Last updated:** 2026-09-06
+**Last updated:** 2026-09-07
+
+> **SESSION (cs), 2026-09-07 — Issue #5: CI, an `npm test` that does something, and a minified
+> `dist/` build (PR #27, merged).**
+> - **The gap**: `package.json` declared one dependency and no scripts, so `npm test` did nothing;
+> every suite (`smoke`, `browser-checks`, ...) was run by hand, on demand, by whoever was in the
+> session; there was no `.github/workflows/` CI at all; and the only thing a publisher could embed
+> was the 212KB heavily-commented source.
+> - **Tests are now a command, not a habit.** Real scripts: `test` (jsdom smoke), `test:browser`
+> (the CDP layout checks), `test:dist` / `test:browser:dist` (both suites against the minified
+> build), `build`. `jsdom` moved to devDependencies (the widget ships zero runtime deps) and
+> `"type": "module"` is now explicit — every `.js` here is already ESM, and the suites were
+> quietly relying on Node 22's module-syntax detection to load them. New
+> `scripts/serve_and_run.mjs` serves the repo on :8777 from Node, so CI needs no
+> `python3 -m http.server` and the server is provably up before the test and gone after it.
+> `tests/browser-checks.mjs` now takes `CHROME_BIN` instead of hardcoding `google-chrome-stable`
+> — that one hook is what makes it CI-runnable.
+> - **Minified build** (`scripts/build_embed.mjs`, esbuild): court-tracker 211.5KB → **71.1KB**,
+> its CSS 51.0 → 21.0KB, appointments-chart 43.9 → 22.4KB, its CSS 10.2 → 7.5KB. `dist/` sits
+> exactly one directory below the repo root ON PURPOSE — both it and `embed/` resolve assets as
+> `new URL("../", import.meta.url)`, so either copy finds `data/`, `assets/geo/` and
+> `assets/photos/` unchanged. **No app code changed to make the minified build work**, and the
+> data-only-update requirement (`CLAUDE.md` §6) is untouched: a data drop still needs no rebuild.
+> `dist/` is committed (like the repo's other derived artifacts) and ships in
+> `data-package.tar.gz` — deliberately not in `data-json.tar.gz`, which stays code-free.
+> - **CI** (`.github/workflows/ci.yml`, push to `main` + every PR): job 1 runs smoke → rebuild →
+> `git diff --exit-code dist` → smoke against the minified build; that diff step is the
+> anti-staleness guard, failing loudly instead of shipping a `dist/` that no longer matches
+> `embed/`. Job 2 resolves a headless Chrome and runs the CDP suite against both `embed/` and
+> `dist/`. First run passed both jobs, resolving Google Chrome 152 on `ubuntu-latest`.
+> - **Verified, not asserted**: all four suite runs pass (smoke and browser-checks, each against
+> `embed/` and `dist/`), `npm ci` restores from the lockfile, and two consecutive builds are
+> byte-identical — so the sync check is deterministic, not flaky. Also bumped undici
+> 7.28.0 → 7.29.1 (lockfile only): the new CI surfaced a high-severity advisory on it via jsdom.
+> Dev-only, but a permanently red audit line in every CI log trains people to ignore it.
+> - **Two collisions while the PR sat open**, both worth noting for the workflow's sake: PR #24's
+> two-asset release conflicted on `release-data.yml` + `README.md` (resolved in favor of main's
+> structure with `dist` folded into the full tarball only), and later PR #26's `schema_version`
+> work conflicted with it again *inside the same release-notes printf* — merged by another
+> session and independently re-verified here (7 format specifiers vs 7 arguments, in order).
+> Operator asked for the three commits squashed; done as a reset onto `main`, so the branch
+> became one commit rebased on `main` rather than carrying a merge. It picked up a second commit
+> afterwards from that other session's merge, which was deliberately NOT re-squashed — rewriting
+> another author's commit is off-limits, and squash-merge handles it at merge time anyway.
+> - **Follow-up left open**: the diagnostic suites (`stress`, `soak`, `flicker-check`,
+> `freeze-hunt`, `gpu-ratchet`, `shoot`) are deliberately not in CI — they're investigation tools,
+> not regression gates — and still hardcode `google-chrome-stable`. Extending the `CHROME_BIN`
+> hook to them is a small, unclaimed follow-up.
+> - Blockers: none. (Session label is `(cs)`: `(cq)` and `(cr)` were both taken by concurrent
+> sessions while this was in flight.)
 
 > **SESSION (cp) cont'd (3), 2026-09-06 — PR #26 review, schema-2.0 tracking issue (#28), and an
 > onboarding-doc accuracy audit (PR #30).**
