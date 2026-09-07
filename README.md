@@ -14,7 +14,9 @@ the app across phases. It is not the finished app yet.
 | `CLAUDE.md` | Project brief the instance reads every session (scope, UX contract, boundaries). |
 | `PROGRESS.md` | Resumable ledger — phase status + session log. The instance updates it. |
 | `INITIAL_PROMPT.md` | The message to paste into Claude Code, plus recommended settings. |
-| `docs/CODEBOOK.md` | Authoritative schema for the three data CSVs. |
+| `docs/CODEBOOK.md` | Authoritative schema for the three data CSVs (field-by-field reference). |
+| `docs/DATA_CONTRACT.md` | The published data as a versioned public API — stability tiers, `schema_version` policy, deprecation path, how to request a field. Read this first if you consume the data. |
+| `docs/SCHEMA_CHANGELOG.md` | History of `manifest.schema_version`. |
 | `docs/BUILD_SEQUENCE.md` | Phases 0–4 with Definitions of Done. |
 | `docs/GEOMETRY_CONTRACT.md` | Interface for the externally-produced QGIS map SVGs (morph invariant). |
 | `docs/GEOMETRY_PROMPT.md` | Paste-ready prompt for the separate web-Claude session that guides QGIS SVG creation. |
@@ -25,13 +27,15 @@ the app across phases. It is not the finished app yet.
 
 ## How the work is split
 - **Claude Code instance** owns the web app (`embed/`, `index.html`) and data collection
-  (`scripts/`, `data/`) via the CourtListener API + Wikipedia.
+  (`scripts/`, `data/`) via the FJC Biographical Directory bulk export + Wikipedia (CourtListener's
+  live API is no longer used — see `docs/DATA_SOURCES.md`).
 - **Operator (you)** owns the QGIS geometry (`assets/geo/**`) and final human verification of data.
 - The two are decoupled: geometry and data are external, lazy-loaded assets, so either can be
   updated later by dropping in new files — **no code changes**.
 
 ## Getting started
-1. Set a CourtListener API token: `export COURTLISTENER_TOKEN=...`
+1. No API token is required to collect data (the FJC bulk export needs no auth; `COURTLISTENER_TOKEN`
+   is a documented-but-currently-unused env var — see `docs/DATA_SOURCES.md`).
    Optional, but polite when running the collection scripts: `export COURT_TRACKER_CONTACT=...`
    (an email or URL a site operator could reach you at — it is appended to the scripts'
    User-Agent at run time, so no personal address is stored in the repo).
@@ -107,6 +111,14 @@ the tag name, so nothing needs fetching to detect a change.
 
 Whichever you pull, apply it atomically on your side — land it somewhere new and swap a pointer, so
 a reader never sees a half-updated set.
+
+**Version the shape separately from the data.** `manifest.version` is a content hash — it changes
+every time a judge moves, which is often, and says nothing about whether the *shape* changed.
+`manifest.schema_version` is semver over the shape (fields, types, enums, file layout) and changes
+rarely. Gate compatibility on the schema version's MAJOR; use `version` for change detection.
+`manifest.stability` tags each file `stable` / `provisional` / `reference-renderer`, so you can
+assert in your own CI that you depend on nothing renderer-specific. Full policy, including how to
+request a field you need: `docs/DATA_CONTRACT.md`.
 
 ## Scope at a glance
 13 courts of appeals + 94 district courts (incl. territorial) + USCIT & CFC as Federal-Circuit
