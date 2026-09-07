@@ -12,6 +12,45 @@ tracker (Phase-4 tail items open, PLUS a brand-new third pane view — "Change",
 (feature-complete first version, operator refinement rounds ongoing; see sessions ai→at, aw).
 **Last updated:** 2026-09-07
 
+> **SESSION (cp) cont'd (4), 2026-09-07 — Repo confirmed public (operator: for Pages + a
+> branch-protection ruleset); filed the git-history PII scrub as issue #36; fixed issue #3
+> (irreplaceable manual data files, PR #37, merged).**
+> - **Public-repo discovery**: while reviewing PR #27, `gh api` showed `"private": false` —
+> contradicted `CLAUDE.md` §7.6 and every session log entry describing the repo as private, with no
+> record of the change. Flagged it rather than assuming; operator confirmed it was intentional
+> (2026-09-06/07, for GitHub Pages + implementing a no-direct-commit ruleset on `main`). No CLAUDE.md
+> correction needed — §7.6 doesn't actually assert privacy as a load-bearing fact, just names it in
+> passing; worth a light correction if it comes up again.
+> - **This reopened a question PR #15 had closed**: the personal email left in git history was
+> "fine as-is" specifically because the repo was private. Filed **#36** to track a future
+> `git filter-repo` pass — deliberately NOT scheduled now (operator: make more progress first). Key
+> technical points captured there: a history rewrite can leave `main`'s current tip content
+> untouched (the address is already redacted from every tracked file), but changes every commit
+> hash from the root forward, requiring a force-push of `main` and recreating every existing
+> release tag — and it's not a guarantee of full removal, since GitHub's caches/any pre-rewrite
+> fork or clone could still retain the old history.
+> - **Issue #3 fixed (PR #37)**: moved `territorial_judges_manual.csv`, `manual_photos.json`, and
+> `photo_thumbs.json` from gitignored `data/cache/` into tracked `data/manual/` (`fjc_manual_overrides.csv`
+> left as documented/normally-absent — already handled gracefully). These are hand-curated inputs
+> with no automated source; losing them silently regresses the dataset — `manual_photos.json`'s
+> absence already caused a real incident (2026-08-27, ~27 curated photos wiped). This environment
+> still had the real cache files, so the fix was verified for real: rebuilt via `build_assets.py`,
+> confirmed judges/courts/photo_thumbs counts unchanged (1490/110/2391) and no derived JSON differs
+> except `manifest.json`'s version hash — which legitimately changed, since every prior committed
+> version had been manually preserved/copied forward rather than freshly computed against a
+> complete photo cache (the exact trap PR #26 documented). This is the first genuinely complete
+> rebuild since `photo_thumbs.json` became tracked.
+> - **CLAUDE.md's repo map updated** (the issue's own suggested fix) — flagged explicitly for
+> operator review before merging, per the core-protocol-file-change rule, rather than folded in
+> silently. Operator approved directly.
+> - **Standing-issue backlog order proposed and accepted**: #3 (done) → #4 → #8 → #2 → #7 → #6,
+> risk/dependency-driven (proven incident first, then hygiene, then forward-looking integration
+> prep, UX-facing work last). #28 (schema 2.0 batch) and #36 stay deliberately parked.
+> - **Operator wants every substantive PR in this batch reviewed before merge** (2026-09-07),
+> stricter than the general case-by-case authority — not just the core-protocol-file category.
+> Ledger-only PRs continue in the routine/self-merge lane (this one included).
+> - Blockers: none.
+
 > **SESSION (cs), 2026-09-07 — Issue #5: CI, an `npm test` that does something, and a minified
 > `dist/` build (PR #27, merged).**
 > - **The gap**: `package.json` declared one dependency and no scripts, so `npm test` did nothing;
