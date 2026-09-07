@@ -1,8 +1,8 @@
 {
   "schema": "court-tracker/manifest@1",
   "schema_version": "1.0.0",
-  "version": "05d95d9fcf1b",
-  "generated": "2026-09-05T11:10:40Z",
+  "version": "263063e280c4",
+  "generated": "2026-09-07T06:15:39Z",
   "last_appointment": "2026-06-18",
   "counts": {
     "courts": 110,
