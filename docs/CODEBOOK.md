@@ -1,5 +1,12 @@
 # CODEBOOK — data schema
 
+**Consuming this data from outside the repo? Read `docs/DATA_CONTRACT.md` first.** This file is
+the field-by-field reference — what each column *means*. The contract covers what a consumer
+needs on top of that: which files are stable public API vs. this widget's private furniture,
+what `manifest.schema_version` promises, how a field gets deprecated, and how to request one
+(`docs/SCHEMA_CHANGELOG.md` is the history). Each table below is tagged with its stability tier;
+the derived JSON differs from these CSVs in a few documented ways, listed in the contract's §7.
+
 Authoritative schema for the three source-of-truth CSVs. Variable names are final. Every judge
 value must be sourced; `data_verified` stays `false` until a human confirms the row. Dates are
 ISO `YYYY-MM-DD`. `president_party` is stored inline (no lookup table).
@@ -7,6 +14,7 @@ ISO `YYYY-MM-DD`. `president_party` is stored inline (no lookup table).
 ---
 
 ## Table A — `judges.csv`
+*Stability: **stable** (derived to `data/judges/<circuit>.json`).*
 One row per **sitting** judge (active or senior on a life-tenured court; in-term on a fixed-term court).
 
 | variable | type | description |
@@ -47,6 +55,7 @@ judges, time served in current term + years remaining (from `commission_date`/`t
 ---
 
 ## Table B — `courts.csv`
+*Stability: **stable** (derived to `data/courts.json`).*
 Reference table: hierarchy, seats, tenure, geometry.
 
 | variable | type | description |
@@ -54,7 +63,7 @@ Reference table: hierarchy, seats, tenure, geometry.
 | `court_id` | string | Primary key; CourtListener court code. |
 | `court_name` | string | Full official name. |
 | `short_name` | string | Compact label for selector/map. |
-| `court_level` | enum `circuit` \| `district` \| `specialized` | View placement + draw rule. `specialized` = USCIT, CFC. |
+| `court_level` | enum `scotus` \| `circuit` \| `district` \| `specialized` | View placement + draw rule. `specialized` = USCIT, CFC; `scotus` is the single Supreme Court row (added with SCOTUS scope, 2026-07-18 — the enum here had not been updated to say so). Note `seat_blocks.json` calls the same courts `feeder`, not `specialized` (`DATA_CONTRACT.md` §7). |
 | `parent_id` | string \| null | District → its circuit. Specialized → the circuit that hears its appeals (`cafc`). Null for circuits. |
 | `tenure_type` | enum `life_tenured` \| `fixed_term` \| `fixed_term_senior` | Governs senior-status applicability and how term length is shown. `fixed_term_senior` is a CFC-only carve-out (see below): active judges still serve a real 15-yr term like plain `fixed_term`, but the court also has statutory senior status (28 U.S.C. §178) that behaves like `life_tenured`'s — supernumerary, doesn't count against `authorized_judgeships`. |
 | `authorized_judgeships` | integer | Statutory active-seat count (28 U.S.C. §44 / §133). Vacancies = `authorized_judgeships − active judges`. |
@@ -87,6 +96,7 @@ Reference table: hierarchy, seats, tenure, geometry.
 ---
 
 ## Table C — `circuit_justices.csv`
+*Stability: **stable** (derived to `data/circuit_justices.json`).*
 Small, separately loaded. Maps each circuit to its assigned SCOTUS Circuit Justice.
 
 | variable | type | description |
@@ -104,6 +114,7 @@ Small, separately loaded. Maps each circuit to its assigned SCOTUS Circuit Justi
 ---
 
 ## Table D — `seat_blocks.csv`  (operator-tuned map placement)
+*Stability: **reference-renderer** — placement is tuned for this widget's map; composition is portable.*
 Optional and **sparse**: one row only for a court whose seat-block you have actually placed.
 Anything absent falls back to the centre of the largest part of that court's shape, so a geometry
 re-export doesn't invalidate rows you never tuned.
@@ -129,6 +140,7 @@ a **data-only** change: drop the CSV in, re-run `build_assets.py`, bump nothing 
 ---
 
 ## Table E — `appointments.csv`  (historical; feeds the future beeswarm widget)
+*Stability: **provisional** — `data/appointments.json` is a string-typed passthrough; see `DATA_CONTRACT.md` §7.*
 
 Written by `scripts/collect_appointments.py`; derived to `data/appointments.json` by
 `build_assets.py` (manifest key `files.appointments`). One row per APPOINTMENT since
@@ -152,6 +164,7 @@ current widget.
 ---
 
 ## Table F — `district_arrangement.json`  (operator-authored; national district-block cartogram)
+*Stability: **reference-renderer** — a hand-built cartogram for one specific view.*
 
 Hand-built via the standalone `tools/district-block-builder.html` (Sampler → Editor → District
 linker → Arrangement stages; see `PROGRESS.md` sessions (bi)-(bq) for the tool's own build
@@ -178,6 +191,7 @@ District" feature) is still pending.
   here will silently be stale; there is no automatic refresh path yet.
 
 ## Table G — `judges_search.json`  (derived; header search-bar index)
+*Stability: **stable**. Deliberately narrow — request additions per `DATA_CONTRACT.md` §6.*
 
 Built by `build_assets.py` straight from the already-derived `judges` list (Table A), keeping
 only the fields the header search bar needs — no photos, education, affiliations, ABA rating,
@@ -205,6 +219,7 @@ first interaction with the search box — never on initial mount.
   today.
 
 ## Table H — `manifest.json`'s `national_totals`  (derived; nation-wide reconciliation)
+*Stability: **stable**.*
 
 Computed by `build_national_totals()` in `build_assets.py` and written into `data/manifest.json`
 directly (no separate file) — small enough to ride along with the version/counts already there.

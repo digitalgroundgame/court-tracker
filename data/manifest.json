@@ -1,5 +1,6 @@
 {
   "schema": "court-tracker/manifest@1",
+  "schema_version": "1.0.0",
   "version": "05d95d9fcf1b",
   "generated": "2026-09-05T11:10:40Z",
   "last_appointment": "2026-06-18",
@@ -53,6 +54,19 @@
         "cadc": "assets/geo/circuits/cadc.svg"
       }
     }
+  },
+  "stability": {
+    "manifest": "stable",
+    "courts": "stable",
+    "judges": "stable",
+    "circuit_justices": "stable",
+    "judges_search": "stable",
+    "seat_blocks": "reference-renderer",
+    "district_arrangement": "reference-renderer",
+    "district_arrangement_alt": "reference-renderer",
+    "appointments": "provisional",
+    "president_photos": "stable",
+    "geo": "stable"
   },
   "national_totals": {
     "authorized": 673,
