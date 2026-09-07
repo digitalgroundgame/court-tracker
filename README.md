@@ -27,13 +27,15 @@ the app across phases. It is not the finished app yet.
 
 ## How the work is split
 - **Claude Code instance** owns the web app (`embed/`, `index.html`) and data collection
-  (`scripts/`, `data/`) via the CourtListener API + Wikipedia.
+  (`scripts/`, `data/`) via the FJC Biographical Directory bulk export + Wikipedia (CourtListener's
+  live API is no longer used — see `docs/DATA_SOURCES.md`).
 - **Operator (you)** owns the QGIS geometry (`assets/geo/**`) and final human verification of data.
 - The two are decoupled: geometry and data are external, lazy-loaded assets, so either can be
   updated later by dropping in new files — **no code changes**.
 
 ## Getting started
-1. Set a CourtListener API token: `export COURTLISTENER_TOKEN=...`
+1. No API token is required to collect data (the FJC bulk export needs no auth; `COURTLISTENER_TOKEN`
+   is a documented-but-currently-unused env var — see `docs/DATA_SOURCES.md`).
    Optional, but polite when running the collection scripts: `export COURT_TRACKER_CONTACT=...`
    (an email or URL a site operator could reach you at — it is appended to the scripts'
    User-Agent at run time, so no personal address is stored in the repo).
