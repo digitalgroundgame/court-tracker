@@ -12,6 +12,46 @@ tracker (Phase-4 tail items open, PLUS a brand-new third pane view — "Change",
 (feature-complete first version, operator refinement rounds ongoing; see sessions ai→at, aw).
 **Last updated:** 2026-09-06
 
+> **SESSION (cr), 2026-09-06 — Data schema as a versioned public API (issue #10, PR #26).**
+> - **Origin**: sub-issue of the Pragmatic Papers epic (#13) — `docs/CODEBOOK.md` documents field
+> meaning but says nothing about what a consumer outside this repo may rely on, what can change
+> without warning, or how to request a field once PP builds a renderer against these shapes.
+> - **What landed**: `manifest.schema_version` (semver over the published *shape*, deliberately
+> separate from `manifest.version`'s content hash — folded into that hash so a shape-only bump
+> still cuts a release) and `manifest.stability` (per-file tier: `stable` / `provisional` /
+> `reference-renderer`). New normative `docs/DATA_CONTRACT.md` (three-tier policy, MAJOR/MINOR/PATCH
+> rules incl. which enums are closed, a deprecation path, the request process) and
+> `docs/SCHEMA_CHANGELOG.md` (1.0.0 baseline — documentation only, no data changed — plus a
+> *Proposed* section for known 1.0 warts). `.github/ISSUE_TEMPLATE/schema-change-request.md` routes
+> new requests.
+> - **`appointments.json` tiered `provisional`, not `stable`**, and it's a real defect, not caution:
+> confirmed directly against the live data (`"sitting": "false"` as a string, `""` for null on one
+> field vs. real `null` on `photo_thumb` in the same record) — a raw passthrough of the CSV rather
+> than a typed build, unlike every other derived file. `provisional` lets the eventual retype ship
+> as fulfilling a stated expectation instead of breaking a `stable` promise.
+> - **One correctness fix found along the way**: `courts.court_level`'s enum in CODEBOOK Table B
+> read `circuit | district | specialized`; the data has carried a `scotus` row since the 2026-07-18
+> SCOTUS scope addition and `build_assets.py:310` has branched on it ever since — confirmed directly
+> in the code before accepting the claim. Corrected.
+> - **Resolved its own conflict with PR #24** before opening (both touched
+> `release-data.yml`/`README.md`) — verified: rebuild produced byte-identical derived JSON: no data
+> changed, only the two new manifest keys.
+> - **Not self-merged**, per `CLAUDE.md` §7's case-by-case authority — a public compatibility
+> commitment, not routine code. Operator reviewed live in conversation: confirmed the
+> `appointments.json provisional` call after walking through what's gained (honesty now, no future
+> broken promise) vs. lost (weaker guarantee for a consumer that doesn't exist yet); the 90-day
+> deprecation window stood unchallenged.
+> - **Follow-up**: the operator asked whether the changelog's Proposed section (three known-breaking
+> 2.0 candidates: `appointments.json` typing, `circuit_justices.full_name` dedup,
+> `seat_blocks.level`/`courts.court_level` vocabulary unification) would actually resurface later —
+> it would not have (a changelog is prose, not a tracked task, and the session-start protocol only
+> checks `gh issue list`/`gh pr list`). Filed **#28** as one combined issue (not three — matches
+> `DATA_CONTRACT.md` §6's own "breaking changes are batched" policy) so the batch is guaranteed to
+> surface at every future session start.
+> - **Verified**: `tests/smoke.mjs` ALL PASS after merge. `manifest.json`'s `national_totals`/other
+> fields confirmed untouched (only `schema_version` + `stability` added).
+> - Blockers: none.
+
 > **SESSION (cq), 2026-09-06 — JSON-only release asset (issue #23, PR #24).**
 > - **Origin**: operator flagged the "possible follow-on" paragraph in the as-built comment on
 > epic #13 (PP-side sync notes, 2026-09-06) as worth its own issue. Filed #23, then built it.
