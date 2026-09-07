@@ -12,6 +12,13 @@ data/cache/
 # is the actual consumed geometry.
 data/out/
 
+# One-time geometry-pipeline inputs (issue #8, 2026-09-07) — Census cartographic-boundary county
+# shapefiles and the NPS Yellowstone boundary shapefile, consumed once by scripts/qgis_export.py
+# to produce assets/geo/**. Nothing the widget serves at runtime reads either. ~59MB combined;
+# re-fetch URLs are in scripts/qgis_export.py's COUNTY_SHAPEFILE/YNP_BOUNDARY comments.
+data/census/
+data/nps/
+
 # DevTools performance traces from freeze-hunting sessions (see PROGRESS.md).
 traces/
 
@@ -31,3 +38,11 @@ __pycache__/
 # scripts/build_district_arrangement_alt.py, which is the actual consumed asset. Left in place,
 # untouched, per the operator's own "make a copy of it, don't move/edit the original" instruction.
 temp_alt_ca1_ca3.txt
+
+# Same situation, earlier instance (issue #8, 2026-09-07) — the operator's own working file from
+# district-block-builder.html (its early lines are an unrelated, out-of-scope linker export; the
+# arrangement data lives from line 3747 on — see PROGRESS.md session (bq)). Verified byte-for-byte
+# identical, after JSON-parsing that tail, to the actual consumed data/district_arrangement.json —
+# so its content is fully superseded, not just "probably." Left in place rather than deleted,
+# mirroring temp_alt_ca1_ca3.txt's precedent above: it's the operator's file, not this repo's.
+temp_district_layout_data.txt
