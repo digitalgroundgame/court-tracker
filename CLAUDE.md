@@ -163,6 +163,15 @@ public-API policy, and `docs/DATA_SOURCES.md` for full collection methodology + 
 - Reuse the reference patterns from `docs/REFERENCE_NOTES.md`: scoped prefix, `viewBox` in projected
   units with a `scale(1,-1) translate(...)` Y-flip, `vector-effect: non-scaling-stroke`,
   top-of-paint-order overlay path for hover outline, cursor-following fixed tooltip.
+- **`embed/` is the readable source; `dist/` is its committed minified build** (added 2026-09-06,
+  session (cp)/issue #5 — flagged as an implied `CLAUDE.md` gap, not silently added). Editing
+  `embed/court-tracker.js`/`.css` or `embed/appointments-chart.js`/`.css` means running
+  `npm run build` (`scripts/build_embed.mjs`, esbuild) and committing the resulting `dist/` in the
+  **same** PR — `.github/workflows/ci.yml` hard-fails a PR where `dist/` has drifted from `embed/`
+  (`git diff --exit-code -- dist`). `dist/` sits exactly one directory below the repo root, same as
+  `embed/` — both resolve assets as `new URL("../", import.meta.url)`, so moving either breaks asset
+  resolution. A pure data/geometry drop still needs no rebuild of `dist/` (nothing in it is
+  data-derived) — this requirement is scoped to `embed/` source edits only.
 
 ## 7. Working protocol (start / pause / resume)
 
