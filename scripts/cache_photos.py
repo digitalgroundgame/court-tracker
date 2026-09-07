@@ -24,7 +24,8 @@ enrich_wikipedia.py. This script only re-encodes pixels those two already cleare
 Every network fetch is cached under data/cache/photos_orig/ (keyed by a hash of the ORIGINAL
 image URL, not the thumb URL, so re-runs are free and `--no-net` rebuilds entirely offline).
 Output thumbnails are content-addressed under assets/photos/<hash>.jpg, and the url->path
-lookup build_assets.py consumes lives at data/cache/photo_thumbs.json.
+lookup build_assets.py consumes lives at data/manual/photo_thumbs.json — tracked in git, unlike
+the rest of data/cache/, since it's not regenerable from a fresh clone (issue #3).
 
 Usage:
     python3 scripts/cache_photos.py              # fetch (cached) + write thumbnails
@@ -48,7 +49,7 @@ ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "data"
 ORIG_CACHE = DATA / "cache" / "photos_orig"
 THUMBS_OUT = ROOT / "assets" / "photos"
-LOOKUP_FILE = DATA / "cache" / "photo_thumbs.json"
+LOOKUP_FILE = DATA / "manual" / "photo_thumbs.json"   # tracked — see CLAUDE.md's repo map + issue #3
 
 sys.path.insert(0, str(ROOT / "scripts"))
 from _useragent import user_agent  # noqa: E402
