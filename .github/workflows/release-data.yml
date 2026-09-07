@@ -11,8 +11,9 @@ name: Release data package
 #                        assets/photos/ — everything a renderer needs at runtime.
 #                        Deliberately excludes data/cache/, data/census/, data/nps/, and any
 #                        other pipeline-only or geometry-source input that never ships to a
-#                        reader. (dist/ is the minified build of embed/; CI keeps the two in
-#                        sync, so nothing is built here.)
+#                        reader. (dist/ is the minified build of embed/. CI checks the two
+#                        stay in sync, but nothing forces a release to wait for CI, so the
+#                        release rebuilds and verifies before it tars — see below.)
 #   data-json.tar.gz     the runtime data/*.json only, same data/-prefixed paths, for a
 #                        consumer that renders its own map and supplies its own images —
 #                        photos and geometry are ~98% of the full package's bytes.
@@ -54,6 +55,28 @@ jobs:
             echo "exists=true" >> "$GITHUB_OUTPUT"
           else
             echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-node@v4
+        if: steps.check.outputs.exists == 'false'
+        with:
+          node-version: "22"
+          cache: npm
+
+      # The committed dist/ ships in the package, so it must match embed/ at THIS commit. CI
+      # asserts that on PRs, but nothing gates this workflow on CI having passed (a data push or
+      # a merge that ran ahead of its checks lands here regardless), so verify it again rather
+      # than publish a minified widget that disagrees with its source.
+      - name: Verify dist/ matches embed/
+        if: steps.check.outputs.exists == 'false'
+        run: |
+          set -euo pipefail
+          npm ci
+          npm run build
+          if [ -n "$(git status --porcelain -- dist)" ]; then
+            git status --porcelain -- dist
+            echo "::error::dist/ is stale at this commit; run 'npm run build', commit, and re-release."
+            exit 1
           fi
 
       - name: Build release tarballs
