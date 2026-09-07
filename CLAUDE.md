@@ -210,6 +210,18 @@ public-API policy, and `docs/DATA_SOURCES.md` for full collection methodology + 
      data correctness, scope, or the UX contract — and any PR from a prior/different session you
      didn't just write — for the operator's explicit go-ahead; when in doubt, summarize the diff and
      ask rather than merge.
+   - **Merge with `--squash`, not `--merge`** (operator decision, 2026-09-07, adopting a contributor
+     suggestion — see `PROGRESS.md` for the full discussion). With multiple sessions merging into
+     `main` concurrently, a branch that falls behind needs `main` merged back into it to resolve,
+     which creates a "merge main in" commit on that branch — squashing collapses that (and every
+     other intermediate commit) into the one commit that actually lands on `main`, so conflict-
+     resolution noise never becomes permanent history. This changes nothing else about how a
+     conflict gets resolved (still commit the resolution immediately, verify content directly, never
+     switch branches mid-resolution) — only the final `gh pr merge` flag. Applies uniformly to
+     feature PRs and the ledger-entry PRs alike. **Prospective only**: this does not mean rewriting
+     the merge commits already on `main` to look squashed — that would be a history rewrite, the
+     same risk category as issue #36, not implied by adopting this going forward. Check that the
+     `Co-Authored-By` trailer survives into the squash commit rather than assuming it does.
    - **Hard stop, stricter than the above: any change to `CLAUDE.md`, `PROGRESS.md`'s
      instance-protocol block, `INITIAL_PROMPT.md`, or any other file a session reads before doing
      work, always needs explicit operator discussion before merging** (operator decision, 2026-09-06
