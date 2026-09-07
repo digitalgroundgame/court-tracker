@@ -12,6 +12,28 @@ tracker (Phase-4 tail items open, PLUS a brand-new third pane view — "Change",
 (feature-complete first version, operator refinement rounds ongoing; see sessions ai→at, aw).
 **Last updated:** 2026-09-07
 
+> **SESSION (cp) cont'd (6), 2026-09-07 — Adopted `--squash` merges (PR #44), first live test
+> confirmed clean.**
+> - **Origin**: tadjh (a contributor session) flagged that falling behind a fast-moving `main`
+> means merging `main` back into a branch to resolve, which — under plain `--merge` — leaves that
+> "merge main in" commit as permanent noise on `main`. We'd hit exactly this twice for real (PR
+> #14, #27). Assessed the tradeoff with the operator before touching anything: squash doesn't
+> change how a conflict gets resolved (still commit immediately, verify content, never switch
+> branches mid-resolution) — only the final `gh pr merge` flag, and it's orthogonal to the
+> fresh-ledger-branch convention (that branch is always cut fresh off whatever `main` looks like
+> after the previous merge, regardless of how that merge landed).
+> - **Operator approved; codified in `CLAUDE.md` §7 point 6** (applies uniformly to feature PRs
+> and ledger PRs). Explicitly prospective-only — existing merge commits on `main` are untouched,
+> not a history rewrite (that's issue #36's separate, unscheduled question).
+> - **First live test (this very change, PR #44)**: squash-merged and inspected the result
+> directly — single-parent commit (`git cat-file -p` confirms no merge structure), GitHub
+> auto-appended the PR number to the title, and both the `Co-Authored-By` and `Claude-Session`
+> trailers survived into the squash commit intact. The one thing worth verifying empirically,
+> verified.
+> - **Still open, awaiting operator review**: PR #41 (issue #8 — untrack 59MB of geometry-source
+> inputs + the stray temp file). Will squash-merge it too once approved, matching the new policy.
+> - Blockers: none.
+
 > **SESSION (cp) cont'd (5), 2026-09-07 — Issue #4 fixed (PR #39): recorded real download URLs
 > for the two manual bulk data inputs.**
 > - Added a section to `docs/DATA_SOURCES.md` naming exactly where `fjc_judges.csv` and
