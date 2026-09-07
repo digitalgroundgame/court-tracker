@@ -21,10 +21,10 @@ They only converge later, at Phase 3. Nothing before Phase 3 needs real geometry
    `INITIAL_PROMPT.md`, `README.md`, `START_HERE.md` at root; `.claude/settings.json`; `docs/` with
    the six docs; `scripts/qgis_export_template.py`; and empty `assets/geo/` and `data/`. (The instance
    will create any other folders it needs.)
-3. **CourtListener token.** Register for a free Free Law Project / CourtListener API token, then in the
-   terminal you'll launch Claude Code from:
-   `export COURTLISTENER_TOKEN=...` (add it to your shell profile so it persists). Needed for Phase 2,
-   but set it now. While you're there, optionally `export COURT_TRACKER_CONTACT=...` — an email or
+3. **No API token needed** (updated 2026-09-06 — corrects earlier guidance in this file: Phase 2's
+   collection scripts stopped calling CourtListener's live API on 2026-07-16; the FJC bulk export
+   needs no auth. `COURTLISTENER_TOKEN` is a documented-but-unused env var; skip it). Optionally, in
+   the terminal you'll launch Claude Code from: `export COURT_TRACKER_CONTACT=...` — an email or
    URL the collection scripts append to their User-Agent so Wikimedia et al. can reach whoever is
    crawling. It stays in your shell, never in the repo.
 4. **Install Claude Code** if you haven't (`npm install -g @anthropic-ai/claude-code`; requires Node.js
@@ -32,7 +32,7 @@ They only converge later, at Phase 3. Nothing before Phase 3 needs real geometry
    for auth.
 5. **Install QGIS** (qgis.org) for the geometry track. Can wait until Stage C.
 
-✅ Before moving on: tree matches the repo map; token is exported in your shell; `claude` runs.
+✅ Before moving on: tree matches the repo map; `claude` runs.
 
 ---
 
@@ -131,8 +131,8 @@ When `ca8` geometry from Stage C is ready:
 ---
 
 ## What comes next (not part one)
-- **Phase 2** — the instance runs the CourtListener sweep + Wikipedia enrichment to populate all
-  three CSVs (this is where the token matters), then you spot-verify and flip `data_verified` to true.
+- **Phase 2** — the instance runs the FJC bulk-directory sweep + Wikipedia enrichment to populate
+  all three CSVs, then you spot-verify and flip `data_verified` to true.
 - **Geometry** — finish the remaining circuits + insets on the geometry track.
 - **Phase 3** — integrate all geometry; **Phase 4** — polish, mobile, offline/archive resilience.
 

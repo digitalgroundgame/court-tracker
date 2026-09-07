@@ -1,14 +1,22 @@
 # DATA_SOURCES — provenance & verification
 
-## Sources (in priority order)
-1. **CourtListener / Free Law Project REST API** — primary spine for judges, seats/positions,
-   appointing president, nomination/confirmation/commission dates, education, ABA rating, and the
-   profile URL. **Check the current API docs at collection time** (courtlistener.com/help/api/rest/);
-   do not hardcode an API version from memory. Use an API token from `COURTLISTENER_TOKEN` (env var).
-2. **Wikipedia / Wikimedia Commons** — `photo_url` (+ `photo_source`, `photo_license`) and context
+## Sources (in priority order) — current, as of 2026-07-16
+**This list describes where things ended up, not where they started** — see "Collection methodology
+as run" below for how #1 changed from CourtListener to FJC mid-project, and why. If you're about to
+write new collection code, read that section before assuming this summary is the whole story.
+
+1. **FJC Biographical Directory bulk export** (`data/cache/fjc_judges.csv`, from fjc.gov, no auth) —
+   primary spine for judges/positions, nomination/confirmation/commission dates, appointing
+   president + party, ABA rating, and JD school/year, matched per appointment block.
+2. **CourtListener / Free Law Project** — supplies only `cl_person_id` + `cl_profile_url`, via a
+   bulk, unauthenticated people table (not a live per-judge/per-court API call), joined by FJC `jid`
+   == CL `fjc_id`. **No live CourtListener API call remains anywhere in `scripts/`** (removed
+   2026-07-16 — its active/senior/chief flags proved unreliable at collection time, below);
+   `COURTLISTENER_TOKEN` is consequently unused.
+3. **Wikipedia / Wikimedia Commons** — `photo_url` (+ `photo_source`, `photo_license`) and context
    for reported FedSoc/ACS affiliation.
-3. **Web search** — to substantiate affiliation claims with a citable `*_source`, and to fill gaps.
-4. **Statute (28 U.S.C. §44, §133)** — `authorized_judgeships` per court.
+4. **Web search** — to substantiate affiliation claims with a citable `*_source`, and to fill gaps.
+5. **Statute (28 U.S.C. §44, §133)** — `authorized_judgeships` per court.
 
 ## Collection rules
 - Cache every API/web response to disk (e.g. `scripts/.cache/`) keyed by request, so runs are
@@ -18,7 +26,8 @@
 - Affiliation: set `*_reported = true` only with a real `*_source` URL and a `*_basis`. "Spoke at a
   chapter event" is `basis = speaker`, not `member`. Keep the distinction honest.
 - Photos: only set `photo_url` when `photo_license` is known and permits reuse; else null (fallback
-  avatar). Prefer public-domain / Wikimedia / CourtListener.
+  avatar). Prefer public-domain / Wikidata / Wikimedia Commons (no script pulls photos from
+  CourtListener — corrected 2026-09-06).
 - Scope reminder: active + senior on life-tenured courts; in-term judges on fixed-term courts
   (territorial districts, CFC). Exclude magistrate, bankruptcy, purely historical judges.
 
