@@ -1,0 +1,78 @@
+name: CI
+
+# Runs the test suites that were previously only ever run by hand (issue #5), plus a check
+# that the committed minified build in dist/ still matches embed/.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch: {}
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: jsdom smoke + dist build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+
+      - name: Smoke suite (source)
+        run: npm test
+
+      - name: Build dist/
+        run: npm run build
+
+      # dist/ is committed so a clone, a static download, and the data release all carry a
+      # production bundle without a build step. That only holds if it is regenerated whenever
+      # embed/ changes — this is the step that says so out loud instead of shipping a stale one.
+      - name: dist/ is in sync with embed/
+        run: |
+          if ! git diff --exit-code -- dist; then
+            echo "::error::dist/ is stale. Run 'npm run build' and commit the result."
+            exit 1
+          fi
+
+      - name: Smoke suite (minified build)
+        run: npm run test:dist
+
+  browser:
+    name: real-browser checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+
+      # The CDP suites default to `google-chrome-stable`; runner images have moved that name
+      # around before, so resolve it here and hand it over via the CHROME_BIN hook.
+      - name: Locate a headless Chrome
+        run: |
+          set -euo pipefail
+          BIN=$(command -v google-chrome-stable || command -v google-chrome \
+             || command -v chromium-browser || command -v chromium || true)
+          if [ -z "$BIN" ]; then echo "::error::no Chrome/Chromium on this runner"; exit 1; fi
+          echo "CHROME_BIN=$BIN" >> "$GITHUB_ENV"
+          "$BIN" --version
+
+      # Layout-dependent assertions jsdom structurally cannot make (it reports 0 for every box).
+      - name: Browser checks (source)
+        run: npm run test:browser
+
+      - name: Browser checks (minified build)
+        run: |
+          npm run build
+          npm run test:browser:dist
