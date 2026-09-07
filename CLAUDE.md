@@ -27,10 +27,14 @@ archived (e.g. archive.org). No build step at runtime; plain ES modules + fetch.
   field, leave it null and note it. `data_verified` is always `false` on write — a human verifies.
 - **Affiliation fields (`fedsoc_*`, `acs_*`) are `true` only with a `*_source` URL** and a `*_basis`.
   Display them with hedged, attributed wording ("reported to be…"), never as asserted fact.
-- **Respect image licensing.** Capture `photo_source` and `photo_license`. Prefer Wikimedia /
-  public-domain / CourtListener images. If reuse terms are unclear, leave `photo_url` null and let
-  the initials-avatar fallback handle it — do not embed an image you cannot license.
-- **No secrets in the repo.** API tokens come from environment variables (`COURTLISTENER_TOKEN`).
+- **Respect image licensing.** Capture `photo_source` and `photo_license`. Prefer Wikidata /
+  Wikimedia Commons / public-domain images (no collection script pulls photos from CourtListener —
+  corrected 2026-09-06, see §4). If reuse terms are unclear, leave `photo_url` null and let the
+  initials-avatar fallback handle it — do not embed an image you cannot license.
+- **No secrets in the repo.** API tokens/contact info come from environment variables — currently
+  `COURT_TRACKER_CONTACT` (optional, User-Agent contact for the collection scripts; see
+  `docs/DATA_SOURCES.md`). `COURTLISTENER_TOKEN` is a documented-but-presently-unused env var (see
+  §4) — the pattern holds for it too, should it ever be needed live again.
 - Do not edit files under a real user's read-only mounts; work only inside this repo.
 
 ## 3. Scope (authoritative)
@@ -70,18 +74,33 @@ archived (e.g. archive.org). No build step at runtime; plain ES modules + fetch.
   generic "seniors generally don't vote en banc" explainer is already just as much a
   simplification for ordinary district courts, so it needs no CFC-specific carve-out.
 
-## 4. Data (see `docs/CODEBOOK.md` for the full schema)
+## 4. Data (see `docs/CODEBOOK.md` for the full schema, `docs/DATA_CONTRACT.md` for the versioned
+public-API policy, and `docs/DATA_SOURCES.md` for full collection methodology + provenance)
 
-- **Primary source: CourtListener / Free Law Project.** Consult the current REST API docs
-  (courtlistener.com/help/api/rest/) at collection time — do **not** assume an API version from
-  memory. Use it for judges, positions/seats, appointing president, dates, education, ABA rating,
-  and the profile URL (`cl_profile_url`).
+- **Primary source: the FJC Biographical Directory bulk export** (updated 2026-09-06 — corrects a
+  stale claim this section carried since Phase 2). Judges/positions, commission/nomination/
+  confirmation dates, appointing president + party, ABA rating, and JD school/year all come from
+  the FJC directory, matched per appointment block. **CourtListener's live REST API is no longer
+  called at all** (dropped 2026-07-16 — its active/senior/chief flags proved unreliable at
+  collection time; see `docs/DATA_SOURCES.md`'s "Collection methodology as run"); it now supplies
+  only `cl_person_id`/`cl_profile_url` via a bulk, unauthenticated people table, joined by FJC
+  `jid` == CL `fjc_id`. `COURTLISTENER_TOKEN` is consequently unused by every collection script —
+  do not assume a live authenticated CourtListener call is available or needed without checking
+  `docs/DATA_SOURCES.md` first, since this has changed once already.
 - **Enrichment: Wikipedia / Wikimedia and web search** for `photo_url`, and for `fedsoc_*` / `acs_*`
   reported affiliation (with a source per claim).
 - **Authorized judgeships** per court are statutory (28 U.S.C. §44 for circuits, §133 for districts);
-  capture the current number in `courts.csv` and verify counts against CourtListener.
+  capture the current number in `courts.csv`, verified against the FJC directory + statute (not
+  CourtListener — see above).
 - Three CSVs are the human-verifiable source of truth: `data/judges.csv`, `data/courts.csv`,
   `data/circuit_justices.csv`. `scripts/build_assets.py` derives the runtime JSON + `manifest.json`.
+- **Changing the published JSON shape is a schema change, not just a code change** (added
+  2026-09-06, session (cr)/issue #10): a field/file added, renamed, retyped, or an enum value
+  added/removed in derived output requires bumping `SCHEMA_VERSION` in `build_assets.py` and adding
+  an entry to `docs/SCHEMA_CHANGELOG.md`, **in the same PR as the code** — the version constant lives
+  next to the derive step it describes on purpose. Whether it's MAJOR/MINOR/PATCH, what a consumer
+  may assume, and the deprecation path are all in `docs/DATA_CONTRACT.md`. A pure data correction
+  (fixing a wrong value) is not a schema change and needs none of this.
 - `president_party` is stored inline (no lookup table). Cache all API/web responses to disk so
   collection is resumable and re-runs are cheap.
 
@@ -159,7 +178,9 @@ archived (e.g. archive.org). No build step at runtime; plain ES modules + fetch.
 6. **Branch → PR → merge, never commit straight to `main`** (updated 2026-09-06, session (cp);
    supersedes the old "commit and push to main" rule from session (br)). This repo is linked to
    `origin` = `github.com/digitalgroundgame/court-tracker` (private) and now runs on GitHub Issues
-   + PRs, not a bare push log:
+   + PRs, not a bare push log. This section is the authoritative version of that policy — pinned
+   issue #21 on GitHub is a human-facing pointer to it, not a second copy; if the two ever disagree,
+   this file wins:
    - **Session start**: in addition to `CLAUDE.md` + `PROGRESS.md`, check `gh issue list` and
      `gh pr list` (open state) for standing work and review feedback before assuming the next task
      is whatever `PROGRESS.md` says next — an open issue or a review comment on your own PR can
@@ -180,6 +201,24 @@ archived (e.g. archive.org). No build step at runtime; plain ES modules + fetch.
      data correctness, scope, or the UX contract — and any PR from a prior/different session you
      didn't just write — for the operator's explicit go-ahead; when in doubt, summarize the diff and
      ask rather than merge.
+   - **Hard stop, stricter than the above: any change to `CLAUDE.md`, `PROGRESS.md`'s
+     instance-protocol block, `INITIAL_PROMPT.md`, or any other file a session reads before doing
+     work, always needs explicit operator discussion before merging** (operator decision, 2026-09-06
+     — prompted by the risk that a PR from a different contributor could bundle a change to one of
+     these files alongside unrelated work, altering how *future* sessions behave without the
+     operator ever weighing in). This applies even when the rest of the PR is otherwise routine —
+     check a PR's file list for these specifically, call out that part on its own, and get an
+     explicit go-ahead on it before merging any of it. Session behavior is something the operator
+     consciously signs off on, not a side effect of merging a feature PR.
+     **This has two distinct triggers, not one** (clarified same day): a PR's own diff touching one
+     of these files is the obvious case, but a PR can also *imply* a needed change without ever
+     touching them — it establishes a new standard, policy, or invariant that a core file now
+     describes incompletely or incorrectly unless updated. (Concrete example: PR #26 added the
+     `SCHEMA_VERSION`/`docs/DATA_CONTRACT.md` policy without touching `CLAUDE.md` at all, but a
+     future session changing the published JSON shape now needs to know to bump it — so this file
+     needed a new paragraph regardless.) Recognizing the implied case takes reading a PR for what
+     it's establishing, not just diffing its file list — flag it and get the operator's go-ahead the
+     same way as the direct case, as its own explicit step, before implementing or merging it.
    - **The `PROGRESS.md` ledger entry is its own tiny branch → PR → merge, cut fresh at merge time**
      (added 2026-09-06, session (cp), after (cn)/(co)/(cp) all independently prepended an entry at
      the same top-of-log line and collided in a real 3-way merge conflict on `main`). Every session
@@ -198,6 +237,15 @@ archived (e.g. archive.org). No build step at runtime; plain ES modules + fetch.
      may need a quick manual nudge afterward, but no merge should ever get stuck on this file again.
    - Skip opening a PR only if there is truly nothing to commit (pure investigation, no file
      changes) — but still check issues/PRs at session start regardless.
+   - **When resolving a merge conflict on someone else's PR branch, commit it before doing
+     anything else** (added 2026-09-06, session (cp) — a real incident, not a hypothetical): a
+     fully-resolved-but-uncommitted merge was silently corrupted when a branch switch (to go handle
+     a different PR) intervened before the commit — git carried some uncommitted file changes across
+     and dropped others with no error, and the loss wasn't caught until a later explicit content diff
+     (a passing test run had not caught it). If a conflict resolution can't be committed immediately
+     for some reason, stash it explicitly (`git stash push -u`) rather than leaving it bare in the
+     working tree, and verify the committed tree's actual content — not just a green test run —
+     before pushing, especially for a conflict that touched files beyond the obvious one.
 
 ## Repo map
 ```

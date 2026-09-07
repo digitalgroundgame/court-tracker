@@ -51,6 +51,48 @@ def _load_photo_thumbs() -> dict[str, str]:
         return {}
     return json.loads(PHOTO_THUMBS_FILE.read_text(encoding="utf-8"))
 
+# ---------------------------------------------------------------------------
+# Public data contract — see docs/DATA_CONTRACT.md (policy) and docs/SCHEMA_CHANGELOG.md
+# (history). These two constants are the machine-readable half of that contract; the doc is
+# the normative half, and the changelog is the record. Change them together, never alone.
+
+# Semantic version over the SHAPE of the published data — field names, types, enum values,
+# nullability, file layout. Deliberately SEPARATE from manifest["version"], which is a content
+# hash over the data itself: judges retire and get appointed constantly (new `version` every
+# collection sweep) without the shape moving at all, and a consumer needs to tell "same contract,
+# newer data" (pull it) from "the contract moved" (read the changelog first). Bump per
+# docs/DATA_CONTRACT.md §"Versioning policy": MAJOR = breaking, MINOR = additive,
+# PATCH = docs/values only. Folded into the version stamp below, so a schema-only bump still
+# cuts a release and still busts caches.
+SCHEMA_VERSION = "1.0.0"
+
+# Stability tier per manifest `files` key, published in the manifest so a consumer can assert
+# (in its own CI) that it depends on nothing it should not. Tiers are defined in
+# docs/DATA_CONTRACT.md §"Stability tiers":
+#   stable            — covered by the versioning policy above; break only at a MAJOR bump.
+#   provisional       — public and versioned, but a known-imperfect shape flagged for change;
+#                       still announced ahead of time, still MAJOR-gated, just expect it to move.
+#   reference-renderer— tuned for THIS repo's widget's visual design (block positions, cartogram
+#                       grids). Published, versioned, but not a portable data contract: another
+#                       renderer should expect to reimplement rather than consume these.
+STABILITY = {
+    "manifest": "stable",
+    "courts": "stable",
+    "judges": "stable",
+    "circuit_justices": "stable",
+    "judges_search": "stable",
+    "president_photos": "stable",
+    "geo": "stable",
+    # String-typed passthrough of appointments.csv ("" for null, "true"/"false" for booleans).
+    # Portable content, imperfect shape; typed coercion is a proposed 2.0 change (see the
+    # changelog's Proposed section), so consumers get told before it moves.
+    "appointments": "provisional",
+    "seat_blocks": "reference-renderer",
+    "district_arrangement": "reference-renderer",
+    "district_arrangement_alt": "reference-renderer",
+}
+
+
 # Expected column contract (frozen in docs/CODEBOOK.md). Used for light validation;
 # a missing/empty CSV is tolerated in Phase 0 so the shell still boots.
 COURTS_COLUMNS = [
@@ -555,6 +597,11 @@ def main() -> int:
         for jpg in sorted(photos_dir.glob("*.jpg")):
             payloads.append(f"{jpg.name}:{jpg.stat().st_size}".encode("utf-8"))
 
+    # Fold the schema version in so a shape-only bump (no data change) still produces a new
+    # `version`, hence a new release tag and a busted cache — a consumer polling releases must
+    # not miss a contract change just because no judge moved that week.
+    payloads.append(f"schema_version:{SCHEMA_VERSION}".encode("utf-8"))
+
     version = _version_stamp(payloads)
     # The most recent judgeship START date in the data (commission_date is this project's
     # established "start of judgeship" field - CLAUDE.md §5 already sorts icons by it). Distinct
@@ -564,6 +611,7 @@ def main() -> int:
                            default=None)
     manifest = {
         "schema": "court-tracker/manifest@1",
+        "schema_version": SCHEMA_VERSION,
         "version": version,
         "generated": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "last_appointment": last_appointment,
@@ -576,6 +624,9 @@ def main() -> int:
             "photo_thumbs": len(photo_thumbs),
         },
         "files": files,
+        # Per-file stability tier for the files actually emitted by THIS build (plus the
+        # manifest itself) — docs/DATA_CONTRACT.md defines the tiers.
+        "stability": {k: STABILITY[k] for k in ["manifest", *files] if k in STABILITY},
         "national_totals": national_totals,
         "sources": {
             "courts_csv": COURTS_CSV.exists(),
