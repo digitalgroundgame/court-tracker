@@ -4,6 +4,8 @@ node_modules/
 # Pipeline resumability cache — raw API/web responses + pre-crop photo
 # originals. Not source of truth, not read by the app; regenerate by
 # re-running the collect/enrich scripts (see CLAUDE.md, DATA_SOURCES.md).
+# NOT the same as data/manual/ (tracked) — that holds hand-authored/curated inputs with no
+# automated source; losing THOSE silently regresses the dataset (issue #3).
 data/cache/
 
 # Staging output of scripts/qgis_export.py — duplicates assets/geo/, which

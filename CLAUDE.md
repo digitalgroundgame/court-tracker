@@ -266,9 +266,19 @@ court-tracker/
 ├── index.html            ← standalone demo host (you build this)
 ├── embed/                ← the shippable widget: court-tracker.{js,css} + embed snippet
 ├── data/                 ← judges/courts/circuit_justices .csv (truth) + derived .json + manifest
-│   └── cache/            ← GITIGNORED — raw API/web response + pre-crop photo cache, not in GitHub.
-│                            Rebuilds itself (slowly, hitting live APIs) as collect_*.py/enrich_*.py
-│                            re-run; absence after a fresh clone is expected, not a bug.
+│   ├── manual/           ← TRACKED (updated 2026-09-07, issue #3 — this used to live gitignored
+│   │                        under cache/ and silently regressed on every fresh clone, incl. a real
+│   │                        2026-08-27 incident that wiped curated photos). Hand-authored/curated
+│   │                        inputs with NO automated source: territorial_judges_manual.csv (the
+│   │                        only source for gud/nmid/vid judges), manual_photos.json (curated-photo
+│   │                        registry enrich_wikipedia.py must never overwrite), photo_thumbs.json
+│   │                        (url→thumbnail lookup — missing it doesn't error, it silently reverts
+│   │                        every photo to hotlinking), fjc_manual_overrides.csv (CFC per-field
+│   │                        patches, usually absent/empty — that's normal).
+│   └── cache/            ← GITIGNORED — genuinely regenerable raw API/web response + pre-crop photo
+│                            cache only, not in GitHub. Rebuilds itself (slowly, hitting live APIs)
+│                            as collect_*.py/enrich_*.py re-run; absence after a fresh clone is
+│                            expected, not a bug — unlike data/manual/ above, which is not optional.
 ├── assets/geo/           ← EXTERNAL geometry: national.svg, circuits/<id>.svg, insets/ (you consume)
 ├── assets/photos/        ← cached judge images (tracked in git — this is what the widget serves)
 ├── scripts/              ← collect_courtlistener.py, enrich_wikipedia.py, build_assets.py, qgis_export_template.py
