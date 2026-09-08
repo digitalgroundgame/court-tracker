@@ -10,7 +10,7 @@
 tracker (Phase-4 tail items open, PLUS a brand-new third pane view — "Change", built session
 (aw), operator review round addressed session (ax)) and the appointments beeswarm
 (feature-complete first version, operator refinement rounds ongoing; see sessions ai→at, aw).
-**Last updated:** 2026-09-08 (cv)
+**Last updated:** 2026-09-08 (cw)
 
 ## Resume briefing
 <!-- Replaced wholesale at the end of each session — this is not an appended log, it's a
@@ -23,18 +23,20 @@ logged date. Session log entries `(bt)`-`(ce)` drifted up to +7 days ahead of th
 git-commit dates from exactly this mistake; see `CLAUDE.md` §7 and the `(cp)` 2026-09-08 entry
 below for the full incident and the corrected dates (ground truth: `git log --format=%ad`).
 
-**Next task**: issue #50's judge-icon collision-avoidance algorithm — the large feature spec still
-open in that issue (its two concrete text-overlap bugs are DONE, session (cv), 2026-09-08 — see
-Session log). **Before implementing**, the operator needs to confirm one specific sub-point: the
-spec's "Step 0" label-overflow fix also wants to replace the general no-photo icon fallback
-(`initials()` in `embed/court-tracker.js`, used everywhere in the app, not just crowded arcs) with
-a "full distinct-name-initials" computation — the issue's own text flags this as a global behavior
-change broader than the collision fix itself and asks to confirm it's really wanted before
-building it. Surface that question before starting the algorithm work; don't decide it
-unilaterally. The spec also names several open implementation choices to make and document in the
-PR rather than block on (exact buffer-tolerance size, the 2/3-base-size rounding convention, what
-counts as a "distinct name part" for suffixes like Jr./III) — read the full spec in the issue body
-on GitHub, not duplicated here.
+**Next task**: issue #50's judge-icon collision-avoidance algorithm itself — the ring/arc part of
+the spec (intra-/inter-ring collision resolution, the buffer-tolerance region, the icon-shrink
+floor). Both prerequisite pieces are DONE and merged: the issue's two concrete text-overlap bugs
+(session (cv), 2026-09-08 — includes a mid-session operator correction that bug 2's fix needed to
+apply at every width, not just mobile) and the general no-photo icon fallback generalized to full
+distinct-name-initials (session (cw), 2026-09-08 — operator confirmed via `AskUserQuestion`,
+"yes, global change"). See those two Session log entries for the full detail.
+
+The operator has also confirmed the collision-avoidance algorithm itself is intended to
+**eventually apply at both mobile AND non-mobile widths**, not just crowded mobile arcs — build it
+that way from the start rather than mobile-first. The spec names several open implementation
+choices to make and document in the PR rather than block on (exact buffer-tolerance size, the
+2/3-base-size rounding convention, what counts as a "distinct name part" for suffixes like
+Jr./III) — read the full spec in the issue body on GitHub, not duplicated here.
 
 **Check `gh issue list`/`gh pr list` at session start regardless** — a newer issue or a PR review
 comment can still supersede this.
@@ -451,6 +453,39 @@ Prove the whole app shell and asset schema on one circuit with hand-authored sam
 - Blockers: ...
 -->
 
+### 2026-09-08 (cw) — Issue #50: no-photo icon fallback generalized to full distinct-name-initials
+- Phase: 4. Second of two prerequisite pieces for issue #50's larger collision-avoidance feature
+  (the other, bugs 1+2, is session (cv) — a separate, independent branch/PR; check `gh pr list`,
+  don't assume either has merged). The spec's "Step 0" fix (switch an overflowing label to full
+  initials) came with an aside — *"the icon lettering in profile picture-less judges will also
+  have to be changed to match this rule generally"* — flagged by the operator's own issue text as
+  a global behavior change needing confirmation before implementing, since it's broader than the
+  collision fix itself. Asked via `AskUserQuestion`; operator confirmed "yes, global change."
+- `initials()` in both `embed/court-tracker.js` and `embed/appointments-chart.js` (previously
+  two DIFFERENT first+last implementations, appointments-chart.js's missing the generational-
+  suffix fix court-tracker.js already had) now compute the initial of EVERY distinct name part in
+  given-name-first order — "John Quincy Adams" -> "JQA", not "JA" — dropping generational suffixes
+  (Jr/Sr/II/III/IV/V), which qualify a name rather than being a part of it (same convention
+  `surname()` already used). This is the app's ENTIRE no-photo fallback, not scoped to crowded
+  arcs — every call site (icon avatars, the docked detail panel's large photo box, the Change
+  view's president avatars, appointments-chart.js's own detail panel) picks it up automatically
+  since they all route through the one shared function per file.
+- Checked the real-world visual impact before shipping: 35/1490 judges (2.3%) have 4+ distinct
+  name parts. Screenshotted the worst realistic case with a real no-photo judge (Virginia Maria
+  Hernandez Covington, flmd — "VMHC", 4 letters) in a real browser at the actual 44px avatar size —
+  renders cleanly, no visual mitigation needed. (The FULL collision-avoidance algorithm's own
+  Step-3 icon-shrink mechanism is the eventual answer for anything that doesn't fit — not
+  duplicated here ahead of that work.)
+- Verification: `tests/smoke.mjs`'s existing `initials()` unit assertions updated for the new
+  behavior (`"Paul Joseph Kelly Jr."` -> `"PJK"`, not `"PK"`) plus a new 3-part-name assertion;
+  `appointments-chart.js`'s `initials()` gained its own first-ever unit coverage (now exported via
+  `_dev`). Full jsdom suite (`embed/` and `--dist`) and real-Chrome CDP checks (`embed/` and
+  `dist/`) all pass. `npm run build` run; `dist/` committed.
+- Next: the ring/arc collision-avoidance algorithm itself (intra-/inter-ring resolution, buffer
+  tolerance, icon-shrink floor) — see Resume briefing. The operator also clarified mid-session
+  that algorithm is intended to eventually apply at both mobile AND non-mobile widths, not just
+  crowded mobile arcs (nothing about that part is built yet).
+- Blockers: none.
 ### 2026-09-08 (cv) — Issue #21 refreshed; issue #50's two mobile-380px bugs fixed (feature spec still open)
 - Phase: 4. Refreshed the pinned issue #21 (GitHub) — it still described the fresh-ledger-branch
   convention PR #46 reversed the day before (2026-09-08), among other drift. Rebuilt it from
