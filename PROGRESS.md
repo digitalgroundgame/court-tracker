@@ -12,6 +12,30 @@ tracker (Phase-4 tail items open, PLUS a brand-new third pane view — "Change",
 (feature-complete first version, operator refinement rounds ongoing; see sessions ai→at, aw).
 **Last updated:** 2026-09-07
 
+> **SESSION (cp) cont'd (8), 2026-09-07 — Issue #8: untracked 59MB of one-time geometry-source
+> inputs + a stray temp file.**
+> - Untracked `data/census/` (~18MB, Census cartographic-boundary county shapefiles) and
+> `data/nps/` (~41MB, NPS Yellowstone boundary shapefile) — one-time inputs to
+> `scripts/qgis_export.py`, consumed once to produce `assets/geo/**`, never read by the widget.
+> `git rm --cached`, not a hard delete — files stay on disk here; future clones just won't carry
+> them. Re-fetch URLs (verified live via WebSearch/WebFetch, issue #4's same standard) added
+> directly to `qgis_export.py`'s `COUNTY_SHAPEFILE`/`YNP_BOUNDARY` comments.
+> - Also untracked `temp_district_layout_data.txt`, gitignored rather than deleted — mirroring the
+> existing `temp_alt_ca1_ca3.txt` precedent, since `PROGRESS.md` session (bq) documents this as
+> explicitly the operator's own working file. Verified byte-for-byte (JSON-parsed its tail, from
+> line 3747 where the arrangement data starts) that its content is fully identical to the
+> production `data/district_arrangement.json` before deciding to leave it in place rather than
+> delete it.
+> - Forward-only (`git rm --cached`), not a history rewrite — the ~59MB stays in past commits, same
+> scope as `data/cache/`'s existing exclusion, deliberately separate from the history question in
+> issue #36.
+> - **Retrofitted with this entry directly** (opened as PR #41 before the ledger-in-branch rule was
+> restored — session (cp) cont'd (7) — so it's added here rather than as a follow-up PR, to land
+> consistent with the current convention).
+> - `tests/smoke.mjs` ALL PASS; `scripts/qgis_export.py` still parses cleanly after the comment
+> edits. Operator reviewed and approved before merge.
+> - Blockers: none. **Next**: issue #2 (asset-root base-URL override).
+
 > **SESSION (cp) cont'd (7), 2026-09-07 — Folded the `PROGRESS.md` ledger entry back into feature
 > branches, reversing yesterday's fresh-branch rule.**
 > - **Origin**: tadjh (a contributor session) pointed out that since we now squash-merge, including
