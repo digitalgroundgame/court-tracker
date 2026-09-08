@@ -6,13 +6,30 @@
 // -> majority semicircle toggle -> "View districts" drill-in (per-vertex morph from the
 // national projection to the circuit-local one; zoom+crossfade fallback) -> back.
 //
-// Assets are fetched relative to import.meta.url and lazy-loaded (national view loads only
-// courts.json + national.svg; a circuit's judges + local SVG load on demand), so the widget
-// runs from file://, when archived, and as a static download.
+// Assets are fetched relative to import.meta.url by default and lazy-loaded (national view
+// loads only courts.json + national.svg; a circuit's judges + local SVG load on demand), so the
+// widget runs from file://, when archived, and as a static download. That default can be
+// overridden per-mount (issue #2) for a publisher serving the script from a different origin/path
+// than data/assets/ — see resolveAssetRoot()'s doc comment.
 
 import { PRESIDENCIES } from "./presidencies.js";
 
-const ASSET_ROOT = new URL("../", import.meta.url);
+// Default: everything (embed/, data/, assets/) stays in one tree, one directory below wherever
+// this script is served from — the layout this repo ships as-is.
+const DEFAULT_ASSET_ROOT = new URL("../", import.meta.url);
+// Where to resolve `data/`, `assets/geo/`, `assets/photos/` from, for the CURRENT mount. Set once
+// per mount() call (below), read by every fetch for that mount's lifetime.
+//
+// Override precedence: `mount(root, {assetRoot})` argument > `data-asset-root` on the root div >
+// DEFAULT_ASSET_ROOT above. A relative override (e.g. "https://cdn.example.com/court-data/", or
+// just "/court-data/") resolves against `document.baseURI` (the HOST page's location) — NOT
+// against this script's own URL — since the whole point is decoupling "where the script is
+// served from" from "where the data is." No code change either way: still a data/config-only
+// knob, matching CLAUDE.md §6's "no code edits for asset updates" principle.
+function resolveAssetRoot(root, opts) {
+  const override = opts?.assetRoot ?? root?.dataset?.assetRoot;
+  return override ? new URL(String(override), document.baseURI) : DEFAULT_ASSET_ROOT;
+}
 // The manifest's content-hash version is appended to every asset URL — this IS the
 // cache-busting the manifest exists for (CLAUDE.md §6), and it was documented but never
 // implemented until 2026-07-19: Chrome's heuristic cache (10% of a file's age, and python
@@ -20,7 +37,7 @@ const ASSET_ROOT = new URL("../", import.meta.url);
 // operator's CSV edits + rebuild changed nothing on screen. http(s) only — file:// and
 // odd archive setups keep plain URLs (query strings there range from ignored to broken).
 const resolve = (rel) => {
-  const u = new URL(rel, ASSET_ROOT);
+  const u = new URL(rel, S.assetRoot);
   if (S.manifest?.version && /^https?:$/.test(u.protocol)) u.searchParams.set("v", S.manifest.version);
   return u.href;
 };
@@ -50,6 +67,7 @@ function svgEl(tag, attrs) {
 
 // ---- module state -------------------------------------------------------------
 const S = {
+  assetRoot: DEFAULT_ASSET_ROOT,  // recomputed per mount() call; see resolveAssetRoot() above
   manifest: null,
   courts: new Map(),          // court_id -> court record
   districtsByCircuit: new Map(),
@@ -3854,7 +3872,7 @@ function morphPlanFor(circuitId, local) {
 }
 
 // ---- entry --------------------------------------------------------------------
-export async function mount(root) {
+export async function mount(root, opts = {}) {
   // CONCURRENT mounts must not interleave: autoMount() fires on import, and a host page
   // that also calls mount() explicitly (tests/visual.html always has) starts a second mount
   // while the first is inside an await. Both clear the maps, then BOTH fill them — every
@@ -3863,6 +3881,9 @@ export async function mount(root) {
   // re-mounting stays supported; a superseded mount just stops at its next await.
   const mySeq = (S._mountSeq = (S._mountSeq || 0) + 1);
   const superseded = () => S._mountSeq !== mySeq;
+  // Recomputed every mount (issue #2): `opts.assetRoot` > `root.dataset.assetRoot` > the
+  // import.meta.url-relative default. Set before any fetch below reads it.
+  S.assetRoot = resolveAssetRoot(root, opts);
   // Reset per-mount state so re-mounting is idempotent (no accumulated districts/caches).
   S.courts.clear(); S.districtsByCircuit.clear(); S.judgeCache.clear();
   S.justices.clear(); S.justicesLoaded = false; S.localSVGCache.clear(); S.localPending.clear();

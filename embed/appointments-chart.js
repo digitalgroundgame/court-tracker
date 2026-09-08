@@ -15,11 +15,19 @@
 
 import { PRESIDENCIES } from "./presidencies.js";
 
-const ASSET_ROOT = new URL("../", import.meta.url);
+// Default: everything (embed/, data/, assets/) stays in one tree, one directory below wherever
+// this script is served from. Overridable per-mount (issue #2) — see resolveAssetRoot() in
+// court-tracker.js for the full rationale; same precedence and semantics here.
+const DEFAULT_ASSET_ROOT = new URL("../", import.meta.url);
+function resolveAssetRoot(root, opts) {
+  const override = opts?.assetRoot ?? root?.dataset?.assetRoot;
+  return override ? new URL(String(override), document.baseURI) : DEFAULT_ASSET_ROOT;
+}
 const SVGNS = "http://www.w3.org/2000/svg";
 const DAY = 86400000;
 
 const A = {
+  assetRoot: DEFAULT_ASSET_ROOT,  // recomputed per mount() call
   manifest: null, rows: [], courts: new Map(), reorgByPerson: new Map(),
   personDots: new Map(), dots: [], chiefMerges: 0,
   day0: 0, dayMax: 0, spanYears: 8, viewStart: 0,
@@ -33,7 +41,7 @@ function unpin() {
 }
 
 const resolve = (rel) => {
-  const u = new URL(rel, ASSET_ROOT);
+  const u = new URL(rel, A.assetRoot);
   if (A.manifest?.version && /^https?:$/.test(u.protocol)) u.searchParams.set("v", A.manifest.version);
   return u.href;
 };
@@ -838,8 +846,9 @@ function buildExplainerOverlay() {
 }
 
 // ---- entry -----------------------------------------------------------------------
-export async function mount(root) {
+export async function mount(root, opts = {}) {
   A.uid++;
+  A.assetRoot = resolveAssetRoot(root, opts);   // issue #2 — see resolveAssetRoot() above
   buildShell(root);
   try {
     A.manifest = await fetchJSON("data/manifest.json", { cache: "no-cache" });
