@@ -508,7 +508,20 @@ async function navigateToSearchResult(courtId, fullName) {
 }
 
 // ---- shell --------------------------------------------------------------------
+// Removes everything the PREVIOUS mount registered outside its own root: the window resize
+// listener, the document mousedown listener, the body-level tooltip node, and the pending
+// resize-debounce timer (issue #6). Handlers are stored on S (not a boolean guard) so they can
+// actually be unregistered, not just wired once and forgotten. Called both from the top of
+// buildShell (so repeated mount() calls never accumulate globals) and from destroy().
+function teardownGlobals() {
+  if (S._resizeHandler) { window.removeEventListener("resize", S._resizeHandler); S._resizeHandler = null; }
+  if (S._mousedownHandler) { document.removeEventListener("mousedown", S._mousedownHandler); S._mousedownHandler = null; }
+  clearTimeout(S._resizeT);
+  S.ui?.tooltip?.remove();
+}
+
 function buildShell(root) {
+  teardownGlobals();
   root.classList.add("ctt-root");
   root.innerHTML = "";
 
@@ -656,37 +669,38 @@ function buildShell(root) {
                tooltip, detail, detailContent, districtOverlay, districtCornerControls,
                search, searchInput, searchClear, searchResults, nationalSVG: null };
   S.ui = ui;
-  window.addEventListener("resize", () => {
+  ui.destroy = () => destroy(root);
+  S._resizeHandler = () => {
     if (S.selectedCourt) layoutJudges();
     if (S.districtOnMap) sizeDistrictOverlay();
     // Square size is in screen px, so the px->map-unit conversion is viewport-dependent.
     clearTimeout(S._resizeT);
     S._resizeT = setTimeout(refreshSeatBlocks, 120);
-  });
-  // Click anywhere that isn't the pinned panel or a judge icon unpins it (#20). Wired once.
-  // Same standard extended to the district docked panel (operator ask, 2026-09-05: it was
-  // missing this "click elsewhere to close" behavior every other docked panel in the app has).
-  if (!S._docWired) {
-    S._docWired = true;
-    document.addEventListener("mousedown", (e) => {
-      if (S.detailPinned) {
-        if (S.ui.detail.contains(e.target)) return;
-        if (e.target.closest && e.target.closest(".ctt-judge")) return;
-        unpinDetail();
-      }
-      if (S.districtDetailPinnedId) {
-        if (e.target.closest && e.target.closest(".ctt-district-detail")) return;
-        if (e.target.closest && e.target.closest(".ctt-district-sq")) return;
-        unpinDistrictDetail();
-      }
-      // Clicking away from the search UI hides the results list (the typed query itself is
-      // NOT cleared — only the × button or deleting the text clears it, operator spec).
-      if (S.ui.searchResults.classList.contains("ctt-is-open")) {
-        if (e.target.closest && e.target.closest(".ctt-search")) return;
-        hideSearchResults();
-      }
-    });
-  }
+  };
+  window.addEventListener("resize", S._resizeHandler);
+  // Click anywhere that isn't the pinned panel or a judge icon unpins it (#20). Same standard
+  // extended to the district docked panel (operator ask, 2026-09-05: it was missing this "click
+  // elsewhere to close" behavior every other docked panel in the app has). Handler is stored on
+  // S (not a fire-once boolean) so destroy()/a fresh mount can actually remove it (issue #6).
+  S._mousedownHandler = (e) => {
+    if (S.detailPinned) {
+      if (S.ui.detail.contains(e.target)) return;
+      if (e.target.closest && e.target.closest(".ctt-judge")) return;
+      unpinDetail();
+    }
+    if (S.districtDetailPinnedId) {
+      if (e.target.closest && e.target.closest(".ctt-district-detail")) return;
+      if (e.target.closest && e.target.closest(".ctt-district-sq")) return;
+      unpinDistrictDetail();
+    }
+    // Clicking away from the search UI hides the results list (the typed query itself is
+    // NOT cleared — only the × button or deleting the text clears it, operator spec).
+    if (S.ui.searchResults.classList.contains("ctt-is-open")) {
+      if (e.target.closest && e.target.closest(".ctt-search")) return;
+      hideSearchResults();
+    }
+  };
+  document.addEventListener("mousedown", S._mousedownHandler);
   return ui;
 }
 
@@ -3949,6 +3963,25 @@ export async function mount(root, opts = {}) {
     console.error("[court-tracker] load failed:", err);
   }
   return ui;
+}
+
+// Full teardown for SPA-style embedding (issue #6): removes the window/document listeners and
+// the body-level tooltip node this instance registered, cancels any in-flight morph animation,
+// and clears the root back to empty so the host can safely remove it (or hand it to a later
+// mount() call — clearing `cttMounted` lets autoMount() pick it back up too). Bumping
+// `_mountSeq` supersedes any fetch still in flight from the torn-down mount, so a slow response
+// arriving after destroy() can't touch a `ui` that's already gone (same guard mount() itself
+// uses against a second concurrent mount).
+export function destroy(root) {
+  S._mountSeq = (S._mountSeq || 0) + 1;
+  cancelMorph();
+  teardownGlobals();
+  if (root) {
+    root.innerHTML = "";
+    root.classList.remove("ctt-root");
+    delete root.dataset.cttMounted;
+  }
+  S.ui = null;
 }
 
 function autoMount() {
