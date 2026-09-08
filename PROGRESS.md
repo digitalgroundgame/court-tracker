@@ -470,28 +470,40 @@ Prove the whole app shell and asset schema on one circuit with hand-authored sam
     far right. Mobile-only override drops it to `position:static`, flowing onto its own line right
     after the title/meta instead.
   - **Bug 2** (the Supreme Court/Appellate/District tri-selector overlapping the pane's stow/close
-    buttons): harder than the issue's own literal numbers suggested. The operator's "align the
-    selector's top with the button's vertical center" gave the right DIRECTION (+8px) but not
-    enough MARGIN once measured for real: a wrapped 2-line tab centers its text within its own
-    taller box, so an 8px shift of the box's top doesn't move the (centered) text down by the same
-    8px. Real-browser measurement (a DOM `Range` around the tab's actual text — not its full
-    padded button box, since the operator's own spec explicitly tolerates padding/background
-    overlap and only glyph-touching is the real bug) showed the naive calculation left ~1px of
-    genuine text-vs-button overlap at 380/480px; tuned to +14px empirically, verified with a
-    several-px safety margin at 380/480/600px (the full width range the `max-width:640px` query is
-    actually active for). Confirmed visually too (a manual CDP screenshot), not just by the
-    geometry assertions. `.ctt-pane-body > .ctt-summary-content`'s existing `flex:1 1 auto`
-    already absorbs the extra height (no manual margin-redistribution needed), and since the
-    tri-selector is shared across all three Summary sub-tabs, the SCOTUS/District pixel-parity
-    invariant (sessions (cb)/(cc)/(cl)) is unaffected regardless of how tall it ends up being.
-  - Verification: `tests/browser-checks.mjs` gained a permanent regression section sweeping
-    380/480/600px for both bugs. Full jsdom suite (`embed/` and `--dist`) and real-Chrome CDP
-    checks (`embed/` and `dist/`) all pass.
-- Next: the collision-avoidance feature spec in issue #50 remains — see Resume briefing.
-- Blockers: the feature spec's "replace the general no-photo initials fallback everywhere with
-  full-distinct-name-initials" sub-point is an explicit operator confirm-before-implementing gate
-  (the issue's own text: "Confirm this is really wanted as a global behavior change... since it's
-  broader than the collision fix itself") — not something to implement without that go-ahead.
+    buttons — **every width**, per an operator mid-session correction: the original fix went into
+    the mobile media query only, but the ask was for all orientations): harder than the issue's
+    own literal numbers suggested. The operator's "align the selector's top with the button's
+    vertical center" gave the right DIRECTION (+8px) but not enough MARGIN once measured for real:
+    a wrapped 2-line tab centers its text within its own taller box, so an 8px shift of the box's
+    top doesn't move the (centered) text down by the same 8px. Real-browser measurement (a DOM
+    `Range` around the tab's actual text — not its full padded button box, since the operator's own
+    spec explicitly tolerates padding/background overlap and only glyph-touching is the real bug)
+    showed the naive calculation left ~1px of genuine text-vs-button overlap at 380/480px; tuned to
+    +14px empirically in `.ctt-summary-switch`'s BASE rule (not the mobile media query), verified
+    with a several-px safety margin across both the mobile breakpoint's full range (380/480/600px)
+    and two ordinary desktop widths (900/1180px). Confirmed visually too (manual CDP screenshots
+    at both a mobile and a desktop width), not just by the geometry assertions.
+    `.ctt-pane-body > .ctt-summary-content`'s existing `flex:1 1 auto` already absorbs the extra
+    height (no manual margin-redistribution needed), and since the tri-selector is shared across
+    all three Summary sub-tabs, the SCOTUS/District pixel-parity invariant (sessions (cb)/(cc)/(cl))
+    is unaffected regardless of how tall it ends up being. Bug 1 stays mobile-only by design — the
+    FedSoc key deliberately shares the desktop title's header band, and an existing
+    `browser-checks.mjs` assertion already covers that desktop behavior on purpose.
+  - Verification: `tests/browser-checks.mjs` gained a permanent regression section (bug 1 checked
+    at 380/480/600px, bug 2 at 380/480/600/900/1180px). Full jsdom suite (`embed/` and `--dist`)
+    and real-Chrome CDP checks (`embed/` and `dist/`) all pass.
+- The feature spec's confirm-before-implementing gate was resolved mid-session: the operator
+  confirmed (2026-09-08) the no-photo icon fallback SHOULD become a global "full distinct-name-
+  initials" change (e.g. "John Quincy Adams" -> "JQA", not "JA"), and clarified the collision-
+  avoidance algorithm itself is intended to eventually apply at both mobile and non-mobile widths
+  too (worth remembering when that part is actually built — nothing about it has been implemented
+  yet beyond this initials groundwork). See the next session-log entry for the initials() change
+  itself (separate branch/PR from this one).
+- Next: the full ring/arc collision-avoidance algorithm (intra-/inter-ring resolution, the
+  buffer-tolerance region, icon-shrink floor) — see Resume briefing.
+- Blockers: none remaining on issue #50 that need operator input; the algorithm's own open
+  implementation choices (exact buffer size, 2/3-base-size rounding convention, what counts as a
+  "distinct name part" for a suffix) are flagged in the issue as choices to document, not gates.
 
 ### 2026-09-08 (cu) — Issue #28: Schema 2.0 batch (appointments typing, circuit_justices dedup, seat_blocks vocabulary unification)
 - Phase: 4 (data-contract work, not a Phase-4 checklist item). Landed the three MAJOR candidates
