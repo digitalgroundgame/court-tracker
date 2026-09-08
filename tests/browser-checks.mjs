@@ -527,6 +527,50 @@ try {
   assert(mobileScroll.overflowPxAfter <= 1,
     `scrolling the pane to its end actually brings the last icon fully into view (${mobileScroll.overflowPxBefore}px past the fold -> ${mobileScroll.overflowPxAfter}px)`);
   assert(!mobileScroll.docOverflowsX, "no horizontal overflow anywhere on the page at 380px width");
+
+  console.log("REGRESSION (issue #50): Summary > SCOTUS FedSoc key and the tri-selector no longer overlap the title/pane buttons at mobile widths");
+  await ev(`document.querySelector('.ctt-selector-back')?.click()`); await sleep(500);
+  await ev(`document.querySelector('.ctt-selector-item[data-court-id="summary"]').click()`); await sleep(400);
+  await ev(`[...document.querySelectorAll('.ctt-mode-opt')].find(b=>b.textContent==='Supreme Court')?.click()`); await sleep(400);
+  // Sweep the full width range this media query is actually active for (a phone wide enough to
+  // exceed 640px in landscape leaves the breakpoint entirely and was never the bug) — bug 2's fix
+  // was tuned against real measurements at these exact widths, not derived from CSS constants
+  // alone (see that fix's own CSS comment for why the naive box-center calculation undershot).
+  for (const [w, h] of [[380, 700], [480, 700], [600, 700]]) {
+    await send("Emulation.setDeviceMetricsOverride", { width: w, height: h, deviceScaleFactor: 1, mobile: true });
+    await sleep(300);
+    // A tab click focuses the <button>, which Chrome's default focus-scroll behavior can nudge
+    // into view within .ctt-pane-body's own scroll container — an artifact of the test's click,
+    // not a real layout issue. Force it back to the top before measuring, matching what a reader
+    // who simply opens Summary fresh (never scrolled) actually sees.
+    await ev(`document.querySelector('.ctt-pane-body').scrollTop = 0`);
+    const bug1 = JSON.parse(await ev(`(() => {
+      const title = document.querySelector('.ctt-summary-subtitle'), meta = document.querySelector('.ctt-pane-meta'),
+        key = document.querySelector('.ctt-scotus-affil-key');
+      const t = title.getBoundingClientRect(), m = meta.getBoundingClientRect(), k = key.getBoundingClientRect();
+      return JSON.stringify({ titleBottom: t.bottom, metaBottom: m.bottom, keyTop: k.top });
+    })()`));
+    assert(bug1.keyTop >= bug1.titleBottom - 1 && bug1.keyTop >= bug1.metaBottom - 1,
+      `[${w}px] bug 1: FedSoc key sits below the title/meta (keyTop ${bug1.keyTop} vs titleBottom ${bug1.titleBottom}, metaBottom ${bug1.metaBottom})`);
+    const bug2 = JSON.parse(await ev(`(() => {
+      // The operator's own spec explicitly tolerates the tab's PADDED BUTTON BOX overlapping the
+      // close/stow circles — only the actual glyph pixels touching is the real bug ("some overlap
+      // is acceptable, it just depends if it touches the text"). A Range around the tab's text
+      // content gives the tight box around the rendered glyphs, excluding the button's own
+      // padding, which is what actually needs to clear the circles.
+      const tabs = [...document.querySelectorAll('.ctt-summary-switch .ctt-mode-opt')];
+      const lastTab = tabs[tabs.length - 1];
+      const range = document.createRange();
+      range.selectNodeContents(lastTab);
+      const text = range.getBoundingClientRect();
+      const close = document.querySelector('.ctt-pane-close').getBoundingClientRect();
+      const stow = document.querySelector('.ctt-pane-stowtop').getBoundingClientRect();
+      const overlaps = (a, b) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+      return JSON.stringify({ closeOverlap: overlaps(text, close), stowOverlap: overlaps(text, stow) });
+    })()`));
+    assert(!bug2.closeOverlap && !bug2.stowOverlap,
+      `[${w}px] bug 2: the tri-selector's last tab does not overlap the close/stow buttons`);
+  }
   await send("Emulation.clearDeviceMetricsOverride");
 } catch (e) { console.log("*** ", e.message); failures++; }
 finally { try { ws && ws.close(); } catch {} chrome.kill(); }
