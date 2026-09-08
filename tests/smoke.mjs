@@ -170,6 +170,50 @@ assert(root.querySelectorAll(".ctt-vacant").length === Math.max(0, mAuth - mAct)
 assert(root.querySelector(".ctt-senior"), "senior judge tinted");
 assert(root.querySelector(".ctt-chief-badge"), "chief judge badged");
 assert(root.querySelector(".ctt-justice"), "circuit justice icon present");
+
+console.log("Schema 2.0 (issue #28): circuit_justices.full_name collapsed into justice_name");
+{
+  const rawJustices = JSON.parse(readFileSync(REPO + "/data/circuit_justices.json", "utf8"));
+  assert(rawJustices.length > 0 && rawJustices.every((j) => !("full_name" in j)),
+    "circuit_justices.json no longer publishes the full_name/justice_name duplicate");
+  assert(rawJustices.every((j) => typeof j.justice_name === "string" && j.justice_name),
+    "justice_name is still published on every row");
+  // The widget's judge-icon renderer reads `full_name` uniformly for judges AND justices —
+  // verify the client-side synthesis (loadJustices()) actually keeps the Circuit Justice's own
+  // icon/detail working now that the published JSON no longer hands it that field pre-joined.
+  const justiceIcon = root.querySelector(".ctt-justice");
+  hover(justiceIcon);
+  await sleep(10);
+  assert(/Kavanaugh/.test(root.querySelector(".ctt-detail-name")?.textContent || ""),
+    "hovering the Circuit Justice shows a real name in the docked detail, not undefined");
+  const justicePhoto = justiceIcon.querySelector(".ctt-photo");
+  if (justicePhoto) {
+    assert(/Kavanaugh/.test(justicePhoto.getAttribute("alt") || ""),
+      "circuit justice photo alt text carries the real name");
+  } else {
+    assert(/^[A-Z]{1,2}$/.test(justiceIcon.querySelector(".ctt-avatar")?.textContent || ""),
+      "circuit justice initials fallback renders real initials, not a '?' placeholder");
+  }
+}
+
+console.log("Schema 2.0 (issue #28): seat_blocks.level unified with courts.court_level ('specialized', not 'feeder')");
+{
+  const rawBlocks = JSON.parse(readFileSync(REPO + "/data/seat_blocks.json", "utf8"));
+  const levels = new Set(Object.values(rawBlocks).map((b) => b.level));
+  assert(!levels.has("feeder"), "seat_blocks.json no longer uses the level value 'feeder'");
+  assert(levels.has("specialized"), "seat_blocks.json uses 'specialized' for cit/uscfc, matching courts.court_level");
+  assert(rawBlocks.cit?.level === "specialized" && rawBlocks.uscfc?.level === "specialized",
+    `cit/uscfc blocks carry level 'specialized' (got ${rawBlocks.cit?.level}, ${rawBlocks.uscfc?.level})`);
+}
+
+console.log("Schema 2.0 (issue #28): manifest reports schema_version 2.0.0, appointments promoted to stable");
+{
+  const rawManifest = JSON.parse(readFileSync(REPO + "/data/manifest.json", "utf8"));
+  assert(rawManifest.schema_version === "2.0.0", `manifest.schema_version is 2.0.0 (got ${rawManifest.schema_version})`);
+  assert(rawManifest.stability?.appointments === "stable",
+    `appointments promoted out of provisional now that it is typed (got ${rawManifest.stability?.appointments})`);
+}
+
 // same-surname disambiguation (Lavenski + Justin Smith both sit on the 8th Circuit)
 const labels = [...root.querySelectorAll(".ctt-judge-label")].map((l) => l.textContent);
 assert(labels.includes("L. Smith") && labels.includes("J. Smith"), "same-surname pair disambiguated (L./J. Smith)");
@@ -858,10 +902,11 @@ const feederIds = [...root.querySelectorAll(".ctt-selector .ctt-selector-item")]
 assert(feederIds.includes("cit") && feederIds.includes("uscfc"),
   `selector repopulates with USCIT + CFC (got ${feederIds.join(",")})`);
 // The feeders also appear ON the map for this view only: labelled CIT/CFC block arrays
-// beside/below the Fed block (level "feeder"), swept again on Back.
-const feederBlocks = () => root.querySelectorAll('.ctt-national-layer .ctt-blocks[data-level="feeder"] .ctt-block');
+// beside/below the Fed block (level "specialized", matching courts.court_level — issue #28),
+// swept again on Back.
+const feederBlocks = () => root.querySelectorAll('.ctt-national-layer .ctt-blocks[data-level="specialized"] .ctt-block');
 assert(feederBlocks().length === 2, `feeder view shows CIT + CFC seat blocks on the map (got ${feederBlocks().length})`);
-assert([...root.querySelectorAll('.ctt-blocks[data-level="feeder"] .ctt-block-label')]
+assert([...root.querySelectorAll('.ctt-blocks[data-level="specialized"] .ctt-block-label')]
   .map((t) => t.textContent).sort().join(",") === "CFC,CIT", "feeder blocks carry the CIT / CFC labels");
 // USCIT/CFC are reachable ONLY here — never as top-level selector entries.
 click(root.querySelector('.ctt-selector-item[data-court-id="uscfc"]')); await sleep(60);
@@ -1760,6 +1805,22 @@ console.log("appointments beeswarm widget (separate module, session aj)");
   await chart.mount(chartRoot);
   await sleep(30);
   const A = chart._dev.A;
+
+  console.log("  Schema 2.0 (issue #28): appointments.json is typed, not a string passthrough");
+  assert(A.rows.length > 0 && A.rows.every((r) => typeof r.sitting === "boolean"),
+    "every row's `sitting` is a real boolean, not the strings \"true\"/\"false\"");
+  assert(A.rows.every((r) => r.fedsoc_reported === null || typeof r.fedsoc_reported === "boolean"),
+    "`fedsoc_reported` is boolean-or-null (three real states), never the empty-string placeholder");
+  assert(A.rows.every((r) => r.acs_reported === null || typeof r.acs_reported === "boolean"),
+    "`acs_reported` is boolean-or-null too");
+  assert(A.rows.some((r) => r.fedsoc_reported === null) && A.rows.some((r) => r.fedsoc_reported === false) &&
+    A.rows.some((r) => r.fedsoc_reported === true),
+    "all three real states (null/false/true) are actually present in the data, not collapsed");
+  assert(A.rows.every((r) => r.fjc_jid === null || Number.isInteger(r.fjc_jid)),
+    "`fjc_jid` is a real int-or-null, not a numeric string");
+  assert(A.rows.every((r) => r.termination_reason === null || typeof r.termination_reason === "string"),
+    "an empty CSV cell round-trips to real `null`, not \"\"");
+
   const reorgRows = A.rows.filter((r) => (r.appointing_president || "").startsWith("None")).length;
   assert(A.dots.length === A.rows.filter((r) => r.commission_date).length - reorgRows - A.chiefMerges,
     `one dot per appointment, minus ${reorgRows} reorganizations and ${A.chiefMerges} chief-justice merge (${A.dots.length})`);
@@ -1823,7 +1884,7 @@ console.log("appointments beeswarm widget (separate module, session aj)");
   barrett.node.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
   assert(chartRoot.querySelectorAll(".cta-dot-hl-border").length === 2 && chartRoot.querySelectorAll(".cta-dot-hl").length === 2,
     "marking active: hover ring gains a black border ring per highlighted dot (Barrett: 7th Cir. + SCOTUS)");
-  const dual = A.rows.find((r) => r.fedsoc_reported === "true" && r.acs_reported === "true");
+  const dual = A.rows.find((r) => r.fedsoc_reported === true && r.acs_reported === true);
   if (dual) {
     const dd = A.dots.find((x) => x.row === dual);
     const tNode = dd.node.classList.contains("cta-dot") ? dd.node : dd.node.querySelector(".cta-scotus-ring");
@@ -1854,7 +1915,7 @@ console.log("appointments beeswarm widget (separate module, session aj)");
   assert(chartRoot.querySelector(".cta-detail-court") && chartRoot.querySelector(".cta-detail-courtname"),
     "detail shows the short court line + full court name on its own line");
   // sitting non-SCOTUS judges show their photo in the panel (dots stay photo-less)
-  const sitDist = A.dots.find((x) => x.row.sitting === "true" && x.row.court_level === "district" && x.row.photo_url);
+  const sitDist = A.dots.find((x) => x.row.sitting === true && x.row.court_level === "district" && x.row.photo_url);
   sitDist.node.dispatchEvent(new window.Event("pointerover", { bubbles: true }));
   await sleep(10);
   assert(chartRoot.querySelector(".cta-detail-photo img"),

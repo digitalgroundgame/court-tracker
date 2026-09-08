@@ -63,7 +63,7 @@ Reference table: hierarchy, seats, tenure, geometry.
 | `court_id` | string | Primary key; CourtListener court code. |
 | `court_name` | string | Full official name. |
 | `short_name` | string | Compact label for selector/map. |
-| `court_level` | enum `scotus` \| `circuit` \| `district` \| `specialized` | View placement + draw rule. `specialized` = USCIT, CFC; `scotus` is the single Supreme Court row (added with SCOTUS scope, 2026-07-18 — the enum here had not been updated to say so). Note `seat_blocks.json` calls the same courts `feeder`, not `specialized` (`DATA_CONTRACT.md` §7). |
+| `court_level` | enum `scotus` \| `circuit` \| `district` \| `specialized` | View placement + draw rule. `specialized` = USCIT, CFC; `scotus` is the single Supreme Court row (added with SCOTUS scope, 2026-07-18 — the enum here had not been updated to say so). `seat_blocks.json`'s `level` uses this same value (`specialized`), unified at schema 2.0 — see `DATA_CONTRACT.md` §7 (was `feeder`, a second vocabulary for the same concept, through 1.x). |
 | `parent_id` | string \| null | District → its circuit. Specialized → the circuit that hears its appeals (`cafc`). Null for circuits. |
 | `tenure_type` | enum `life_tenured` \| `fixed_term` \| `fixed_term_senior` | Governs senior-status applicability and how term length is shown. `fixed_term_senior` is a CFC-only carve-out (see below): active judges still serve a real 15-yr term like plain `fixed_term`, but the court also has statutory senior status (28 U.S.C. §178) that behaves like `life_tenured`'s — supernumerary, doesn't count against `authorized_judgeships`. |
 | `authorized_judgeships` | integer | Statutory active-seat count (28 U.S.C. §44 / §133). Vacancies = `authorized_judgeships − active judges`. |
@@ -111,6 +111,12 @@ Small, separately loaded. Maps each circuit to its assigned SCOTUS Circuit Justi
 | `source_url` | url | Source substantiating the assignment. |
 | `notes` | string \| null | Free text. |
 
+`data/circuit_justices.json` (the derived file) no longer duplicates this as `full_name`
+(collapsed at schema 2.0, issue #28 — it existed only because the widget's shared judge-icon
+renderer reads `full_name`). A consumer wanting the icon-renderer field name should synthesize it
+itself (`full_name = justice_name`), the same way `embed/court-tracker.js` now does client-side at
+load time rather than publishing the duplicate.
+
 ---
 
 ## Table D — `seat_blocks.csv`  (operator-tuned map placement)
@@ -139,25 +145,30 @@ a **data-only** change: drop the CSV in, re-run `build_assets.py`, bump nothing 
 
 ---
 
-## Table E — `appointments.csv`  (historical; feeds the future beeswarm widget)
-*Stability: **provisional** — `data/appointments.json` is a string-typed passthrough; see `DATA_CONTRACT.md` §7.*
+## Table E — `appointments.csv`  (historical; feeds the appointments beeswarm widget)
+*Stability: **stable**, promoted from `provisional` at schema 2.0 (issue #28) — `data/appointments.json`
+is now a typed build, not a string-typed passthrough; see `DATA_CONTRACT.md` §7.*
 
 Written by `scripts/collect_appointments.py`; derived to `data/appointments.json` by
-`build_assets.py` (manifest key `files.appointments`). One row per APPOINTMENT since
-1969-01-20 (Nixon) — a judge elevated district→circuit is two rows. Not consumed by the
-current widget.
+`build_assets.py` (manifest key `files.appointments`, via `build_appointments()`). One row per
+APPOINTMENT since 1969-01-20 (Nixon) — a judge elevated district→circuit is two rows. Consumed by
+`embed/appointments-chart.js`.
+
+The columns below describe the **source CSV**, where every cell is text by construction. The
+derived JSON types them: dates and free-text fields are `string | null` (an empty cell → real
+`null`); `sitting` is a plain `boolean`; `fjc_jid` is `int | null`.
 
 | column | notes |
 |---|---|
 | `full_name` | FJC name form (First Middle Last Suffix) |
 | `court_id` / `court_level` | as in `courts.csv` (`scotus`/`circuit`/`district`/`specialized`) |
-| `appointing_president`, `president_party` | verbatim from FJC; reorganizations appear as `None (reassignment)` with an empty party |
+| `appointing_president`, `president_party` | verbatim from FJC; reorganizations appear as `None (reassignment)` in BOTH columns (not an empty party, despite how that reads) |
 | `nomination_date`, `confirmation_date`, `commission_date` | ISO dates |
 | `senior_date` | set when the judge (later) took senior status in THIS appointment |
 | `termination_date`, `termination_reason` | empty while the appointment is held. Departed CFC judges carry year precision only (see `date_precision = termination:year`) |
 | `sitting` | true iff currently held. A RETIRED justice is `sitting=false` with an empty `termination_date` — their departure date is `senior_date` (28 U.S.C. §371) |
 | `fjc_jid` | FJC judge id (empty for CFC/territorial rows) |
-| `fedsoc_reported`, `acs_reported` | joined from `judges.csv`; populated for sitting judges only — "false" means UNREPORTED |
+| `fedsoc_reported`, `acs_reported` | joined from `judges.csv`; populated for sitting judges only. **Genuinely three-state** in the derived JSON (`null`/`false`/`true`), not just true/false: `null` means "never asked" (a departed judge, or a sitting one the join missed — real in the data, not hypothetical); `false` means "asked, reported unaffiliated". Collapsing both to `false` would fabricate a checked-and-negative signal from data that was simply never checked (`CLAUDE.md` §2). |
 | `photo_url`, `photo_source`, `photo_license` | SCOTUS rows only (the beeswarm draws justices with photos). Sitting nine from judges.csv at collect time; former justices via `scripts/enrich_scotus_photos.py` (same license gate as all photos). |
 | `source`, `notes` | `fjc_bulk` / `fjc_html` (CFC) / `territorial_manual` (current-only, documented gap) |
 

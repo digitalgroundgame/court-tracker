@@ -85,7 +85,7 @@ const isoOfDay = (day) => new Date(day * DAY + DAY / 2).toISOString().slice(0, 1
 
 function personKey(r) { return r.fjc_jid ? `j${r.fjc_jid}` : `n:${r.full_name}`; }
 function statusOf(r) {
-  if (r.sitting !== "true") return "departed";
+  if (r.sitting !== true) return "departed";
   return r.senior_date ? "senior" : "active";
 }
 function initials(name) {
@@ -483,8 +483,8 @@ function drawAll() {
     // also handle a judge reported for BOTH organizations, which the old
     // fedsoc-else-acs overlay silently dropped).
     const markTarget = node.classList ? (node.querySelector?.(".cta-scotus-ring") || node) : node;
-    if (r.fedsoc_reported === "true") markTarget.classList.add("cta-aff-fedsoc");
-    if (r.acs_reported === "true") markTarget.classList.add("cta-aff-acs");
+    if (r.fedsoc_reported === true) markTarget.classList.add("cta-aff-fedsoc");
+    if (r.acs_reported === true) markTarget.classList.add("cta-aff-acs");
     if (d.status === "senior") markTarget.classList.add("cta-sen");
     d.node = node;
     d.cy = cy;
@@ -595,8 +595,8 @@ function showDetail(d) {
     if (r.termination_date) lines.push(`<div>Left the bench ${r.termination_date}` +
       (r.termination_reason ? ` (${r.termination_reason.toLowerCase()})` : "") + `</div>`);
   }
-  if (r.fedsoc_reported === "true") lines.push(`<div class="cta-affil-line">Reported to have a Federalist Society affiliation</div>`);
-  if (r.acs_reported === "true") lines.push(`<div class="cta-affil-line">Reported to have an American Constitution Society affiliation</div>`);
+  if (r.fedsoc_reported === true) lines.push(`<div class="cta-affil-line">Reported to have a Federalist Society affiliation</div>`);
+  if (r.acs_reported === true) lines.push(`<div class="cta-affil-line">Reported to have an American Constitution Society affiliation</div>`);
 
   // statutory reorganization line(s) for this person (these events are NOT dots)
   for (const g of A.reorgByPerson.get(d.person) || []) {
