@@ -12,6 +12,34 @@ tracker (Phase-4 tail items open, PLUS a brand-new third pane view — "Change",
 (feature-complete first version, operator refinement rounds ongoing; see sessions ai→at, aw).
 **Last updated:** 2026-09-07
 
+> **SESSION (cp) cont'd (9), 2026-09-07 — Issue #2: optional asset-root override for both
+> widgets.**
+> - Both `embed/court-tracker.js` and `embed/appointments-chart.js` resolved every runtime asset
+> relative to their own `import.meta.url` with no override — a publisher serving the script from a
+> CDN while keeping `data/`/`assets/` on a different origin/path had to edit the source. Added
+> `resolveAssetRoot(root, opts)` to both files: precedence `mount(root, {assetRoot})` argument >
+> `data-asset-root` attribute on the root div > the existing `import.meta.url`-relative default.
+> Stored on the shared state object (`S.assetRoot` / `A.assetRoot`), recomputed at the top of every
+> `mount()` call before any fetch reads it — re-mounting with different options is fully supported,
+> matching the existing idempotent-remount contract.
+> - **A relative override resolves against the HOST page's `document.baseURI`, not the script's
+> own URL** — deliberately, since the whole point is decoupling "where the script is served from"
+> from "where the data is." Verified directly (not just asserted): mounted with a relative
+> `data-asset-root` from a nested host-page path and confirmed it resolved against the host's
+> origin, not the script's file:// location.
+> - Still a **data/config-only knob, no code change required** to use it — matches CLAUDE.md §6's
+> existing "no code edits for asset updates" principle; unset, behavior is byte-identical to before.
+> - Documented in `README.md`'s embedding guide (both the `data-*` attribute and the `mount()`
+> options-argument forms, with the CORS note the issue itself called out for cross-origin hosting).
+> - **New permanent regression test** in `tests/smoke.mjs` (survives `--dist` too): the
+> `data-asset-root` attribute, the `mount()` option winning over it, relative-path resolution
+> against the host page, and the no-override default — four assertions, isolated on a separate div
+> at the very end of the suite so re-mounting doesn't disturb the main flow's shared state that
+> earlier assertions read.
+> - **Verified**: rebuilt `dist/` (required — this edits `embed/`); `npm test`, `npm run test:dist`,
+> `npm run test:browser`, and `npm run test:browser:dist` all ALL PASS.
+> - Blockers: none. **Next**: issue #7 (touch/mobile support for hover-only interactions).
+
 > **SESSION (cs), 2026-09-07 — Harden CI / dist build / test server from PR #27's review (issue
 > #42, PR #43).**
 > - **Origin**: a post-merge review of PR #27 (CI + npm scripts + minified `dist/`, issue #5)

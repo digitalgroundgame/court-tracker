@@ -1893,6 +1893,32 @@ console.log("appointments beeswarm widget (separate module, session aj)");
   assert(rMax < r8, `dot radius scales down with a wider span (${rMax.toFixed(1)} < ${r8.toFixed(1)})`);
 }
 
+// Asset-root override (issue #2) — mounted on a SEPARATE div, at the very end: mount() resets
+// module-level shared state, which would otherwise disturb every assertion above that reads it.
+console.log("asset-root override: data-asset-root attribute, mount() option, and precedence between them");
+{
+  const div = document.createElement("div");
+  div.dataset.assetRoot = "https://data.example.org/ct-data/";
+  document.body.append(div);
+  await mod.mount(div);
+  assert(mod._dev.S.assetRoot.href === "https://data.example.org/ct-data/",
+    `data-asset-root attribute sets S.assetRoot (got ${mod._dev.S.assetRoot.href})`);
+
+  await mod.mount(div, { assetRoot: "https://override-wins.example.org/foo/" });
+  assert(mod._dev.S.assetRoot.href === "https://override-wins.example.org/foo/",
+    "mount()'s assetRoot option wins over the div's data-asset-root attribute");
+
+  const plainDiv = document.createElement("div");
+  document.body.append(plainDiv);
+  await mod.mount(plainDiv, { assetRoot: "/relative-path/" });
+  assert(mod._dev.S.assetRoot.href === "https://example.test/relative-path/",
+    `a relative override resolves against the HOST page's location, not the script's own URL (got ${mod._dev.S.assetRoot.href})`);
+
+  await mod.mount(plainDiv);
+  assert(mod._dev.S.assetRoot.href === pathToFileURL(REPO + "/").href,
+    `no override falls back to the import.meta.url-relative default (got ${mod._dev.S.assetRoot.href})`);
+}
+
 // jsdom cannot exercise a stylesheet, so under --dist this is the one place the minified CSS is
 // looked at here: the two rules the native-memory and compositor-freeze guards above depend on
 // must survive minification with the same selectors and declarations, and each bundle must still
