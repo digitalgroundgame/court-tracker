@@ -108,7 +108,7 @@ root.classList.add("tuning");
 const touched = new Set(Object.entries(S.seatBlocks || {})
   .filter(([, b]) => b.anchor).map(([cid]) => cid));      // pre-existing CSV rows count as tuned
 // square edge in CSS px — constant on screen, so one number reads the same in every view
-const sizeOverride = { circuit: _dev.BLOCK_PX, district: _dev.BLOCK_PX, feeder: _dev.BLOCK_PX };
+const sizeOverride = { circuit: _dev.BLOCK_PX, district: _dev.BLOCK_PX, specialized: _dev.BLOCK_PX };
 
 const CIRCUITS = [...S.courts.values()].filter((c) => c.court_level === "circuit")
   .sort((a, b) => a.court_id.replace(/^ca/, "").padStart(3, "0").localeCompare(b.court_id.replace(/^ca/, "").padStart(3, "0")));
@@ -124,17 +124,18 @@ $("view").innerHTML = `<option value="">National (circuits)</option>` +
 // shortcut that drives the widget; the widget is the source of truth.
 const activeCircuit = () =>
   (S.view === "circuit" && S.activeCircuit && S.activeCircuit !== "cafc" ? S.activeCircuit : null);
-// The cafc feeder view: CIT/CFC blocks (level "feeder") live on the NATIONAL svg alongside
-// the circuit blocks, exactly as the widget shows them.
+// The cafc feeder view: CIT/CFC blocks (level "specialized", matching courts.court_level — see
+// issue #28) live on the NATIONAL svg alongside the circuit blocks, exactly as the widget shows
+// them.
 const feederMode = () => S.view === "circuit" && S.activeCircuit === "cafc";
-const level = () => (feederMode() ? "feeder" : activeCircuit() ? "district" : "circuit");
+const level = () => (feederMode() ? "specialized" : activeCircuit() ? "district" : "circuit");
 const activeSVG = () => (activeCircuit() ? S.localSVGCache.get(activeCircuit()) : S.ui.nationalSVG);
 const rerender = () => {
   const svg = activeSVG();
   if (svg) {
     if (feederMode()) {                 // both levels are on screen in this view
       _dev.renderSeatBlocks(svg, "circuit");
-      _dev.renderSeatBlocks(svg, "feeder");
+      _dev.renderSeatBlocks(svg, "specialized");
     } else {
       _dev.renderSeatBlocks(svg, level(), activeCircuit() || undefined);
     }

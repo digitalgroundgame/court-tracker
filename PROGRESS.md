@@ -10,7 +10,7 @@
 tracker (Phase-4 tail items open, PLUS a brand-new third pane view — "Change", built session
 (aw), operator review round addressed session (ax)) and the appointments beeswarm
 (feature-complete first version, operator refinement rounds ongoing; see sessions ai→at, aw).
-**Last updated:** 2026-09-08 (ct)
+**Last updated:** 2026-09-08 (cu)
 
 ## Resume briefing
 <!-- Replaced wholesale at the end of each session — this is not an appended log, it's a
@@ -23,11 +23,13 @@ logged date. Session log entries `(bt)`-`(ce)` drifted up to +7 days ahead of th
 git-commit dates from exactly this mistake; see `CLAUDE.md` §7 and the `(cp)` 2026-09-08 entry
 below for the full incident and the corrected dates (ground truth: `git log --format=%ad`).
 
-**Next task**: issue #6 is DONE (session (ct), 2026-09-08 — see Session log). **Check
-`gh issue list`/`gh pr list` at session start before assuming what's next** — the likeliest
-candidate right now is **#28** (Schema 2.0 batch: `appointments.json` typing, `circuit_justices`
-full_name dedup, seat_blocks/courts vocabulary unification), which is open, unparked, and not
-started, but a newer issue or PR review comment can supersede it.
+**Next task**: issue #28 is DONE (session (cu), 2026-09-08 — see Session log). **Check
+`gh issue list`/`gh pr list` at session start before assuming what's next** — as of this writing
+the only open issues besides the parked three below are **#21** (a standing workflow doc pointer,
+not actionable work — CLAUDE.md §7 is the authoritative copy) and **#13** (the Pragmatic Papers
+epic itself, tracked via its sub-issues rather than worked directly). There is no obvious
+unparked, actionable issue left in the queue right now — re-run `gh issue list` fresh; a new issue
+or a PR review comment is the likely source of the next task.
 
 **Standing/parked issues, not scheduled unless picked up explicitly**:
 - **#50** — mobile ~380px: two confirmed real text-overlap bugs (Summary > SCOTUS FedSoc key vs.
@@ -68,6 +70,19 @@ started, but a newer issue or PR review comment can supersede it.
   `add`/`removeEventListener` on `window`/`document` (before any module import) to count live
   listeners per type — reuse `listenerCount(target, type)` there for any future teardown test
   rather than re-deriving it.
+- **A breaking schema change already named in `docs/SCHEMA_CHANGELOG.md`'s Proposed section can
+  land as a straight MAJOR bump, no separate announce/overlap MINOR first** (session (cu),
+  2026-09-08, issue #28): `DATA_CONTRACT.md` §5's deprecation path exists to protect *existing*
+  external consumers, and there are none yet (schema_version was cut 2026-09-06; Pragmatic Papers
+  integration, issue #13, is still ahead) — the Proposed section itself was already the
+  "announce" step. Issue #28's own text treated the three 1.0 warts as one ready-to-land
+  migration, which is what happened. Revisit this once a real external consumer exists.
+- **Dropping a published duplicate field the widget's OWN renderer still wants: synthesize it
+  client-side at load time, once, rather than special-casing every render call site** (session
+  (cu), issue #28 — `circuit_justices.json` stopped publishing `full_name`; `loadJustices()` in
+  `embed/court-tracker.js` now sets `j.full_name = j.justice_name` right after fetch, so
+  `makeIcon`/`initials`/`showDetail` etc. all keep working unchanged). Same shape for any future
+  "this field left the contract but the reference renderer still wants it" situation.
 
 ## Phase 0 — Scaffold & contracts  ✅ DONE (2026-07-10)
 - [x] Create repo skeleton per `CLAUDE.md` §Repo map; confirm `index.html` loads an empty shell.
@@ -416,6 +431,48 @@ Prove the whole app shell and asset schema on one circuit with hand-authored sam
 - Next: ...
 - Blockers: ...
 -->
+
+### 2026-09-08 (cu) — Issue #28: Schema 2.0 batch (appointments typing, circuit_justices dedup, seat_blocks vocabulary unification)
+- Phase: 4 (data-contract work, not a Phase-4 checklist item). Landed the three MAJOR candidates
+  `docs/SCHEMA_CHANGELOG.md` had carried in its Proposed section since 1.0.0 (2026-09-06), batched
+  into one 2.0.0 bump per `DATA_CONTRACT.md` §6 point 4 and issue #28's own framing:
+  - `appointments.json` is now a typed build (`build_appointments()` in `scripts/build_assets.py`)
+    instead of a raw string passthrough of `appointments.csv`: dates/free-text are `string | null`
+    (`""` → real `null`), `sitting` is a plain `boolean`, `fjc_jid` is `int | null`.
+    `fedsoc_reported`/`acs_reported` are `boolean | null` — genuinely **three**-state in the real
+    data (confirmed: 25 sitting-judge rows have neither `"true"` nor `"false"`), not a blind
+    `_coerce_bool`; a new `_coerce_bool_nullable()` helper keeps "never asked" (`null`) distinct
+    from "asked, unaffiliated" (`false`) rather than fabricating a checked-and-negative signal
+    from unchecked data. Promoted `appointments` from `provisional` to `stable` in
+    `manifest.stability` as a direct consequence. `embed/appointments-chart.js` updated at every
+    `"true"`/`"false"` string-comparison call site (`statusOf`, the two affiliation-mark checks).
+  - `circuit_justices.json` no longer publishes the `full_name` duplicate of `justice_name`. The
+    widget's own judge-icon renderer (`makeIcon`/`initials`/`showDetail`) still reads `full_name`
+    uniformly across judges and justices, so `loadJustices()` in `embed/court-tracker.js` now
+    synthesizes it client-side (`j.full_name = j.justice_name`) once at load time — every render
+    call site keeps working unchanged, verified by hovering the Circuit Justice icon in the smoke
+    suite and checking the docked detail shows a real name, not `undefined`.
+  - `seat_blocks.level` now says `specialized` for CIT/CFC, matching `courts.court_level`'s own
+    vocabulary, instead of a second word (`feeder`) for the same concept. Updated every literal
+    `"feeder"` level comparison in `embed/court-tracker.js` (`renderSeatBlocks` and its three call
+    sites) and the dev tool `tools/tune-seat-blocks.html`; left the *prose* "feeder"/"View
+    feeders" UI language alone (that's user-facing wording, not the schema vocabulary).
+  - `SCHEMA_VERSION` bumped to `2.0.0` in `build_assets.py`; `docs/SCHEMA_CHANGELOG.md` gained a
+    `## 2.0.0` entry and the Proposed section's now-landed MAJOR list was cleared (the MINOR
+    proposals — `judges_search` fields, a per-circuit rollup — are untouched); `docs/CODEBOOK.md`
+    Tables C/E and `docs/DATA_CONTRACT.md` §2/§7/§8 updated to match (also fixed two doc bugs
+    found in passing: Table E's stale "empty party" claim for reorganization rows — it's actually
+    `"None (reassignment)"` in both columns, verified against the real CSV — and its stale "not
+    consumed by the current widget" line, which `appointments-chart.js` has read since session aj).
+- Verification: `tests/smoke.mjs` gained a dedicated Schema 2.0 section (raw-JSON assertions on
+  `circuit_justices.json`/`seat_blocks.json`/`manifest.json`, a live hover check that the
+  Circuit-Justice full_name synthesis actually renders, and typed-field assertions on the loaded
+  `appointments.json` rows including a check that all three `fedsoc_reported` states are really
+  present in the data, not just theoretically possible). Full jsdom suite (`embed/` and `--dist`)
+  and real-Chrome CDP checks (`embed/` and `dist/`) all pass; `data/*.json` and `dist/` rebuilt and
+  the diffs spot-checked (pure shape changes, no accidental data movement).
+- Next: no unparked, actionable open issue left as of this session — see Resume briefing.
+- Blockers: none.
 
 ### 2026-09-08 (ct) — Issue #6: destroy()/unmount() for SPA embedding, both widgets
 - Phase: 4. Both `court-tracker.js` and `appointments-chart.js` now export `destroy(root)` (also

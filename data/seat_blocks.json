@@ -1599,7 +1599,7 @@
     "size": null
   },
   "cit": {
-    "level": "feeder",
+    "level": "specialized",
     "parent_id": "cafc",
     "authorized": 9,
     "total": 9,
@@ -1614,7 +1614,7 @@
     "size": null
   },
   "uscfc": {
-    "level": "feeder",
+    "level": "specialized",
     "parent_id": "cafc",
     "authorized": 16,
     "total": 16,

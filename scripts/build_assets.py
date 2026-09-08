@@ -66,7 +66,7 @@ def _load_photo_thumbs() -> dict[str, str]:
 # docs/DATA_CONTRACT.md §"Versioning policy": MAJOR = breaking, MINOR = additive,
 # PATCH = docs/values only. Folded into the version stamp below, so a schema-only bump still
 # cuts a release and still busts caches.
-SCHEMA_VERSION = "1.0.0"
+SCHEMA_VERSION = "2.0.0"
 
 # Stability tier per manifest `files` key, published in the manifest so a consumer can assert
 # (in its own CI) that it depends on nothing it should not. Tiers are defined in
@@ -85,10 +85,11 @@ STABILITY = {
     "judges_search": "stable",
     "president_photos": "stable",
     "geo": "stable",
-    # String-typed passthrough of appointments.csv ("" for null, "true"/"false" for booleans).
-    # Portable content, imperfect shape; typed coercion is a proposed 2.0 change (see the
-    # changelog's Proposed section), so consumers get told before it moves.
-    "appointments": "provisional",
+    # Promoted from `provisional` at schema 2.0 (issue #28): was a string-typed passthrough of
+    # appointments.csv ("" for null, "true"/"false" for booleans) — the reason it was provisional
+    # in the first place. build_appointments() below now gives it real types, same treatment
+    # every other derived file already gets, so the wart that justified the lower tier is gone.
+    "appointments": "stable",
     "seat_blocks": "reference-renderer",
     "district_arrangement": "reference-renderer",
     "district_arrangement_alt": "reference-renderer",
@@ -113,6 +114,19 @@ def _read_csv(path: Path) -> list[dict]:
 
 def _coerce_bool(value: str | None) -> bool:
     return str(value).strip().lower() in {"1", "true", "t", "yes", "y"}
+
+
+def _coerce_bool_nullable(value: str | None):
+    """Like `_coerce_bool`, but an empty source value stays `None` instead of collapsing to
+    `False`. Needed where "empty" and "false" are genuinely different claims — e.g.
+    `appointments.fedsoc_reported`/`acs_reported`, which are only ever populated for sitting
+    judges (docs/CODEBOOK.md Table E): `None` means "never asked" (a departed judge, or a sitting
+    one the join missed), `False` means "asked, reported unaffiliated". Coercing both to `False`
+    would fabricate a checked-and-negative signal from data that was simply never checked."""
+    v = (value or "").strip().lower()
+    if v == "":
+        return None
+    return v in {"1", "true", "t", "yes", "y"}
 
 
 def _coerce_int(value: str | None):
@@ -178,6 +192,31 @@ def build_judges(rows: list[dict], photo_thumbs: dict[str, str]) -> list[dict]:
     return out
 
 
+# Fields carried into the runtime appointments record as plain nullable strings; the booleans and
+# the one int field are coerced separately in build_appointments() below (Schema 2.0, issue #28 —
+# see the `appointments` STABILITY comment above for why this used to be a raw passthrough).
+APPOINTMENT_FIELDS = [
+    "full_name", "court_id", "court_level", "appointing_president", "president_party",
+    "nomination_date", "confirmation_date", "commission_date", "recess_appointment_date",
+    "senior_date", "termination_date", "termination_reason", "date_precision",
+    "photo_url", "photo_source", "photo_license", "source", "notes",
+]
+
+
+def build_appointments(rows: list[dict], photo_thumbs: dict[str, str]) -> list[dict]:
+    out = []
+    for r in rows:
+        rec = {k: _nullable(r.get(k)) for k in APPOINTMENT_FIELDS}
+        rec["fjc_jid"] = _coerce_int(r.get("fjc_jid"))
+        rec["sitting"] = _coerce_bool(r.get("sitting"))
+        # Three-state, not two — see _coerce_bool_nullable()'s docstring.
+        rec["fedsoc_reported"] = _coerce_bool_nullable(r.get("fedsoc_reported"))
+        rec["acs_reported"] = _coerce_bool_nullable(r.get("acs_reported"))
+        rec["photo_thumb"] = photo_thumbs.get(rec["photo_url"]) if rec["photo_url"] else None
+        out.append(rec)
+    return out
+
+
 def build_seat_blocks(courts: list[dict], judges: list[dict], anchor_rows: list[dict]) -> dict:
     """Per-court seat-block composition + operator-tuned placement.
 
@@ -200,8 +239,10 @@ def build_seat_blocks(courts: list[dict], judges: list[dict], anchor_rows: list[
         if c["court_level"] not in ("circuit", "district", "specialized"):
             continue
         # cit/uscfc (court_level "specialized") ARE on the map now, but only while the Federal
-        # Circuit's feeder view is active: level "feeder" blocks, rendered beside/below cafc's.
-        level = "feeder" if c["court_level"] == "specialized" else c["court_level"]
+        # Circuit's feeder view is active, rendered beside/below cafc's. `level` here now just
+        # mirrors `courts.court_level` directly (Schema 2.0, issue #28 — used to rename this to
+        # "feeder", a second vocabulary for the same concept).
+        level = c["court_level"]
         seats = active.get(cid, [])
         counts = {"r": 0, "d": 0, "o": 0}
         for j in seats:
@@ -390,9 +431,6 @@ def main() -> int:
             "circuit_id": r.get("circuit_id", "").strip(),
             "justice_cl_person_id": _coerce_int(r.get("justice_cl_person_id")),
             "justice_name": r.get("justice_name", "").strip(),
-            # the pane renders a justice with the judge icon, which reads full_name for the
-            # image alt text and the initials fallback
-            "full_name": r.get("justice_name", "").strip(),
             "assignment_start_date": _nullable(r.get("assignment_start_date")),
             "photo_url": _nullable(r.get("photo_url")),
             "photo_thumb": photo_thumbs.get(r.get("photo_url", "").strip()),
@@ -454,13 +492,12 @@ def main() -> int:
     national_totals = build_national_totals(courts, blocks) if blocks else None
 
     # appointments.json — historical appointment events since Nixon (collect_appointments.py),
-    # for the future beeswarm feature. Lazy-loaded; nothing in the current widget reads it.
+    # feeding the appointments beeswarm widget. Typed by build_appointments() (Schema 2.0,
+    # issue #28) rather than passed through as raw CSV strings.
     appts_file = None
     appts_csv = DATA / "appointments.csv"
     if appts_csv.exists():
-        appts = _read_csv(appts_csv)
-        for a in appts:
-            a["photo_thumb"] = photo_thumbs.get(a.get("photo_url", "").strip())
+        appts = build_appointments(_read_csv(appts_csv), photo_thumbs)
         bad = [a for a in appts
                if a.get("appointing_president")
                and not a["appointing_president"].startswith("None")
