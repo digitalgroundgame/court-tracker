@@ -243,11 +243,14 @@ assert(root.querySelectorAll(".ctt-judge img.ctt-photo").length > 0, "photo <img
 // Direct unit check via _dev, not a DOM assertion tied to ca8 happening to have a photo-less
 // judge right now - the enrichment pass keeps closing that gap (ca8 hit 100% photo coverage
 // session (bb), which silently made the old DOM-based version of this check vacuous/unrunnable).
-// Also locks in the Jr./Sr.-suffix fix (session bb): naive last-token initials would read "PJ"
-// for "Paul Joseph Kelly Jr." (J from "Jr."), not "PK".
-assert(mod._dev.initials({ full_name: "Paul Joseph Kelly Jr." }) === "PK",
-  "initials fallback strips generational suffixes (Jr/Sr/II/...) rather than treating them as the surname");
+// Also locks in the Jr./Sr.-suffix fix (session bb, still true after issue #50's session (cv)
+// generalization to full distinct-name-initials): a generational suffix must never be mistaken
+// for a real name part ("Jr." contributing its own initial).
+assert(mod._dev.initials({ full_name: "Paul Joseph Kelly Jr." }) === "PJK",
+  "initials fallback covers EVERY distinct name part (issue #50), and still strips generational suffixes rather than treating them as one");
 assert(mod._dev.initials({ full_name: "Jane Doe" }) === "JD", "initials fallback works for a plain two-word name");
+assert(mod._dev.initials({ full_name: "John Quincy Adams" }) === "JQA",
+  "a three-part name is NOT truncated to first+last (the whole point of issue #50's generalization — was \"JA\" before)");
 // Affiliation must never be asserted as fact, and never claimed without a source.
 const affJudges = ca8Judges.filter((j) => j.fedsoc_reported || j.acs_reported);
 assert(affJudges.length > 0, `ca8 has reported affiliations (${affJudges.length})`);
@@ -1805,6 +1808,11 @@ console.log("appointments beeswarm widget (separate module, session aj)");
   await chart.mount(chartRoot);
   await sleep(30);
   const A = chart._dev.A;
+
+  console.log("  issue #50: no-photo initials fallback covers every distinct name part, matches court-tracker.js");
+  assert(chart._dev.initials("John Quincy Adams") === "JQA", "three-part name is not truncated to first+last");
+  assert(chart._dev.initials("Paul Joseph Kelly Jr.") === "PJK", "a generational suffix is dropped, not read as a name part");
+  assert(chart._dev.initials("Jane Doe") === "JD", "a plain two-word name is unaffected");
 
   console.log("  Schema 2.0 (issue #28): appointments.json is typed, not a string passthrough");
   assert(A.rows.length > 0 && A.rows.every((r) => typeof r.sitting === "boolean"),
