@@ -10,7 +10,7 @@
 tracker (Phase-4 tail items open, PLUS a brand-new third pane view — "Change", built session
 (aw), operator review round addressed session (ax)) and the appointments beeswarm
 (feature-complete first version, operator refinement rounds ongoing; see sessions ai→at, aw).
-**Last updated:** 2026-09-08
+**Last updated:** 2026-09-08 (ct)
 
 ## Resume briefing
 <!-- Replaced wholesale at the end of each session — this is not an appended log, it's a
@@ -23,8 +23,11 @@ logged date. Session log entries `(bt)`-`(ce)` drifted up to +7 days ahead of th
 git-commit dates from exactly this mistake; see `CLAUDE.md` §7 and the `(cp)` 2026-09-08 entry
 below for the full incident and the corrected dates (ground truth: `git log --format=%ad`).
 
-**Next task**: issue #6 — `destroy()`/`unmount()` for SPA-style embedding. Deferred mid-session
-on 2026-09-08 to do this PROGRESS.md/CLAUDE.md cleanup instead; no work has started on it yet.
+**Next task**: issue #6 is DONE (session (ct), 2026-09-08 — see Session log). **Check
+`gh issue list`/`gh pr list` at session start before assuming what's next** — the likeliest
+candidate right now is **#28** (Schema 2.0 batch: `appointments.json` typing, `circuit_justices`
+full_name dedup, seat_blocks/courts vocabulary unification), which is open, unparked, and not
+started, but a newer issue or PR review comment can supersede it.
 
 **Standing/parked issues, not scheduled unless picked up explicitly**:
 - **#50** — mobile ~380px: two confirmed real text-overlap bugs (Summary > SCOTUS FedSoc key vs.
@@ -54,6 +57,17 @@ on 2026-09-08 to do this PROGRESS.md/CLAUDE.md cleanup instead; no work has star
 - This file's logging convention: the old ever-growing top blockquote buffer is retired. Session
   end now writes a condensed entry directly into `## Session log` below (dated, verified against
   real "today") and replaces this Resume briefing section wholesale — it does not accumulate.
+- **Global listeners on `window`/`document` (issue #6, session (ct))**: both widgets now store
+  every such handler on their module-singleton state (`S._resizeHandler`/`S._mousedownHandler` in
+  court-tracker.js; `A._resizeHandler`/`A._keydownHandler` in appointments-chart.js) instead of
+  wiring an inline anonymous closure — a `teardownGlobals()` helper in each file removes them
+  (called at the top of `buildShell()` on every mount, and from the exported `destroy(root)`).
+  Any *new* window/document-level listener either widget adds should follow this same
+  store-on-state-then-teardown shape, not a fresh inline `addEventListener`, or it'll leak on
+  repeated mount()/destroy() the same way the old ones did. `tests/smoke.mjs` now wraps
+  `add`/`removeEventListener` on `window`/`document` (before any module import) to count live
+  listeners per type — reuse `listenerCount(target, type)` there for any future teardown test
+  rather than re-deriving it.
 
 ## Phase 0 — Scaffold & contracts  ✅ DONE (2026-07-10)
 - [x] Create repo skeleton per `CLAUDE.md` §Repo map; confirm `index.html` loads an empty shell.
@@ -402,6 +416,34 @@ Prove the whole app shell and asset schema on one circuit with hand-authored sam
 - Next: ...
 - Blockers: ...
 -->
+
+### 2026-09-08 (ct) — Issue #6: destroy()/unmount() for SPA embedding, both widgets
+- Phase: 4. Both `court-tracker.js` and `appointments-chart.js` now export `destroy(root)` (also
+  reachable as the resolved `mount()` handle's own `.destroy()` method, matching the issue's
+  suggested API). It removes the window `resize` listener, the document `mousedown` (tracker) /
+  `keydown` (beeswarm) listener, and — court-tracker only — the body-level `.ctt-tooltip` node the
+  mount registered; empties the root; clears the `cttMounted`/`ctaMounted` auto-mount guard so the
+  root can be re-adopted by a later `mount()`; and bumps a mount-token so a fetch still in flight
+  from a torn-down mount can't write into a UI that's already gone (court-tracker already had this
+  guard, `_mountSeq`/`superseded()`, for concurrent mounts — appointments-chart gained the same
+  pattern here, since it previously had none).
+- Also fixed the leak for repeated `mount()` calls WITHOUT an intervening `destroy()` — the
+  issue's own title, not just the SPA-teardown case: each `buildShell()` now tears down its own
+  previous mount's globals (via a shared `teardownGlobals()`) before wiring up new ones, so two
+  consecutive `mount()` calls net exactly one resize/mousedown/keydown listener and one tooltip
+  node, not two.
+- Verification: `tests/smoke.mjs` gained a listener-count-tracking harness (wraps
+  `window`/`document` `add`/`removeEventListener` before any module import, so it sees every
+  listener either widget registers) plus a dedicated destroy()-teardown section per widget,
+  asserting listeners are ACTUALLY unregistered — not just that an internal handle went null.
+  Full suite passes against `embed/` and `--dist`; `npm run test:browser[:dist]` (real Chrome via
+  CDP) also passes, confirming no regression. `npm run build` run; `dist/` committed alongside
+  `embed/` per CLAUDE.md §6. README gained a short "Unmounting in a single-page app?" section next
+  to the existing programmatic-`mount()` example.
+- Next: issue #6 wasn't a Phase-4 checklist item, so nothing there changed. See Resume briefing
+  for the next likely task (issue #28) — re-check `gh issue list`/`gh pr list` at session start,
+  since it can be superseded.
+- Blockers: none.
 
 ### 2026-09-08 (cp) — Issue #7 hover/mobile audit, real overlap bugs found on review, CI flakiness root-caused and fixed twice, PROGRESS.md logging convention cleaned up
 - Phase: 4. Issue #7: audited every hover-only affordance — all already had a working `click`

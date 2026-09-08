@@ -33,6 +33,10 @@ const A = {
   day0: 0, dayMax: 0, spanYears: 8, viewStart: 0,
   markMode: "none", pinned: false, lastDot: null,
   ui: null, uid: 0, presidentPhotos: {},
+  _mountToken: 0,       // bumped by mount()/destroy() so a slow in-flight fetch from a
+                         // torn-down mount can't write into a UI that's already gone (issue #6)
+  _keydownHandler: null, _resizeHandler: null, _resizeT: null,   // global listeners this
+                         // instance registered outside its own root — see teardownGlobals()
 };
 
 function unpin() {
@@ -95,7 +99,19 @@ const short = (cid) => A.courts.get(cid)?.short_name || A.courts.get(cid)?.court
 function photoSrc(r) { return r.photo_thumb ? resolve(r.photo_thumb) : r.photo_url; }
 
 // ---- shell ---------------------------------------------------------------------
+// Removes what the PREVIOUS mount registered outside its own root: the document keydown
+// listener, the window resize listener, and the pending resize-debounce timer (issue #6).
+// Handlers live on A (not fired-and-forgotten inline closures) so they can be unregistered.
+// Called both from the top of buildShell (repeated mount() never accumulates globals) and
+// from destroy().
+function teardownGlobals() {
+  if (A._keydownHandler) { document.removeEventListener("keydown", A._keydownHandler); A._keydownHandler = null; }
+  if (A._resizeHandler) { window.removeEventListener("resize", A._resizeHandler); A._resizeHandler = null; }
+  clearTimeout(A._resizeT);
+}
+
 function buildShell(root) {
+  teardownGlobals();
   root.classList.add("cta-root");
   root.innerHTML = "";
   root.dataset.mark = "none";
@@ -186,14 +202,16 @@ function buildShell(root) {
   // Pin lifecycle (operator spec, session ak): clicking elsewhere — the chart, the span or
   // mark controls, the page — must NOT unpin. Unpinning is explicit: the (×) in the panel,
   // or any keypress that isn't operating a control (so slider arrow-keys don't self-unpin).
-  document.addEventListener("keydown", (e) => {
+  A._keydownHandler = (e) => {
     if (!A.pinned) return;
     const t = e.target;
     if (t && /^(INPUT|BUTTON|SELECT|TEXTAREA)$/.test(t.tagName)) return;
     unpin();
-  });
+  };
+  document.addEventListener("keydown", A._keydownHandler);
   A.ui = { root, subtitle, svg, status, chartWrap, detail, detailContent, slider, spanVal,
            tickRow, marksRow, syncSlider };
+  A.ui.destroy = () => destroy(root);
 }
 
 // ---- geometry ------------------------------------------------------------------
@@ -663,11 +681,11 @@ function wireInteractions() {
     e.preventDefault();
   });
 
-  let rT = null;
-  window.addEventListener("resize", () => {
-    clearTimeout(rT);
-    rT = setTimeout(() => { layoutDots(); drawAll(); }, 150);
-  });
+  A._resizeHandler = () => {
+    clearTimeout(A._resizeT);
+    A._resizeT = setTimeout(() => { layoutDots(); drawAll(); }, 150);
+  };
+  window.addEventListener("resize", A._resizeHandler);
 }
 
 // ---- "Explain this graphic" overlay (operator spec, session an) -------------------
@@ -848,6 +866,8 @@ function buildExplainerOverlay() {
 // ---- entry -----------------------------------------------------------------------
 export async function mount(root, opts = {}) {
   A.uid++;
+  const myToken = (A._mountToken = (A._mountToken || 0) + 1);
+  const superseded = () => A._mountToken !== myToken;
   A.assetRoot = resolveAssetRoot(root, opts);   // issue #2 — see resolveAssetRoot() above
   buildShell(root);
   try {
@@ -857,6 +877,9 @@ export async function mount(root, opts = {}) {
       fetchJSON(A.manifest.files?.appointments || "data/appointments.json"),
       fetchJSON(A.manifest.files?.president_photos || "data/president_photos.json").catch(() => ({})),
     ]);
+    // A slow fetch outracing a destroy() (or a later mount()) must not write into a torn-down
+    // or superseded UI (issue #6) — same guard shape as court-tracker.js's mount().
+    if (superseded()) return A.ui;
     for (const c of courts) A.courts.set(c.court_id, c);
     A.rows = rows;
     A.presidentPhotos = presidentPhotos;
@@ -939,6 +962,21 @@ export async function mount(root, opts = {}) {
     console.error("[appointments-chart] load failed:", err);
   }
   return A.ui;
+}
+
+// Full teardown for SPA-style embedding (issue #6): removes the document/window listeners this
+// instance registered and clears the root back to empty. Bumping `_mountToken` supersedes any
+// fetch still in flight from the torn-down mount. Clearing `ctaMounted` lets a later autoMount()
+// (or an explicit mount()) pick the root back up.
+export function destroy(root) {
+  A._mountToken = (A._mountToken || 0) + 1;
+  teardownGlobals();
+  if (root) {
+    root.innerHTML = "";
+    root.classList.remove("cta-root");
+    delete root.dataset.ctaMounted;
+  }
+  A.ui = null;
 }
 
 function autoMount() {

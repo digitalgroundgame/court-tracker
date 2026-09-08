@@ -48,6 +48,29 @@ globalThis.CSS = window.CSS || { escape: (s) => s };
 if (!globalThis.CSS.escape) globalThis.CSS.escape = (s) => s;
 globalThis.localStorage = window.localStorage;   // for the district-overlay zoom-persistence test
 
+// Tracks live addEventListener/removeEventListener counts per (target,type), so the destroy()
+// tests below (issue #6) can assert a listener was ACTUALLY unregistered, not just that some
+// internal handle went null. Wrapped before any module is imported, so it sees every listener
+// either widget ever registers on window/document.
+const _listenerCounts = new Map();
+function trackListeners(target, label) {
+  const add = target.addEventListener.bind(target);
+  const remove = target.removeEventListener.bind(target);
+  target.addEventListener = (type, ...rest) => {
+    const key = `${label}:${type}`;
+    _listenerCounts.set(key, (_listenerCounts.get(key) || 0) + 1);
+    return add(type, ...rest);
+  };
+  target.removeEventListener = (type, ...rest) => {
+    const key = `${label}:${type}`;
+    _listenerCounts.set(key, (_listenerCounts.get(key) || 0) - 1);
+    return remove(type, ...rest);
+  };
+}
+trackListeners(window, "window");
+trackListeners(document, "document");
+const listenerCount = (target, type) => _listenerCounts.get(`${target === window ? "window" : "document"}:${type}`) || 0;
+
 // Map the module's import.meta.url-relative fetches back to files on disk.
 globalThis.fetch = async (u) => {
   // Module resolves assets against its own file:// URL -> u is a file:// URL whose
@@ -1891,6 +1914,52 @@ console.log("appointments beeswarm widget (separate module, session aj)");
   await sleep(30);
   const rMax = Math.max(...A.dots.map((d) => d.r));
   assert(rMax < r8, `dot radius scales down with a wider span (${rMax.toFixed(1)} < ${r8.toFixed(1)})`);
+
+  console.log("  destroy()/unmount() teardown (issue #6)");
+  const resizeBeforeA = listenerCount(window, "resize");
+  const keydownBeforeA = listenerCount(document, "keydown");
+  assert(typeof chart.destroy === "function", "appointments-chart.js exports a destroy() function");
+  chart.destroy(chartRoot);
+  assert(chartRoot.innerHTML === "", "destroy() empties the root");
+  assert(!chartRoot.classList.contains("cta-root"), "destroy() removes the cta-root class");
+  assert(!chartRoot.dataset.ctaMounted, "destroy() clears the ctaMounted mount-guard so a later mount can re-adopt the root");
+  assert(A._resizeHandler === null && A._keydownHandler === null, "destroy() clears the stored listener handles");
+  assert(listenerCount(window, "resize") === resizeBeforeA - 1, "destroy() actually unregisters the window resize listener");
+  assert(listenerCount(document, "keydown") === keydownBeforeA - 1, "destroy() actually unregisters the document keydown listener");
+  assert(A.ui === null, "destroy() clears A.ui");
+}
+
+// destroy()/unmount() teardown for the court-tracker widget (issue #6) — mounted on the same
+// `root` every earlier section used; safe to tear all the way down now that nothing below reuses
+// its content (the asset-root section that follows mounts on its own separate divs).
+console.log("court-tracker destroy()/unmount() teardown (issue #6)");
+{
+  const S = mod._dev.S;
+  assert(document.querySelectorAll(".ctt-tooltip").length === 1, "sanity: exactly one tooltip node before destroy");
+  const resizeBefore = listenerCount(window, "resize");
+  const mousedownBefore = listenerCount(document, "mousedown");
+  assert(typeof mod.destroy === "function", "court-tracker.js exports a destroy() function");
+  mod.destroy(root);
+  assert(root.innerHTML === "", "destroy() empties the root");
+  assert(!root.classList.contains("ctt-root"), "destroy() removes the ctt-root class");
+  assert(!root.dataset.cttMounted, "destroy() clears the cttMounted mount-guard so a later mount can re-adopt the root");
+  assert(document.querySelectorAll(".ctt-tooltip").length === 0, "destroy() removes the body-level tooltip node");
+  assert(S._resizeHandler === null && S._mousedownHandler === null, "destroy() clears the stored listener handles");
+  assert(listenerCount(window, "resize") === resizeBefore - 1, "destroy() actually unregisters the window resize listener");
+  assert(listenerCount(document, "mousedown") === mousedownBefore - 1, "destroy() actually unregisters the document mousedown listener");
+  assert(S.ui === null, "destroy() clears S.ui");
+
+  console.log("  repeated mount() without an intervening destroy() does not accumulate globals (issue #6 title)");
+  const rBefore2 = listenerCount(window, "resize");
+  const mBefore2 = listenerCount(document, "mousedown");
+  await mod.mount(root);
+  await sleep(30);
+  await mod.mount(root);
+  await sleep(30);
+  assert(document.querySelectorAll(".ctt-tooltip").length === 1, "two consecutive mount() calls leave exactly one tooltip node, not two");
+  assert(listenerCount(window, "resize") === rBefore2 + 1, "two consecutive mount() calls net exactly one resize listener");
+  assert(listenerCount(document, "mousedown") === mBefore2 + 1, "two consecutive mount() calls net exactly one mousedown listener");
+  mod.destroy(root);   // leave the shared root clean
 }
 
 // Asset-root override (issue #2) — mounted on a SEPARATE div, at the very end: mount() resets

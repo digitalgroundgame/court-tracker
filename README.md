@@ -82,6 +82,21 @@ Leave it unset for the default: everything resolves relative to the script's own
 Cross-origin hosting needs the data host to send CORS headers, since every asset load is a
 `fetch`. No code change either way — still a data/config-only knob.
 
+**Unmounting in a single-page app?** Both widgets export `destroy(root)` (also reachable as
+`mount(root).then(ui => ui.destroy())`, since the resolved handle carries a `.destroy` method
+too) — it removes the window/document listeners and body-level tooltip node the instance
+registered and empties the root, so mounting and unmounting repeatedly as a reader navigates
+doesn't leak:
+```js
+import { mount, destroy } from "./court-tracker.js";
+const root = document.getElementById("court-tracker-root");
+await mount(root);
+// ...later, when the host removes this view:
+destroy(root);
+```
+Calling `mount()` again on the same root (with or without an intervening `destroy()`) is safe —
+each mount tears down its predecessor's globals before wiring up its own.
+
 ## Development (tests and build)
 ```
 npm install            # dev-only deps: jsdom (headless smoke) + esbuild (minifier)
