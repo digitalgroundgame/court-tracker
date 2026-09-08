@@ -36,7 +36,23 @@ let failures = 0;
 const assert = (cond, msg) => { console.log(`  ${cond ? "✓" : "✗"} ${msg}`); if (!cond) failures++; };
 
 try {
-  for (let i = 0; i < 60; i++) { try { await (await fetch(`http://127.0.0.1:${PORT}/json/version`)).json(); break; } catch { await sleep(100); } }
+  // Chrome's CDP port has taken well over 6s to open on shared/cold GitHub Actions runners —
+  // confirmed from real CI logs (2026-09-08): three separate failures, all in this exact spot,
+  // all landing at ~6.3s (the old 60x100ms budget), all passing cleanly on an immediate re-run.
+  // 200x150ms (30s) tolerates that without slowing down the common fast-local-Chrome case, since
+  // the loop still `break`s the moment the port answers. If it genuinely never comes up, fail with
+  // an actionable message instead of falling through to a second fetch that throws a bare
+  // "fetch failed" with no indication of what actually didn't start.
+  let chromeReady = false;
+  for (let i = 0; i < 200; i++) {
+    try { await (await fetch(`http://127.0.0.1:${PORT}/json/version`)).json(); chromeReady = true; break; }
+    catch { await sleep(150); }
+  }
+  if (!chromeReady) {
+    throw new Error(`Chrome's CDP endpoint at 127.0.0.1:${PORT} never opened after 30s ` +
+      `(CHROME_BIN=${CHROME}) — check the runner has enough headroom to start Chrome, or that ` +
+      `nothing else is holding that port.`);
+  }
   const tab = await (await fetch(`http://127.0.0.1:${PORT}/json/new?${encodeURIComponent(URL_)}`, { method: "PUT" })).json();
   ws = new WebSocket(tab.webSocketDebuggerUrl);
   await new Promise((r) => (ws.onopen = r));
@@ -46,12 +62,49 @@ try {
     const p = pending.get(m.id);
     if (p) { pending.delete(m.id); m.error ? p.rej(new Error(m.error.message)) : p.res(m.result); }
   };
-  await send("Runtime.enable"); await sleep(2800);
+  await send("Runtime.enable");
+  // Same class of problem as the CDP-port wait above, caught the same way (2026-09-08): a FIXED
+  // 2800ms here assumed the app finishes its first fetch+render in that window, which held
+  // locally but not on a cold/shared Actions runner -- confirmed live, this exact assertion is
+  // what failed first when the fixed sleep ran out early. Poll for the actual element instead of
+  // guessing a bigger fixed number.
+  let mounted = false;
+  for (let i = 0; i < 100; i++) {
+    if (await ev(`!!document.querySelector('.ctt-block[data-court-id="ca8"] .ctt-sq')`)) { mounted = true; break; }
+    await sleep(150);
+  }
+  if (!mounted) throw new Error("app never rendered ca8's seat block after 15s -- did mount() throw? check for a PAGE ERROR line above.");
 
   console.log("seat-block squares are the same on-screen size in every view");
   const natEdge = await ev(`document.querySelector('.ctt-block[data-court-id="ca8"] .ctt-sq').getBoundingClientRect().width`);
   assert(Math.abs(natEdge - 6.5) < 0.6, `national square edge ~6.5px (got ${natEdge?.toFixed?.(2)})`);
   await ev(`document.querySelector('.ctt-selector-item[data-court-id="ca8"]').click()`); await sleep(500);
+
+  // Issue #7 audit: cohort highlight + the judge detail box must be reachable by a bare CLICK
+  // alone, with NO preceding mouseenter/hover event ever dispatched — this whole file never
+  // simulates hover anywhere, so if this passes, tap-only reachability holds for real, not just
+  // by code inspection. onIconClick() calls the same highlightCohort()/showDetail() a hover would,
+  // then additionally pins the panel — verified directly rather than trusted from reading the code.
+  console.log("judge-icon detail box + same-president cohort highlight are reachable by click alone, no hover needed");
+  const firstJudge = JSON.parse(await ev(`(() => {
+    const icons = [...document.querySelectorAll(".ctt-judge-stage .ctt-judge")];
+    const target = icons.find(n => !n.classList.contains("ctt-vacant"));
+    target.click();
+    const president = target.querySelector(".ctt-judge-label")?.textContent || "";
+    return JSON.stringify({
+      found: !!target,
+      pinned: document.querySelector(".ctt-detail")?.classList.contains("ctt-pinned") || false,
+      hasName: !!document.querySelector(".ctt-detail-name")?.textContent,
+      cohortCount: document.querySelectorAll(".ctt-judge-stage .ctt-judge.ctt-copresident").length,
+    });
+  })()`));
+  assert(firstJudge.found, "a non-vacant judge icon exists in ca8's bench to click");
+  assert(firstJudge.pinned, "clicking a judge icon (no prior hover) pins the detail panel");
+  assert(firstJudge.hasName, "clicking a judge icon (no prior hover) populates the detail box");
+  assert(firstJudge.cohortCount >= 1,
+    `clicking a judge icon (no prior hover) highlights its appointing-president cohort (${firstJudge.cohortCount} marked)`);
+  await ev(`document.querySelector(".ctt-detail-close")?.click()`);
+
   await ev(`document.querySelector('.ctt-drill').click()`); await sleep(1800);
   const locEdge = await ev(`document.querySelector('.ctt-local-layer .ctt-block[data-court-id="moed"] .ctt-sq').getBoundingClientRect().width`);
   assert(Math.abs(locEdge - natEdge) < 0.3,
@@ -435,6 +488,46 @@ try {
   const sotoSepVisible = await ev(`getComputedStyle(document.querySelector('.ctt-search-result .ctt-search-sep')).display !== 'none'`);
   assert(sotoSepVisible, "...and the '· ' joiner stays visible there, since it's genuinely inline");
   await ev(`document.querySelector('.ctt-search-clear').click()`);
+
+  // Issue #7: the ~380px mobile layout had never been eyeballed in a real browser since Phase 1.
+  // Resizing an existing CDP session (rather than a fresh Chrome launch) re-evaluates the
+  // `max-width: 640px` layout media query in place. A large-bench court's Majority arc looked
+  // "cut off" at first glance in manual screenshots — root-caused to `.ctt-pane-body`'s
+  // intentional overflow-y:auto internal scroll (CLAUDE.md §6's "fixed outer widget height"), NOT
+  // a clipping bug: confirmed the pane genuinely has more content than fits AND that scrolling it
+  // actually reveals the rest, not just that a scrollbar exists cosmetically.
+  console.log("mobile ~380px: majority arc's internal pane-scroll genuinely reaches every icon, no horizontal overflow anywhere");
+  await send("Emulation.setDeviceMetricsOverride",
+    { width: 380, height: 900, deviceScaleFactor: 1, mobile: true });
+  await sleep(300);
+  await ev(`document.querySelector('.ctt-selector-back')?.click()`); await sleep(600);
+  await ev(`document.querySelector('.ctt-selector-item[data-court-id="ca8"]').click()`); await sleep(500);
+  await ev(`[...document.querySelectorAll(".ctt-toggle")].find(b => b.textContent === "Majority")?.click()`);
+  await sleep(700);
+  const mobileScroll = JSON.parse(await ev(`(() => {
+    const pane = document.querySelector(".ctt-pane-body");
+    const icons = [...document.querySelectorAll(".ctt-judge")];
+    const paneRectBefore = pane.getBoundingClientRect();
+    const before = icons[icons.length - 1].getBoundingClientRect().bottom - paneRectBefore.bottom;
+    pane.scrollTop = pane.scrollHeight;
+    const paneRectAfter = pane.getBoundingClientRect();
+    const after = icons[icons.length - 1].getBoundingClientRect().bottom - paneRectAfter.bottom;
+    return JSON.stringify({
+      hasOverflow: pane.scrollHeight > pane.clientHeight,
+      // Icon bottom relative to the PANE's own bottom edge (both viewport-relative coordinates
+      // already, so this subtraction is apples-to-apples) — positive means still below the fold.
+      overflowPxBefore: Math.round(before), overflowPxAfter: Math.round(after),
+      docOverflowsX: document.documentElement.scrollWidth > document.documentElement.clientWidth,
+    });
+  })()`));
+  assert(mobileScroll.hasOverflow,
+    "the pane genuinely has more bench content than fits at once at 380px (this is expected, not a bug)");
+  assert(mobileScroll.overflowPxBefore > 0,
+    `sanity check: before scrolling, the last icon really is below the pane's fold (${mobileScroll.overflowPxBefore}px past it)`);
+  assert(mobileScroll.overflowPxAfter <= 1,
+    `scrolling the pane to its end actually brings the last icon fully into view (${mobileScroll.overflowPxBefore}px past the fold -> ${mobileScroll.overflowPxAfter}px)`);
+  assert(!mobileScroll.docOverflowsX, "no horizontal overflow anywhere on the page at 380px width");
+  await send("Emulation.clearDeviceMetricsOverride");
 } catch (e) { console.log("*** ", e.message); failures++; }
 finally { try { ws && ws.close(); } catch {} chrome.kill(); }
 
