@@ -3,10 +3,24 @@ name: CI
 # Runs the test suites that were previously only ever run by hand (issue #5), plus a check
 # that the committed minified build in dist/ still matches embed/.
 
+# Ledger-only and docs-only changes (every session's PROGRESS.md PR, per CLAUDE.md §7) cannot
+# affect any of these suites, so they skip both jobs rather than burn two headless-Chrome runs.
+# If branch protection ever requires these checks, drop the filter (a skipped required check
+# blocks the merge) or switch to a paths filter inside the jobs.
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - "PROGRESS.md"
+      - "README.md"
+      - "docs/**"
+      - "LICENSE"
   pull_request:
+    paths-ignore:
+      - "PROGRESS.md"
+      - "README.md"
+      - "docs/**"
+      - "LICENSE"
   workflow_dispatch: {}
 
 concurrency:
@@ -35,9 +49,13 @@ jobs:
       # dist/ is committed so a clone, a static download, and the data release all carry a
       # production bundle without a build step. That only holds if it is regenerated whenever
       # embed/ changes — this is the step that says so out loud instead of shipping a stale one.
+      # `git status --porcelain`, not `git diff`: diff only reports changes to tracked files, so
+      # a NEW bundle the build emits (a third entry in build_embed.mjs's lists) that was never
+      # committed would sail through as an untracked file. status catches both.
       - name: dist/ is in sync with embed/
         run: |
-          if ! git diff --exit-code -- dist; then
+          if [ -n "$(git status --porcelain -- dist)" ]; then
+            git status --porcelain -- dist
             echo "::error::dist/ is stale. Run 'npm run build' and commit the result."
             exit 1
           fi

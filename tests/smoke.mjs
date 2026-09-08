@@ -8,19 +8,31 @@
 //   npm install && npm test
 // (or from a dir where `jsdom` resolves). Exits non-zero on any failed assertion.
 //
-// CT_BUILD=dist (npm run test:dist) points the same assertions at the minified production
-// build in dist/ instead of the readable source in embed/, so the bundle a publisher actually
-// embeds is exercised by this suite too, not just the source it was generated from.
+// `--dist` (npm run test:dist; CT_BUILD=dist also works) points the behavioural assertions at
+// the minified production build in dist/ instead of the readable source in embed/, so the bundle
+// a publisher actually embeds is exercised by this suite too, not just the source it was
+// generated from. Two things deliberately do NOT switch with it:
+//   - the source-text guards below (`readFileSync(SRC_JS|SRC_CSS)`) always read embed/: they
+//     assert on identifiers and rule layout that minification renames or collapses, and the
+//     source is what a human edits;
+//   - jsdom never loads a stylesheet or computes layout, so this suite cannot exercise the CSS
+//     bundle at all. Under --dist a small structural check on dist/*.min.css stands in; the real
+//     coverage of the minified stylesheet is `npm run test:browser:dist`.
 import { JSDOM } from "jsdom";
 import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 
 import { fileURLToPath } from "node:url";
 const REPO = fileURLToPath(new URL("..", import.meta.url));
-const BUILD = process.env.CT_BUILD === "dist" ? { dir: "dist", ext: ".min.js" }
-                                              : { dir: "embed", ext: ".js" };
+// A CLI flag rather than an env-prefix in package.json: `CT_BUILD=dist node …` is POSIX shell
+// syntax and fails outright under Windows cmd/PowerShell. The env var is kept as an alias.
+const DIST = process.argv.includes("--dist") || process.env.CT_BUILD === "dist";
+const BUILD = DIST ? { dir: "dist", ext: ".min.js" } : { dir: "embed", ext: ".js" };
 const mods = (name) => `${REPO}/${BUILD.dir}/${name}${BUILD.ext}`;
 const MODULE = mods("court-tracker");
+// Source-text guards read these regardless of --dist (see the header comment).
+const SRC_JS = REPO + "/embed/court-tracker.js";
+const SRC_CSS = REPO + "/embed/court-tracker.css";
 
 const dom = new JSDOM(`<!DOCTYPE html><body><div id="court-tracker-root"></div></body>`, {
   url: "https://example.test/host/",
@@ -519,10 +531,10 @@ console.log("re-drilling the circuit you are already inside is a no-op");
 // every circuit ever visited kept a full-map layer's raster tiles alive in native memory.
 console.log("only the active map layer is paintable (native-memory guard)");
 {
-  const css = readFileSync(REPO + "/embed/court-tracker.css", "utf8");
+  const css = readFileSync(SRC_CSS, "utf8");
   // A custom property invalidates style for the WHOLE subtree and a var-driven opacity cannot be
   // composited, so this repainted ~106 paths every frame (measured 8.6x the style cost).
-  assert(!/--ctt-morph-t/.test(css) && !/--ctt-morph-t/.test(readFileSync(REPO + "/embed/court-tracker.js", "utf8")),
+  assert(!/--ctt-morph-t/.test(css) && !/--ctt-morph-t/.test(readFileSync(SRC_JS, "utf8")),
     "morph fades are not driven by a CSS custom property + calc()");
   assert(/\.ctt-local-layer \{[^}]*display:\s*none/.test(css),
     "an idle .ctt-local-layer is display:none, not merely transparent");
@@ -570,12 +582,12 @@ console.log("hovering/selecting a court highlights its seat block");
   // Highlight = the squares grow about their own centres. Nothing recolours, so the vacancy's
   // dash and the party colours survive — and neighbours must never touch (scale < pitch/edge).
   {
-    const css = readFileSync(REPO + "/embed/court-tracker.css", "utf8");
+    const css = readFileSync(SRC_CSS, "utf8");
     // Scales moved from CSS to JS (BLOCK_SCALE_*): a CSS transform transition on SVG rects
     // can't composite, and its promotion attempt re-rendered hairline strokes map-wide
     // (the border flicker). Assert the constants where they now live, and that no CSS
     // transition sneaks back onto .ctt-sq.
-    const jsSrc = readFileSync(REPO + "/embed/court-tracker.js", "utf8");
+    const jsSrc = readFileSync(SRC_JS, "utf8");
     const hov = +/BLOCK_SCALE_HOVER = ([0-9.]+)/.exec(jsSrc)[1];
     const sel = +/BLOCK_SCALE_SELECTED = ([0-9.]+)/.exec(jsSrc)[1];
     const maxScale = 1.30;                        // BLOCK_GAP: pitch = edge * 1.30 -> edges touch
@@ -597,7 +609,7 @@ console.log("hovering/selecting a court highlights its seat block");
     const w = (re) => +re.exec(css)[1];
     const partyW = w(/\.ctt-sq \{[^}]*stroke-width: ([0-9.]+)/);
     const vacW = w(/\.ctt-sq-vacant \{[^}]*stroke-width: ([0-9.]+)/);
-    const js = readFileSync(REPO + "/embed/court-tracker.js", "utf8");
+    const js = readFileSync(SRC_JS, "utf8");
     const inset = eval(/const VACANCY_INSET_PX = ([^;]+);/.exec(js)[1]);
     // No exact target (the party stroke is 85% opaque, so its colour fades rather than ends), but
     // the outline must stay between the two defensible bounds: the party BOX edge (inset = half
@@ -665,7 +677,7 @@ assert(root.querySelectorAll(".ctt-judge.ctt-affil-marked").length === ca8Judges
 // content box and visibly shrinks the photo inside — which is what the operator reported.
 {
   click(affOpts[1]); await sleep(20);
-  const css = readFileSync(REPO + "/embed/court-tracker.css", "utf8");
+  const css = readFileSync(SRC_CSS, "utf8");
   const rule = /\.ctt-affil-marked \.ctt-avatar \{([^}]*)\}/.exec(css);
   assert(rule && !/border-width|border\s*:/.test(rule[1]),
     `affiliation ridge changes border-style only, never its width (got "${rule && rule[1].trim()}")`);
@@ -715,7 +727,7 @@ assert(root.querySelector('.ctt-national-layer .ctt-block[data-court-id="ca1"] .
   const tx = +/translate\(([-\d.]+)/.exec(blk.querySelector("g").getAttribute("transform"))[1];
   const leftX = Math.min(...[...blk.querySelectorAll(".ctt-sq")].map((r) => +r.getAttribute("x")));
   assert(Math.abs(tx - leftX) < 1, `label anchored to the block's left edge (${tx} vs ${leftX})`);
-  const css = readFileSync(REPO + "/embed/court-tracker.css", "utf8");
+  const css = readFileSync(SRC_CSS, "utf8");
   assert(/\.ctt-block-label \{[^}]*text-anchor: start/.test(css), "label text-anchor is start (left-aligned)");
 }
 // Square size is a constant SCREEN size, not map units: a map-unit edge renders ~4x larger
@@ -1879,6 +1891,27 @@ console.log("appointments beeswarm widget (separate module, session aj)");
   await sleep(30);
   const rMax = Math.max(...A.dots.map((d) => d.r));
   assert(rMax < r8, `dot radius scales down with a wider span (${rMax.toFixed(1)} < ${r8.toFixed(1)})`);
+}
+
+// jsdom cannot exercise a stylesheet, so under --dist this is the one place the minified CSS is
+// looked at here: the two rules the native-memory and compositor-freeze guards above depend on
+// must survive minification with the same selectors and declarations, and each bundle must still
+// carry the banner build_embed.mjs stamps on it. Layout-level coverage of the bundle is
+// `npm run test:browser:dist`.
+if (DIST) {
+  console.log("minified bundles keep their banners and the rules the guards above depend on");
+  const cssMin = readFileSync(REPO + "/dist/court-tracker.min.css", "utf8");
+  assert(cssMin.startsWith("/*! court-tracker.min.css — generated from embed/court-tracker.css"),
+    "dist/court-tracker.min.css carries the build banner naming the file it actually is");
+  assert(/\.ctt-local-layer\{[^}]*display:none/.test(cssMin),
+    "minified: an idle .ctt-local-layer is still display:none");
+  assert(/(^|[,{}])\.ctt-morph-layer \.ctt-block-label[^{]*\{[^}]*display:none/.test(cssMin),
+    "minified: the morph layer still hides seat-block labels");
+  for (const n of ["court-tracker", "appointments-chart"]) {
+    const js = readFileSync(`${REPO}/dist/${n}.min.js`, "utf8");
+    assert(js.startsWith(`/*! ${n}.min.js — generated from embed/${n}.js`),
+      `dist/${n}.min.js carries the build banner naming the file it actually is`);
+  }
 }
 
 console.log(`\n${failures === 0 ? "ALL PASS" : failures + " FAILURE(S)"}`);

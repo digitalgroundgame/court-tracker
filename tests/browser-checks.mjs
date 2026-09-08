@@ -9,14 +9,23 @@
 import { spawn } from "node:child_process";
 
 const PORT = 9877, MARK = `/tmp/ctbc-${process.pid}`;
-const URL_ = process.argv.includes("--url") ? process.argv[process.argv.indexOf("--url") + 1]
-                                            : "http://localhost:8777/index.html";
+// --url may be a full URL or just a path; a path is resolved against the local server, whose
+// port comes from CT_PORT (scripts/serve_and_run.mjs sets it so a custom port moves both ends).
+const ORIGIN = `http://localhost:${process.env.CT_PORT || 8777}`;
+const urlArg = process.argv.includes("--url") ? process.argv[process.argv.indexOf("--url") + 1] : "/index.html";
+const URL_ = /^https?:\/\//.test(urlArg) ? urlArg : new URL(urlArg, ORIGIN).href;
 // Binary is overridable (CHROME_BIN) so CI runners and containers that ship Chromium under
 // another name can run this without patching the test.
 const CHROME = process.env.CHROME_BIN || "google-chrome-stable";
 const chrome = spawn(CHROME, ["--headless=new", "--no-sandbox", "--hide-scrollbars",
   "--enable-unsafe-swiftshader", `--user-data-dir=${MARK}`, `--remote-debugging-port=${PORT}`,
   "--window-size=1180,760", "about:blank"], { stdio: "ignore" });
+// Without this a missing binary surfaces as an uncaught ENOENT stack trace from spawn's
+// next-tick 'error' event, with nothing pointing at the one knob that fixes it.
+chrome.on("error", (e) => {
+  console.error(`cannot launch Chrome at "${CHROME}" (${e.code || e.message}); set CHROME_BIN to your Chrome/Chromium binary`);
+  process.exit(1);
+});
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let ws, id = 0; const pending = new Map();
