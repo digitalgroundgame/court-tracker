@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Serves the repo over http://localhost:8777 and runs a browser test against it.
+// Serves the repo over http://localhost:8777 (or $CT_PORT) and runs a browser test against it.
 //
 // The CDP suites (tests/browser-checks.mjs et al.) need a real origin — ES modules and
 // fetch() do not work from file:// in Chrome — and every one of them defaults to port 8777.
@@ -14,6 +14,8 @@ import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const REPO = fileURLToPath(new URL("..", import.meta.url));
+// CT_PORT moves the server; the test script inherits it through the environment and resolves a
+// path-only --url against it (see tests/browser-checks.mjs), so one variable moves both ends.
 const PORT = +(process.env.CT_PORT || 8777);
 const [script, ...rest] = process.argv.slice(2);
 if (!script) {
@@ -31,23 +33,34 @@ const TYPES = {
   ".woff2": "font/woff2", ".txt": "text/plain; charset=utf-8",
 };
 
+const notFound = (res) => {
+  if (!res.headersSent) res.writeHead(404, { "Content-Type": "text/plain" });
+  res.end("not found");
+};
+
 const server = createServer((req, res) => {
-  const rel = normalize(decodeURIComponent(new URL(req.url, "http://localhost").pathname))
-    .replace(/^(\.\.[/\\])+/, "");                     // no escaping the repo root
-  let file = join(REPO, rel);
+  // Everything that can throw or fail sits inside the try: a malformed %-escape throws from
+  // decodeURIComponent, and a directory with no index.html passes statSync but then fails
+  // asynchronously in createReadStream. Either used to be an uncaught exception that killed the
+  // server — and with it the whole test run — mid-suite. Both are just a 404 now.
   try {
+    const rel = normalize(decodeURIComponent(new URL(req.url, "http://localhost").pathname))
+      .replace(/^(\.\.[/\\])+/, "");                   // no escaping the repo root
+    let file = join(REPO, rel);
     if (statSync(file).isDirectory()) file = join(file, "index.html");
     const type = TYPES[extname(file).toLowerCase()] || "application/octet-stream";
-    res.writeHead(200, { "Content-Type": type, "Cache-Control": "no-store" });
-    createReadStream(file).pipe(res);
+    const stream = createReadStream(file);
+    stream.on("open", () => res.writeHead(200, { "Content-Type": type, "Cache-Control": "no-store" }));
+    stream.on("error", () => notFound(res));
+    stream.pipe(res);
   } catch {
-    res.writeHead(404, { "Content-Type": "text/plain" });
-    res.end("not found");
+    notFound(res);
   }
 });
 
 await new Promise((r) => server.listen(PORT, "127.0.0.1", r));
-const child = spawn(process.execPath, [script, ...rest], { stdio: "inherit", cwd: REPO });
+const child = spawn(process.execPath, [script, ...rest],
+  { stdio: "inherit", cwd: REPO, env: { ...process.env, CT_PORT: String(PORT) } });
 const code = await new Promise((r) => child.on("exit", (c, sig) => r(sig ? 1 : c ?? 1)));
 server.close();
 process.exit(code);

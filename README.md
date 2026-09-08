@@ -71,13 +71,16 @@ either one find `data/`, `assets/geo/` and `assets/photos/`. The second widget e
 npm install            # dev-only deps: jsdom (headless smoke) + esbuild (minifier)
 npm test               # jsdom smoke suite against embed/
 npm run build          # regenerate dist/ from embed/  — commit the result
-npm run test:dist      # the same smoke suite against the minified build
+npm run test:dist      # the smoke suite's behavioural assertions against the minified JS bundle
 npm run test:browser   # real-browser (CDP) checks jsdom structurally cannot make
 ```
-`npm run test:browser` serves the repo on `localhost:8777` itself and drives headless Chrome; set
-`CHROME_BIN` if your Chrome is not on `PATH` as `google-chrome-stable`. `npm run test:browser:dist`
-runs those same checks against `dist/`. `.github/workflows/ci.yml` runs all of it on every push to
-`main` and every pull request. The widgets themselves have **zero runtime dependencies** — nothing
+`npm run test:browser` serves the repo on `localhost:8777` itself (`CT_PORT` moves it) and drives
+headless Chrome; set `CHROME_BIN` if your Chrome is not on `PATH` as `google-chrome-stable`.
+`npm run test:browser:dist` runs those same checks against `dist/` — and is the only real coverage
+of the minified *stylesheet*, since jsdom never loads CSS (`test:dist` adds just a structural check
+on it). `.github/workflows/ci.yml` runs all of it on every push to `main` and every pull request
+that touches anything other than `PROGRESS.md`, `README.md`, `LICENSE` or `docs/`; the data release
+rebuilds `dist/` and refuses to publish if it does not match `embed/`. The widgets themselves have **zero runtime dependencies** — nothing
 in `node_modules/` ships to a reader.
 
 ## Syncing the data package (for external consumers)

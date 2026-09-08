@@ -12,6 +12,38 @@ tracker (Phase-4 tail items open, PLUS a brand-new third pane view — "Change",
 (feature-complete first version, operator refinement rounds ongoing; see sessions ai→at, aw).
 **Last updated:** 2026-09-07
 
+> **SESSION (cs), 2026-09-07 — Harden CI / dist build / test server from PR #27's review (issue
+> #42, PR #43).**
+> - **Origin**: a post-merge review of PR #27 (CI + npm scripts + minified `dist/`, issue #5)
+> found ten follow-ups, filed as issue #42, none breaking the widget or CI as it stood but all
+> real gaps. Fixed all ten.
+> - **Two real crash bugs in `scripts/serve_and_run.mjs`**: a directory request with no
+> `index.html` (e.g. `GET /tests`) passed `statSync` but then failed asynchronously in
+> `createReadStream`, an unhandled `'error'` that killed the whole test run mid-suite; a
+> malformed `%`-escape threw from `decodeURIComponent`, which sat outside the `try`. Both are a
+> plain 404 now.
+> - **A build that could delete `dist/` on failure**: `build_embed.mjs` used to `rmSync` before
+> running esbuild, so a syntax error in `embed/` left all four `dist/` files deleted in the
+> working tree — `git add -A` would then stage their removal. Now builds into a sibling temp dir,
+> swaps it in only after both esbuild passes succeed, and cleans up the temp dir on any exit path.
+> - **CI/release gaps**: the staleness gate used `git diff --exit-code -- dist`, which only sees
+> tracked-file changes — a brand-new, never-committed bundle would sail through; switched to
+> `git status --porcelain -- dist`. The release workflow ships `dist/` in the package but nothing
+> gated it on CI passing — it now rebuilds and reverifies before tarring. `paths-ignore` added so
+> ledger-only PRs skip two headless-Chrome runs.
+> - **Test/config fixes**: `test:dist` only ever exercised the JS bundle (jsdom loads no CSS) —
+> added a structural check on the minified CSS + banner naming for all four bundles. `CT_PORT`
+> now actually propagates to the spawned test child (previously silently ignored). Build banner
+> named a nonexistent file (`court-tracker.js.min` vs. the real `court-tracker.min.js`). SPDX
+> license id corrected to `MIT`.
+> - **Verified independently, not just trusted**: ran `npm test`, `npm run build`,
+> `npm run test:dist`, both real-browser suites myself — all pass. Directly reproduced both crash
+> scenarios against a live server (`GET /tests` → 404, malformed `%`-escape → 404, server stays
+> alive) and the build-failure scenario (broke `embed/court-tracker.js` on purpose — `dist/`
+> stayed fully intact, no leftover temp dir).
+> - Retrofitted with this entry directly (opened before today's ledger-in-branch reversal).
+> - Blockers: none.
+
 > **SESSION (cp) cont'd (8), 2026-09-07 — Issue #8: untracked 59MB of one-time geometry-source
 > inputs + a stray temp file.**
 > - Untracked `data/census/` (~18MB, Census cartographic-boundary county shapefiles) and
