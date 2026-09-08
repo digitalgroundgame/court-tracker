@@ -849,7 +849,14 @@ async function loadJustices() {
   if (S.justicesLoaded) return;
   const path = S.manifest.files?.circuit_justices;
   if (path) {
-    for (const j of await fetchJSON(path)) S.justices.set(j.circuit_id, j);
+    for (const j of await fetchJSON(path)) {
+      // circuit_justices.json no longer duplicates `justice_name` as `full_name` (Schema 2.0,
+      // issue #28) — the judge-icon renderer (makeIcon/initials/showDetail) reads `full_name`
+      // uniformly across both judge and justice records, so synthesize it once here at load
+      // time rather than special-casing every render call site.
+      j.full_name = j.justice_name;
+      S.justices.set(j.circuit_id, j);
+    }
   }
   S.justicesLoaded = true;
 }
@@ -3252,8 +3259,10 @@ const BLOCK_SCALE_MS = 90;
 // Used only where layout is unavailable (headless/jsdom), which reports 0 for every box.
 const NOMINAL_MAP_PX = 900;
 const LAYER_PAD = 12;                   // must match .ctt-svg-layer's padding
-// Labels for the Federal Circuit's feeder blocks (visible only in the feeder view).
-const FEEDER_LABEL = { cit: "CIT", uscfc: "CFC" };
+// Labels for the Federal Circuit's feeder blocks (visible only in the feeder view). Keyed by the
+// same `specialized` level seat_blocks.json uses (Schema 2.0, issue #28 — was "feeder" in the
+// data, a second vocabulary for the concept `courts.court_level` already calls "specialized").
+const SPECIALIZED_LABEL = { cit: "CIT", uscfc: "CFC" };
 const CIRCUIT_LABEL = {
   ca1: "1st", ca2: "2nd", ca3: "3rd", ca4: "4th", ca5: "5th", ca6: "6th",
   ca7: "7th", ca8: "8th", ca9: "9th", ca10: "10th", ca11: "11th", cadc: "DC", cafc: "Fed",
@@ -3301,7 +3310,7 @@ function refreshSeatBlocks() {
   if (!S.seatBlocks || !S.ui) return;
   if (S.ui.nationalSVG) {
     renderSeatBlocks(S.ui.nationalSVG, "circuit");
-    if (S.view === "circuit" && S.activeCircuit === "cafc") renderSeatBlocks(S.ui.nationalSVG, "feeder");
+    if (S.view === "circuit" && S.activeCircuit === "cafc") renderSeatBlocks(S.ui.nationalSVG, "specialized");
   }
   for (const [circ, svg] of S.localSVGCache) renderSeatBlocks(svg, "district", circ);
   S.morphPlans.clear();
@@ -3326,8 +3335,8 @@ function renderedMapWidth(svg) {
 
 /** Build the <g> of blocks for one SVG. level='circuit' on national, 'district' on a local. */
 function renderSeatBlocks(svg, level, circuitId) {
-  // Idempotent PER LEVEL: the feeder blocks render into the national svg alongside the
-  // circuit blocks, so only the same level's previous group may be swept.
+  // Idempotent PER LEVEL: the 'specialized' (cit/uscfc feeder) blocks render into the national
+  // svg alongside the circuit blocks, so only the same level's previous group may be swept.
   svg.querySelectorAll(`.ctt-blocks[data-level="${level}"]`).forEach((n) => n.remove());
   if (!S.seatBlocks) return null;
   const g = document.createElementNS(SVGNS, "g");
@@ -3344,7 +3353,7 @@ function renderSeatBlocks(svg, level, circuitId) {
     if (level === "district" && b.parent_id !== circuitId) continue;
     if (!b.total) continue;
     let anchor = b.anchor || shapeAnchor(svg, cid, level);
-    if (!anchor && level === "feeder") {
+    if (!anchor && level === "specialized") {
       // Default: below the Fed block, CIT left / CFC right, in screen-px converted to units.
       const fed = S.seatBlocks.cafc && S.seatBlocks.cafc.anchor;
       if (fed) anchor = [fed[0] + (cid === "cit" ? -34 : 34) * unitsPerPx,
@@ -3371,7 +3380,7 @@ function renderSeatBlocks(svg, level, circuitId) {
     // hover flickers as you cross a block. It also has to reach above the squares to cover the
     // label, and out past them: several blocks (Fed, 2nd, DC, 1st) sit partly or wholly off their
     // own circuit's geometry, and cafc has no geometry at all — its block is its only map presence.
-    const labelled = (level === "circuit" && CIRCUIT_LABEL[cid]) || (level === "feeder" && FEEDER_LABEL[cid]);
+    const labelled = (level === "circuit" && CIRCUIT_LABEL[cid]) || (level === "specialized" && SPECIALIZED_LABEL[cid]);
     const m = e * 0.6;                                   // buffer, in map units
     const top = labelled ? y0 - e * 0.45 - e * 1.9 : y0 - m;
     const hit = document.createElementNS(SVGNS, "rect");
@@ -3399,7 +3408,7 @@ function renderSeatBlocks(svg, level, circuitId) {
     // these viewBoxes are millions of units across, and browsers CLAMP font-size at 10000px
     // (measured in Chrome), which silently renders the text as a ~2px smudge. Keep the font
     // small and let the transform do the scaling.
-    const labelText = level === "circuit" ? CIRCUIT_LABEL[cid] : level === "feeder" ? FEEDER_LABEL[cid] : null;
+    const labelText = level === "circuit" ? CIRCUIT_LABEL[cid] : level === "specialized" ? SPECIALIZED_LABEL[cid] : null;
     if (labelText) {
       const scale = (e * 1.9) / LABEL_EM;
       const tg = document.createElementNS(SVGNS, "g");
@@ -3784,7 +3793,7 @@ async function drillIn(circuitId) {
     togglePane(false);
     // The feeders appear ON the map for this view only: two labelled block arrays (CIT, CFC)
     // parked below the Fed block; drillOut sweeps them.
-    if (S.ui.nationalSVG) renderSeatBlocks(S.ui.nationalSVG, "feeder");
+    if (S.ui.nationalSVG) renderSeatBlocks(S.ui.nationalSVG, "specialized");
     return;
   }
   const local = await ensureLocalLayer(circuitId);
@@ -3837,7 +3846,7 @@ async function drillOut() {
   const circuitId = S.activeCircuit;
   const local = S.localSVGCache.get(circuitId);
   if (S.ui.nationalSVG)   // feeder blocks (CIT/CFC) exist only inside the cafc feeder view
-    S.ui.nationalSVG.querySelectorAll('.ctt-blocks[data-level="feeder"]').forEach((n) => n.remove());
+    S.ui.nationalSVG.querySelectorAll('.ctt-blocks[data-level="specialized"]').forEach((n) => n.remove());
   S.view = "national"; S.activeCircuit = null; S.selectedCourt = null;
   updateDistrictOverlayVisibility();   // the deployed national assembly reappears if it was on
   renderDistrictSubassembly(null);     // sweep the circuit-local fixed sub-assembly

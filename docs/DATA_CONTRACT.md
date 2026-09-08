@@ -1,6 +1,6 @@
 # DATA_CONTRACT — the published data as a versioned public API
 
-**Status: `schema_version` 1.0.0, frozen 2026-09-06.** This document is normative for anyone
+**Status: `schema_version` 2.0.0, cut 2026-09-08 (issue #28).** This document is normative for anyone
 building a renderer against this repo's published data — including a future Pragmatic Papers
 front end (issue #13, Phase B), and including this repo's own `embed/` widgets, which are just
 the first consumer, not a privileged one.
@@ -41,8 +41,8 @@ shouldn't. The tiers, in decreasing order of promise:
 
 | Tier | Promise | Applies to |
 |---|---|---|
-| `stable` | Covered by §3 in full. Breaks only at a MAJOR bump, only after the deprecation path in §5. | `manifest`, `courts`, `judges`, `circuit_justices`, `judges_search`, `president_photos`, `geo` |
-| `provisional` | Public, versioned, and announced the same way — but the shape is *known* to be imperfect and a MAJOR change to it is already anticipated (see §7). Depend on it; just expect the announced change to come. | `appointments` |
+| `stable` | Covered by §3 in full. Breaks only at a MAJOR bump, only after the deprecation path in §5. | `manifest`, `courts`, `judges`, `circuit_justices`, `judges_search`, `president_photos`, `geo`, `appointments` |
+| `provisional` | Public, versioned, and announced the same way — but the shape is *known* to be imperfect and a MAJOR change to it is already anticipated (see §7). Depend on it; just expect the announced change to come. | *(none currently — `appointments` was the sole occupant through 1.x; promoted to `stable` at 2.0.0, issue #28, once its shape was fixed)* |
 | `reference-renderer` | Published and versioned, but **not portable data**: these encode layout decisions specific to this repo's widget's visual design. Another renderer should expect to reimplement, not consume, them. Consuming one is allowed and it still gets version-gated — you are simply inheriting our design, not our data. | `seat_blocks`, `district_arrangement`, `district_arrangement_alt` |
 
 The `reference-renderer` tier is the formalization of the epic's "portable data vs.
@@ -179,11 +179,11 @@ CSV→JSON deltas a consumer can't see from the codebook, and the shape quirks w
 | `manifest.json` | object | stable | Entry point. Table H documents `national_totals`. |
 | `courts.json` (`courts`) | array of 110 records | stable | Table B's ten columns, typed: `authorized_judgeships` int, `has_geography`/`is_inset` bool, `parent_id`/`geometry_key` nullable. **`court_level` is `scotus \| circuit \| district \| specialized`** — `scotus` is real and Table B's enum omits it. |
 | `judges/<circuit>.json` (`judges`) | array, sorted by `commission_date` | stable | Table A's columns, typed, **plus `photo_thumb`** (local cached image path, null until `cache_photos.py` has run for that URL — fall back to `photo_url`). Bundled by circuit: a circuit's own judges + its districts'; `scotus` bundles alone; `cit`/`uscfc` bundle under `cafc`. Bundle keys come from `manifest.files.judges` — do not assume 14. |
-| `circuit_justices.json` (`circuit_justices`) | array | stable | Table C, **plus `photo_thumb`** and **plus `full_name`**, a duplicate of `justice_name` (the widget's judge-icon renderer reads `full_name`). Both are emitted; they are always equal. |
+| `circuit_justices.json` (`circuit_justices`) | array | stable | Table C, **plus `photo_thumb`**. No longer duplicates `justice_name` as `full_name` (removed at schema 2.0, issue #28 — a renderer-convenience field that leaked into the published shape; a consumer wanting it can synthesize `full_name = justice_name` itself). |
 | `judges_search.json` (`judges_search`) | array, sorted by `full_name` | stable | Table G. Deliberately narrow — see §6 before working around it. `court_id` XOR `court_ids` (plural only for roving judgeships). |
 | `president_photos.json` (`president_photos`) | object keyed by president name | stable | The key is the exact `name` string used in `embed/presidencies.js`; matching on it is string equality, not an id join. Values: `photo_url`, `photo_thumb`, `photo_source`, `photo_license`. |
-| `appointments.json` (`appointments`) | array of ~2,800 records | **provisional** | Table E. **Every value is a string** — `""` for null, `"true"`/`"false"` for booleans — because this file is a passthrough of `appointments.csv` rather than a typed build. The one exception is the added `photo_thumb`, which is a real `string \| null`. Coerce on read. Typed coercion is proposed for 2.0 (see the changelog). |
-| `seat_blocks.json` (`seat_blocks`) | object keyed by `court_id` | reference-renderer | Composition (`authorized`, `total`, `r`/`d`/`o`, `vacancies`) is portable arithmetic; `anchor`/`size` are hand-tuned placement for this map. Note `level` is `circuit \| district \| feeder` — **`feeder` where `courts.json` says `specialized`**. Table D documents the CSV that feeds the placement half. |
+| `appointments.json` (`appointments`) | array of ~2,800 records | **stable** | Table E, typed (schema 2.0, issue #28 — was a raw string passthrough of `appointments.csv` through 1.x, hence its old `provisional` tier). Dates/free-text are `string \| null` (`""` → `null`), `sitting` is a plain `boolean`, `fjc_jid` is `int \| null`. **`fedsoc_reported`/`acs_reported` are `boolean \| null`**, genuinely three-state, not just true/false — see Table E for why `null` and `false` mean different things here. |
+| `seat_blocks.json` (`seat_blocks`) | object keyed by `court_id` | reference-renderer | Composition (`authorized`, `total`, `r`/`d`/`o`, `vacancies`) is portable arithmetic; `anchor`/`size` are hand-tuned placement for this map. `level` is `circuit \| district \| specialized`, unified with `courts.court_level` at schema 2.0 (issue #28 — was `feeder`, a second vocabulary for the same concept, through 1.x). Table D documents the CSV that feeds the placement half. |
 | `district_arrangement.json`, `district_arrangement_alt.json` | object | reference-renderer | Table F. Hand-built cartogram; `cell_colors` is frozen at export time and **goes stale** — recompute from `seat_blocks.json` if you render it. |
 | `assets/geo/**.svg` (`geo`) | SVG | stable | Interface specified in `docs/GEOMETRY_CONTRACT.md` (projected units, morph invariant). |
 | `assets/photos/**.jpg` | JPEG | stable | Content-addressed; reached via `photo_thumb`, never by constructing a filename. Licensing per row (`photo_license`); render the credit line where the license requires attribution. |
@@ -193,17 +193,22 @@ editing and the collectors, not for consumption), `data/cache/**` (gitignored, m
 `tools/*.html`, `scripts/**`, and `embed/**`'s internals — including `_dev` exports and any
 internal state shape (issue #13 Phase A calls this out explicitly).
 
-## 8. Known 1.0 warts
+## 8. Known warts
 
 Documented rather than quietly fixed, because fixing them is exactly what the version policy is
-for. Each is either a MAJOR candidate (§3) or a data question, and each is in the changelog's
-Proposed section:
+for. The three 1.0 shape warts below were the 2.0.0 batch (issue #28, `docs/SCHEMA_CHANGELOG.md`)
+and are now fixed:
 
-- **`appointments.json` is string-typed** (above). The fix is a typed build; it is breaking.
-- **`circuit_justices.json` emits `justice_name` and `full_name` as duplicates.** Renderer
-  convenience that leaked into the published shape. Collapsing them is breaking.
-- **`seat_blocks.level` renames `specialized` to `feeder`.** Two vocabularies for one concept.
-- **`data_verified` is `false` on all 1,490 rows.** Not a shape problem — the human pass has never
-  run. Do not build a "verified only" filter on it yet.
+- ~~`appointments.json` is string-typed.~~ **Fixed at 2.0.0**: typed build (see §7's `appointments`
+  row).
+- ~~`circuit_justices.json` emits `justice_name` and `full_name` as duplicates.~~ **Fixed at
+  2.0.0**: `full_name` removed; a consumer that wants it synthesizes `full_name = justice_name`.
+- ~~`seat_blocks.level` renames `specialized` to `feeder`.~~ **Fixed at 2.0.0**: `level` now uses
+  `courts.court_level`'s own vocabulary throughout.
+
+Still open, not a shape problem for either:
+
+- **`data_verified` is `false` on all 1,490 rows.** The human verification pass has never run.
+  Do not build a "verified only" filter on it yet.
 - **`judges_search.json`'s five fields** are a reference-renderer-shaped narrowing of a stable
   file. It stays as-is until someone asks (§6).
