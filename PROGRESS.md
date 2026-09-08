@@ -50,7 +50,30 @@ tracker (Phase-4 tail items open, PLUS a brand-new third pane view — "Change",
 > `dist/` rebuild not needed (confirmed empty `git status` on both after the work).
 > - **Verified**: `npm test`, `npm run test:dist`, `npm run test:browser`, `npm run test:browser:dist`
 > — ALL PASS, including the new mobile-380px block, and the click-only judge-detail test.
-> - Blockers: none. **Next**: issue #6 (destroy()/unmount() for SPA-style embedding).
+> - **Self-correction, added before merge (operator review, 2026-09-08): the mobile-clean claim
+> above was overstated.** The operator reviewed a real DevTools device-toolbar resize themselves
+> and found two genuine text-overlap bugs my automated pass never touched — I never checked the
+> Summary tab, or the tri-selector/stow-close-button area, at 380px at all; what I verified was
+> real but partial, not exhaustive, and shouldn't have read as "all clean." Both bugs, plus a much
+> larger judge-icon-label collision-avoidance algorithm the operator specified in full, are now
+> **issue #50** (verbatim spec, not summarized — see that issue, not this entry, for the details).
+> - **Two more real, unrelated things turned up in the same review round, both fixed here:**
+>   1. `tests/visual.html` was missing the `<meta name="viewport">` tag `index.html` has — without
+>   it, a REAL DevTools device-toolbar resize can't trigger the `max-width: 640px` layout at all
+>   (the page renders at a fixed desktop viewport and scales visually instead), which is exactly
+>   why the operator's resize attempt on `visual.html?c=ca8` did nothing while plain
+>   `localhost:8777`/`index.html` worked. Added the tag.
+>   2. **CI's `real-browser checks` job has been failing on a first try, then passing clean on
+>   re-run, repeatedly** — confirmed genuinely systemic, not flaky, by pulling three separate real
+>   CI failure logs (main-branch push + two PRs): all three fail in the exact same spot, all at
+>   ~6.3s, all `fetch failed` with no further detail. Root cause: `browser-checks.mjs`'s wait loop
+>   for Chrome's CDP port only budgeted 60×100ms (6s) — too short for a shared/cold GitHub Actions
+>   runner, though always fast enough locally to hide the problem here. Extended to 200×150ms
+>   (30s, still `break`s immediately once ready so the common fast case is untouched) and replaced
+>   the silent fall-through into a second doomed fetch with an actionable error naming the port and
+>   `CHROME_BIN`.
+> - Blockers: none. **Next**: issue #6 (destroy()/unmount() for SPA-style embedding); issue #50
+> (the mobile overlap bugs + collision-avoidance algorithm) whenever picked up.
 
 > **SESSION (cp) cont'd (9), 2026-09-07 — Issue #2: optional asset-root override for both
 > widgets.**
@@ -2400,11 +2423,14 @@ Prove the whole app shell and asset schema on one circuit with hand-authored sam
 - [x] "View districts" drill-in via **zoom+crossfade** (documented fallback per contract §Morph
       fallback; true vertex-morph deferred to Phase 3/4 for visual tuning) + back button. Federal
       Circuit special case: selects, then "View feeders →" repopulates selector with USCIT/CFC, no map.
-- [x] Mobile vertical layout: CSS written (selector stacks/wraps; pane = full-width sheet; detail
-      panel goes static). **Visually verified at ~380px in a real browser, finally** (issue #7,
-      session (cp), 2026-09-07/08) — see the Phase 4 checklist entry for the full write-up
-      (screenshots across every pane mode, two apparent issues investigated and root-caused as
-      testing artifacts rather than real bugs, now permanent `tests/browser-checks.mjs` assertions).
+- [~] Mobile vertical layout: CSS written (selector stacks/wraps; pane = full-width sheet; detail
+      panel goes static). **Partially visually verified at ~380px in a real browser, finally**
+      (issue #7, session (cp), 2026-09-07/08) — national view, Timeline, Majority, and a drilled
+      district pane are genuinely clean (real screenshots + permanent `tests/browser-checks.mjs`
+      coverage). **Not exhaustive**: a real-device operator review of the same work found two
+      genuine text-overlap bugs in states this pass never checked (Summary tab; the tri-selector/
+      pane-button area) — tracked in issue #50 along with a larger collision-avoidance algorithm
+      spec. Leave at `[~]` until #50 is closed.
 - **Verification:** headless jsdom regression test `tests/smoke.mjs` — **28/28 assertions pass** end
       to end (mount→select ca8→counts 11/7active/2senior/4vacant→hover→majority "R 6 of 7 · majority 4",
       fold→"of 9"→drill to 10 districts→moed pane (no Justice)→back). Robust to the malformed exported
@@ -2651,9 +2677,9 @@ Prove the whole app shell and asset schema on one circuit with hand-authored sam
       + DATA_SOURCES 2026-07-18 for schema/caveats (retired-justice departure = senior_date;
       CFC departed = year-precision terminations; territorial historical = documented gap;
       51 reorganization rows flagged). Widget does not read it yet.
-- [x] **~380px mobile layout, finally eyeballed for real (issue #7, session (cp), 2026-09-07/08)**
+- [~] **~380px mobile layout, partially eyeballed for real (issue #7, session (cp), 2026-09-07/08)**
       — carried unchecked since Phase 1. Screenshotted via `tests/shoot.mjs` across national view,
-      Timeline, Majority, and a drilled-in district pane; all render cleanly, text wraps sensibly,
+      Timeline, Majority, and a drilled-in district pane; those render cleanly, text wraps sensibly,
       no overflow. Investigated two states that LOOKED broken in manual screenshots and root-caused
       both as testing artifacts, not app bugs: the Majority arc's apparent "cut off" is
       `.ctt-pane-body`'s intentional `overflow-y:auto` internal scroll (CLAUDE.md §6's fixed outer
@@ -2663,6 +2689,11 @@ Prove the whole app shell and asset schema on one circuit with hand-authored sam
       resized CDP session (not a second Chrome launch) re-evaluates the `max-width: 640px` layout
       query, then asserts the pane's overflow is real AND that scrolling it actually clears the
       last icon's position, not merely that a scrollbar exists.
+      **NOT exhaustive, corrected 2026-09-08 after operator review**: a real DevTools device-toolbar
+      pass (once `tests/visual.html` got the viewport meta tag it was missing — see below) found two
+      genuine text-overlap bugs in states this pass never checked at all — the Summary tab, and the
+      pane's tri-selector/stow-close-button area. Filed as **issue #50** along with a much larger
+      judge-icon-label collision-avoidance algorithm spec. Left at `[~]`, not `[x]`, until #50 closes.
 - [x] **Hover-only-interaction audit (issue #7)**: every hover affordance (map shapes, seat
       blocks, judge icons) already had a full `click` equivalent doing real work, not just
       cosmetic feedback — `onIconClick` already calls the same `highlightCohort()`/`showDetail()`

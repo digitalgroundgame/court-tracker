@@ -36,7 +36,23 @@ let failures = 0;
 const assert = (cond, msg) => { console.log(`  ${cond ? "✓" : "✗"} ${msg}`); if (!cond) failures++; };
 
 try {
-  for (let i = 0; i < 60; i++) { try { await (await fetch(`http://127.0.0.1:${PORT}/json/version`)).json(); break; } catch { await sleep(100); } }
+  // Chrome's CDP port has taken well over 6s to open on shared/cold GitHub Actions runners —
+  // confirmed from real CI logs (2026-09-08): three separate failures, all in this exact spot,
+  // all landing at ~6.3s (the old 60x100ms budget), all passing cleanly on an immediate re-run.
+  // 200x150ms (30s) tolerates that without slowing down the common fast-local-Chrome case, since
+  // the loop still `break`s the moment the port answers. If it genuinely never comes up, fail with
+  // an actionable message instead of falling through to a second fetch that throws a bare
+  // "fetch failed" with no indication of what actually didn't start.
+  let chromeReady = false;
+  for (let i = 0; i < 200; i++) {
+    try { await (await fetch(`http://127.0.0.1:${PORT}/json/version`)).json(); chromeReady = true; break; }
+    catch { await sleep(150); }
+  }
+  if (!chromeReady) {
+    throw new Error(`Chrome's CDP endpoint at 127.0.0.1:${PORT} never opened after 30s ` +
+      `(CHROME_BIN=${CHROME}) — check the runner has enough headroom to start Chrome, or that ` +
+      `nothing else is holding that port.`);
+  }
   const tab = await (await fetch(`http://127.0.0.1:${PORT}/json/new?${encodeURIComponent(URL_)}`, { method: "PUT" })).json();
   ws = new WebSocket(tab.webSocketDebuggerUrl);
   await new Promise((r) => (ws.onopen = r));
