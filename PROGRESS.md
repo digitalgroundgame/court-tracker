@@ -10,7 +10,7 @@
 tracker (Phase-4 tail items open, PLUS a brand-new third pane view — "Change", built session
 (aw), operator review round addressed session (ax)) and the appointments beeswarm
 (feature-complete first version, operator refinement rounds ongoing; see sessions ai→at, aw).
-**Last updated:** 2026-09-08 (cu)
+**Last updated:** 2026-09-08 (cw)
 
 ## Resume briefing
 <!-- Replaced wholesale at the end of each session — this is not an appended log, it's a
@@ -23,22 +23,24 @@ logged date. Session log entries `(bt)`-`(ce)` drifted up to +7 days ahead of th
 git-commit dates from exactly this mistake; see `CLAUDE.md` §7 and the `(cp)` 2026-09-08 entry
 below for the full incident and the corrected dates (ground truth: `git log --format=%ad`).
 
-**Next task**: issue #28 is DONE (session (cu), 2026-09-08 — see Session log). **Check
-`gh issue list`/`gh pr list` at session start before assuming what's next** — as of this writing
-the only open issues besides the parked three below are **#21** (a standing workflow doc pointer,
-not actionable work — CLAUDE.md §7 is the authoritative copy) and **#13** (the Pragmatic Papers
-epic itself, tracked via its sub-issues rather than worked directly). There is no obvious
-unparked, actionable issue left in the queue right now — re-run `gh issue list` fresh; a new issue
-or a PR review comment is the likely source of the next task.
+**Next task**: issue #50's judge-icon collision-avoidance algorithm — the ring/arc part of the
+spec (intra-/inter-ring collision resolution, the buffer-tolerance region, the icon-shrink floor).
+Two prerequisite pieces are DONE, each its own PR, **both still open for operator review as of
+this writing — check `gh pr list` before assuming either has landed**:
+- The issue's two concrete text-overlap bugs (session (cv), 2026-09-08) — including a mid-session
+  operator correction that bug 2's fix needed to apply at every width, not just mobile.
+- The general no-photo icon fallback, generalized app-wide to full distinct-name-initials
+  (session (cw), 2026-09-08) — the operator confirmed this via `AskUserQuestion` ("yes, global
+  change") and separately clarified the collision algorithm itself is intended to eventually apply
+  at both mobile AND non-mobile widths, not just crowded mobile arcs — worth remembering when
+  actually building it.
+See the Session log entries for both for the full detail; each branch is independent and can merge
+in either order.
+
+**Check `gh issue list`/`gh pr list` at session start regardless** — a newer issue or a PR review
+comment can still supersede this.
 
 **Standing/parked issues, not scheduled unless picked up explicitly**:
-- **#50** — mobile ~380px: two confirmed real text-overlap bugs (Summary > SCOTUS FedSoc key vs.
-  title; the tri-selector vs. pane stow/close buttons) plus the operator's full judge-icon
-  label collision-avoidance algorithm spec (intra-/inter-ring collision types, ring-radius
-  expansion, inter-ring distance adjustment, a looped "Step 0" full-initials fallback for
-  overflowing labels — also the new general no-photo-icon-fallback rule — and a last-resort
-  icon-shrink step down to the nearest round number to 2/3 base size). Full spec is in the issue
-  body on GitHub, not duplicated here — read it before starting.
 - **#49** — GitHub Pages blocked by an org-level policy (`digitalgroundgame` org, Free plan,
   Pages-creation likely restricted at Member privileges), not a repo-plan issue. Deliberately
   parked; keep testing against the locally-hosted server (`python3 -m http.server 8777`) in the
@@ -431,6 +433,40 @@ Prove the whole app shell and asset schema on one circuit with hand-authored sam
 - Next: ...
 - Blockers: ...
 -->
+
+### 2026-09-08 (cw) — Issue #50: no-photo icon fallback generalized to full distinct-name-initials
+- Phase: 4. Second of two prerequisite pieces for issue #50's larger collision-avoidance feature
+  (the other, bugs 1+2, is session (cv) — a separate, independent branch/PR; check `gh pr list`,
+  don't assume either has merged). The spec's "Step 0" fix (switch an overflowing label to full
+  initials) came with an aside — *"the icon lettering in profile picture-less judges will also
+  have to be changed to match this rule generally"* — flagged by the operator's own issue text as
+  a global behavior change needing confirmation before implementing, since it's broader than the
+  collision fix itself. Asked via `AskUserQuestion`; operator confirmed "yes, global change."
+- `initials()` in both `embed/court-tracker.js` and `embed/appointments-chart.js` (previously
+  two DIFFERENT first+last implementations, appointments-chart.js's missing the generational-
+  suffix fix court-tracker.js already had) now compute the initial of EVERY distinct name part in
+  given-name-first order — "John Quincy Adams" -> "JQA", not "JA" — dropping generational suffixes
+  (Jr/Sr/II/III/IV/V), which qualify a name rather than being a part of it (same convention
+  `surname()` already used). This is the app's ENTIRE no-photo fallback, not scoped to crowded
+  arcs — every call site (icon avatars, the docked detail panel's large photo box, the Change
+  view's president avatars, appointments-chart.js's own detail panel) picks it up automatically
+  since they all route through the one shared function per file.
+- Checked the real-world visual impact before shipping: 35/1490 judges (2.3%) have 4+ distinct
+  name parts. Screenshotted the worst realistic case with a real no-photo judge (Virginia Maria
+  Hernandez Covington, flmd — "VMHC", 4 letters) in a real browser at the actual 44px avatar size —
+  renders cleanly, no visual mitigation needed. (The FULL collision-avoidance algorithm's own
+  Step-3 icon-shrink mechanism is the eventual answer for anything that doesn't fit — not
+  duplicated here ahead of that work.)
+- Verification: `tests/smoke.mjs`'s existing `initials()` unit assertions updated for the new
+  behavior (`"Paul Joseph Kelly Jr."` -> `"PJK"`, not `"PK"`) plus a new 3-part-name assertion;
+  `appointments-chart.js`'s `initials()` gained its own first-ever unit coverage (now exported via
+  `_dev`). Full jsdom suite (`embed/` and `--dist`) and real-Chrome CDP checks (`embed/` and
+  `dist/`) all pass. `npm run build` run; `dist/` committed.
+- Next: the ring/arc collision-avoidance algorithm itself (intra-/inter-ring resolution, buffer
+  tolerance, icon-shrink floor) — see Resume briefing. The operator also clarified mid-session
+  that algorithm is intended to eventually apply at both mobile AND non-mobile widths, not just
+  crowded mobile arcs (nothing about that part is built yet).
+- Blockers: none.
 
 ### 2026-09-08 (cu) — Issue #28: Schema 2.0 batch (appointments typing, circuit_justices dedup, seat_blocks vocabulary unification)
 - Phase: 4 (data-contract work, not a Phase-4 checklist item). Landed the three MAJOR candidates

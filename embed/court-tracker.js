@@ -2208,14 +2208,17 @@ function surname(name) {
     .filter((p) => !/^(Jr|Sr|II|III|IV|V)\.?$/i.test(p));
   return parts[parts.length - 1] || name || "";
 }
+/** No-photo icon fallback: the initial of EVERY distinct name part, in given-name-first order —
+ *  not just first+last (issue #50: originally a "Step 0" fix for overflowing labels in crowded
+ *  arcs, generalized by the operator to the app's whole no-photo fallback, confirmed 2026-09-08 —
+ *  "John Quincy Adams" -> "JQA", not "JA"). Generational suffixes (Jr/Sr/II/...) are dropped, same
+ *  convention surname() already uses — they qualify a name, they aren't a part of it; without
+ *  that filter "Paul Joseph Kelly Jr." would read "PJKJ" (the "Jr." mistaken for a real part). */
 function initials(j) {
   const name = (j.full_name || j.display_name || "?").trim();
-  const parts = name.split(/\s+/);
-  const first = parts[0]?.[0] || "";
-  // surname() strips generational suffixes (Jr/Sr/II/...) - without it, "Paul Joseph Kelly
-  // Jr." rendered "PJ" (P from Paul, J from "Jr." mistaken for the last name) instead of "PK".
-  const last = parts.length > 1 ? surname(name)[0] || "" : "";
-  return (first + last).toUpperCase();
+  const parts = name.replace(/,/g, "").split(/\s+/)
+    .filter((p) => p && !/^(Jr|Sr|II|III|IV|V)\.?$/i.test(p));
+  return parts.map((p) => p[0] || "").join("").toUpperCase();
 }
 // Prefer the locally-cached, anti-aliased thumbnail (scripts/cache_photos.py) over hotlinking
 // `photo_url` — same photo, but pre-blurred/resized to survive downscaling to a 34-84px

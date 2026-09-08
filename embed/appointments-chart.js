@@ -88,9 +88,15 @@ function statusOf(r) {
   if (r.sitting !== true) return "departed";
   return r.senior_date ? "senior" : "active";
 }
+/** No-photo fallback: the initial of EVERY distinct name part, in given-name-first order — not
+ *  just first+last (issue #50, generalized by the operator to the app's whole no-photo fallback,
+ *  confirmed 2026-09-08 — "John Quincy Adams" -> "JQA", not "JA"; matches
+ *  court-tracker.js's own initials()). Generational suffixes (Jr/Sr/II/...) are dropped — they
+ *  qualify a name, they aren't a part of it. */
 function initials(name) {
-  const p = (name || "?").trim().split(/\s+/);
-  return ((p[0]?.[0] || "") + (p[p.length - 1]?.[0] || "")).toUpperCase();
+  const p = (name || "?").replace(/,/g, "").trim().split(/\s+/)
+    .filter((x) => x && !/^(Jr|Sr|II|III|IV|V)\.?$/i.test(x));
+  return p.map((x) => x[0] || "").join("").toUpperCase();
 }
 const short = (cid) => A.courts.get(cid)?.short_name || A.courts.get(cid)?.court_name || cid;
 // Prefer the locally-cached, anti-aliased thumbnail (scripts/cache_photos.py) — see the
@@ -990,4 +996,4 @@ export default mount;
 // Dev/test hook only — not part of the embed API.
 export const _dev = { A, layoutDots, drawAll, setSpan, packSwarm, relievePileups,
   toggleExplainer, dismissExplainer, buildExplainerOverlay, EXPLAINER_DEFAULT,
-  days, isoOfDay, ivDays };
+  days, isoOfDay, ivDays, initials };
