@@ -12,6 +12,107 @@ tracker (Phase-4 tail items open, PLUS a brand-new third pane view — "Change",
 (feature-complete first version, operator refinement rounds ongoing; see sessions ai→at, aw).
 **Last updated:** 2026-09-07
 
+> **SESSION (cs), 2026-09-07 — Harden CI / dist build / test server from PR #27's review (issue
+> #42, PR #43).**
+> - **Origin**: a post-merge review of PR #27 (CI + npm scripts + minified `dist/`, issue #5)
+> found ten follow-ups, filed as issue #42, none breaking the widget or CI as it stood but all
+> real gaps. Fixed all ten.
+> - **Two real crash bugs in `scripts/serve_and_run.mjs`**: a directory request with no
+> `index.html` (e.g. `GET /tests`) passed `statSync` but then failed asynchronously in
+> `createReadStream`, an unhandled `'error'` that killed the whole test run mid-suite; a
+> malformed `%`-escape threw from `decodeURIComponent`, which sat outside the `try`. Both are a
+> plain 404 now.
+> - **A build that could delete `dist/` on failure**: `build_embed.mjs` used to `rmSync` before
+> running esbuild, so a syntax error in `embed/` left all four `dist/` files deleted in the
+> working tree — `git add -A` would then stage their removal. Now builds into a sibling temp dir,
+> swaps it in only after both esbuild passes succeed, and cleans up the temp dir on any exit path.
+> - **CI/release gaps**: the staleness gate used `git diff --exit-code -- dist`, which only sees
+> tracked-file changes — a brand-new, never-committed bundle would sail through; switched to
+> `git status --porcelain -- dist`. The release workflow ships `dist/` in the package but nothing
+> gated it on CI passing — it now rebuilds and reverifies before tarring. `paths-ignore` added so
+> ledger-only PRs skip two headless-Chrome runs.
+> - **Test/config fixes**: `test:dist` only ever exercised the JS bundle (jsdom loads no CSS) —
+> added a structural check on the minified CSS + banner naming for all four bundles. `CT_PORT`
+> now actually propagates to the spawned test child (previously silently ignored). Build banner
+> named a nonexistent file (`court-tracker.js.min` vs. the real `court-tracker.min.js`). SPDX
+> license id corrected to `MIT`.
+> - **Verified independently, not just trusted**: ran `npm test`, `npm run build`,
+> `npm run test:dist`, both real-browser suites myself — all pass. Directly reproduced both crash
+> scenarios against a live server (`GET /tests` → 404, malformed `%`-escape → 404, server stays
+> alive) and the build-failure scenario (broke `embed/court-tracker.js` on purpose — `dist/`
+> stayed fully intact, no leftover temp dir).
+> - Retrofitted with this entry directly (opened before today's ledger-in-branch reversal).
+> - Blockers: none.
+
+> **SESSION (cp) cont'd (8), 2026-09-07 — Issue #8: untracked 59MB of one-time geometry-source
+> inputs + a stray temp file.**
+> - Untracked `data/census/` (~18MB, Census cartographic-boundary county shapefiles) and
+> `data/nps/` (~41MB, NPS Yellowstone boundary shapefile) — one-time inputs to
+> `scripts/qgis_export.py`, consumed once to produce `assets/geo/**`, never read by the widget.
+> `git rm --cached`, not a hard delete — files stay on disk here; future clones just won't carry
+> them. Re-fetch URLs (verified live via WebSearch/WebFetch, issue #4's same standard) added
+> directly to `qgis_export.py`'s `COUNTY_SHAPEFILE`/`YNP_BOUNDARY` comments.
+> - Also untracked `temp_district_layout_data.txt`, gitignored rather than deleted — mirroring the
+> existing `temp_alt_ca1_ca3.txt` precedent, since `PROGRESS.md` session (bq) documents this as
+> explicitly the operator's own working file. Verified byte-for-byte (JSON-parsed its tail, from
+> line 3747 where the arrangement data starts) that its content is fully identical to the
+> production `data/district_arrangement.json` before deciding to leave it in place rather than
+> delete it.
+> - Forward-only (`git rm --cached`), not a history rewrite — the ~59MB stays in past commits, same
+> scope as `data/cache/`'s existing exclusion, deliberately separate from the history question in
+> issue #36.
+> - **Retrofitted with this entry directly** (opened as PR #41 before the ledger-in-branch rule was
+> restored — session (cp) cont'd (7) — so it's added here rather than as a follow-up PR, to land
+> consistent with the current convention).
+> - `tests/smoke.mjs` ALL PASS; `scripts/qgis_export.py` still parses cleanly after the comment
+> edits. Operator reviewed and approved before merge.
+> - Blockers: none. **Next**: issue #2 (asset-root base-URL override).
+
+> **SESSION (cp) cont'd (7), 2026-09-07 — Folded the `PROGRESS.md` ledger entry back into feature
+> branches, reversing yesterday's fresh-branch rule.**
+> - **Origin**: tadjh (a contributor session) pointed out that since we now squash-merge, including
+> the ledger entry in the same PR as the code lets the squash commit's title (= PR title, since
+> `--squash` uses it) match the `PROGRESS.md` heading directly — one commit on `main` per session-log
+> entry, synced and browsable either place, instead of two.
+> - **Assessed honestly before adopting**: squash-merge does NOT by itself solve the original
+> collision this session (cp) hit yesterday (three branches — (cn)/(co)/(cp) — independently
+> prepending an entry at the same top-of-log line). What actually makes reverting safe is the
+> `.gitattributes` union-merge driver added alongside that original fix, already tested and proven
+> in PR #19: a same-spot collision auto-resolves instead of blocking. Squash-merge just removed the
+> justification for paying two PRs per unit of work on top of that.
+> - **`CLAUDE.md` §7 point 6 updated**: the ledger entry rides in the same branch/PR as the code
+> again; the union-merge driver is now framed as the actual mitigation (not just a backstop); PR
+> title discipline (`(letter) — Heading`, exactly matching the `PROGRESS.md` heading) reinforced,
+> since that title is literally what lands as the commit message under `--squash`. Also fixed a
+> stray inaccuracy caught while in that paragraph: it still said the repo was private, true only
+> through session (co) — corrected to note it's been public since 2026-09-06.
+> - **Retrofitting in progress**: PR #41 (issue #8), opened before this reversal, gets its own
+> `PROGRESS.md` entry added directly rather than a follow-up ledger PR, so we're consistent from
+> here on rather than half-migrated.
+> - Blockers: none.
+
+> **SESSION (cp) cont'd (6), 2026-09-07 — Adopted `--squash` merges (PR #44), first live test
+> confirmed clean.**
+> - **Origin**: tadjh (a contributor session) flagged that falling behind a fast-moving `main`
+> means merging `main` back into a branch to resolve, which — under plain `--merge` — leaves that
+> "merge main in" commit as permanent noise on `main`. We'd hit exactly this twice for real (PR
+> #14, #27). Assessed the tradeoff with the operator before touching anything: squash doesn't
+> change how a conflict gets resolved (still commit immediately, verify content, never switch
+> branches mid-resolution) — only the final `gh pr merge` flag, and it's orthogonal to the
+> fresh-ledger-branch convention (that branch is always cut fresh off whatever `main` looks like
+> after the previous merge, regardless of how that merge landed).
+> - **Operator approved; codified in `CLAUDE.md` §7 point 6** (applies uniformly to feature PRs
+> and ledger PRs). Explicitly prospective-only — existing merge commits on `main` are untouched,
+> not a history rewrite (that's issue #36's separate, unscheduled question).
+> - **First live test (this very change, PR #44)**: squash-merged and inspected the result
+> directly — single-parent commit (`git cat-file -p` confirms no merge structure), GitHub
+> auto-appended the PR number to the title, and both the `Co-Authored-By` and `Claude-Session`
+> trailers survived into the squash commit intact. The one thing worth verifying empirically,
+> verified.
+> - **Still open, awaiting operator review**: PR #41 (issue #8 — untrack 59MB of geometry-source
+> inputs + the stray temp file). Will squash-merge it too once approved, matching the new policy.
+> - Blockers: none.
+
 > **SESSION (cp) cont'd (5), 2026-09-07 — Issue #4 fixed (PR #39): recorded real download URLs
 > for the two manual bulk data inputs.**
 > - Added a section to `docs/DATA_SOURCES.md` naming exactly where `fjc_judges.csv` and

@@ -186,7 +186,8 @@ public-API policy, and `docs/DATA_SOURCES.md` for full collection methodology + 
    against the documented placeholder/stub, and continue with unblocked work.
 6. **Branch → PR → merge, never commit straight to `main`** (updated 2026-09-06, session (cp);
    supersedes the old "commit and push to main" rule from session (br)). This repo is linked to
-   `origin` = `github.com/digitalgroundgame/court-tracker` (private) and now runs on GitHub Issues
+   `origin` = `github.com/digitalgroundgame/court-tracker` (public since 2026-09-06, for GitHub
+   Pages + a branch ruleset — was private through session (co)) and now runs on GitHub Issues
    + PRs, not a bare push log. This section is the authoritative version of that policy — pinned
    issue #21 on GitHub is a human-facing pointer to it, not a second copy; if the two ever disagree,
    this file wins:
@@ -195,21 +196,36 @@ public-API policy, and `docs/DATA_SOURCES.md` for full collection methodology + 
      is whatever `PROGRESS.md` says next — an open issue or a review comment on your own PR can
      supersede it.
    - **Per unit of work**: branch off `main` as `claude/<slug>` (matches the naming already in use
-     in this repo's history). Commit CODE/DATA there only — **not** the `PROGRESS.md` ledger entry
-     (see below for why and where that goes instead). `git add -A` (check `git status` first —
-     verify nothing under `data/cache/`, `traces/`, or `node_modules/` snuck past `.gitignore`, and
-     that no unexpected file is staged).
+     in this repo's history). Commit CODE/DATA **and** that unit of work's `PROGRESS.md` ledger
+     entry together, in the same branch (reversed 2026-09-07, session (cp) — see below). `git add -A`
+     (check `git status` first — verify nothing under `data/cache/`, `traces/`, or `node_modules/`
+     snuck past `.gitignore`, and that no unexpected file is staged).
    - **Open a PR** (`gh pr create`) once the unit of work is done; reference the issue it addresses
      (`Fixes #N`) when there is one. Write the full session-log write-up (what changed, verification,
-     what's next, blockers) into the **PR description** — this is where it lives while the branch is
-     open, and it's the source text for the ledger commit below. The PR title should echo the
-     write-up's heading (e.g. `(br) — GitHub linking + auto-commit protocol`) so GitHub's PR history
-     reads as the same log as `PROGRESS.md`'s session log, browsable either place.
+     what's next, blockers) both into the **PR description** and into the `PROGRESS.md` entry itself
+     — the two should read as the same text. **Title the PR `(letter) — Heading`, matching the
+     `PROGRESS.md` entry's heading exactly** — with `--squash` (below), that title becomes the
+     commit message that actually lands on `main` (GitHub appends `(#N)`), so the PR title, the
+     landed commit, and the `PROGRESS.md` heading all stay in sync and are browsable interchangeably.
    - **Merge authority is case-by-case** (operator decision, 2026-09-06): merge routine/low-risk PRs
      yourself once clean (no CLAUDE.md boundary violations, tests pass). Leave anything touching
      data correctness, scope, or the UX contract — and any PR from a prior/different session you
      didn't just write — for the operator's explicit go-ahead; when in doubt, summarize the diff and
      ask rather than merge.
+   - **Merge with `--squash`, not `--merge`** (operator decision, 2026-09-07, adopting a contributor
+     suggestion — see `PROGRESS.md` for the full discussion). **Now server-enforced, not just
+     documented practice**: the repo's merge-method setting has `allow_merge_commit: false`, so
+     GitHub refuses a plain `--merge` outright. With multiple sessions merging into `main`
+     concurrently, a branch that falls behind needs `main` merged back into it to resolve, which
+     creates a "merge main in" commit on that branch — squashing collapses that (and every other
+     intermediate commit) into the one commit that actually lands on `main`, so conflict-resolution
+     noise never becomes permanent history. This changes nothing else about how a conflict gets
+     resolved (still commit the resolution immediately, verify content directly, never switch
+     branches mid-resolution) — only the final `gh pr merge` flag. **Prospective only**: this does
+     not mean rewriting the merge commits already on `main` to look squashed — that would be a
+     history rewrite, the
+     same risk category as issue #36, not implied by adopting this going forward. Check that the
+     `Co-Authored-By` trailer survives into the squash commit rather than assuming it does.
    - **Hard stop, stricter than the above: any change to `CLAUDE.md`, `PROGRESS.md`'s
      instance-protocol block, `INITIAL_PROMPT.md`, or any other file a session reads before doing
      work, always needs explicit operator discussion before merging** (operator decision, 2026-09-06
@@ -228,22 +244,21 @@ public-API policy, and `docs/DATA_SOURCES.md` for full collection methodology + 
      needed a new paragraph regardless.) Recognizing the implied case takes reading a PR for what
      it's establishing, not just diffing its file list — flag it and get the operator's go-ahead the
      same way as the direct case, as its own explicit step, before implementing or merging it.
-   - **The `PROGRESS.md` ledger entry is its own tiny branch → PR → merge, cut fresh at merge time**
-     (added 2026-09-06, session (cp), after (cn)/(co)/(cp) all independently prepended an entry at
-     the same top-of-log line and collided in a real 3-way merge conflict on `main`). Every session
-     writes to the identical insertion point (right after `**Last updated:**`), so bundling that edit
-     into a feature branch that might sit open for a while is what causes the collision — two
-     branches cut around the same time will always fight over that line. The fix is **not** an
-     exception that allows a direct commit to `main` (that would defeat the whole point of this
-     section) — it's doing the ledger update through the *same* branch → PR → merge discipline, just
-     on a branch with a lifespan of seconds instead of a whole session: immediately after merging the
-     code PR, branch off the now-current `main`, add only the `PROGRESS.md` entry (adapted from that
-     PR's description), push, open a PR, merge it. A branch that's created and merged in one breath
-     essentially never overlaps with another one doing the same thing.
-   - **Backstop**: `.gitattributes` sets `PROGRESS.md merge=union`, so even a genuine same-instant
-     collision (or a hand-edit while a session is mid-flight) auto-resolves by keeping both sides'
-     text instead of blocking on conflict markers — chronological ordering between two such entries
-     may need a quick manual nudge afterward, but no merge should ever get stuck on this file again.
+   - **The `PROGRESS.md` ledger entry rides in the same branch/PR as the code it describes**
+     (reversed 2026-09-07, session (cp), adopting a second contributor suggestion — supersedes the
+     "cut a fresh branch for it" rule from the day before). That rule existed because (cn)/(co)/(cp)
+     had all independently prepended an entry at the same top-of-log line and collided in a real
+     3-way conflict — but the actual fix for that collision is the `.gitattributes` union-merge
+     driver below, not the separate-branch dance, and paying two PRs per unit of work for it stopped
+     being worth it once `--squash` meant the ledger-only PR was landing as its own extra commit on
+     `main` anyway. Write the entry as part of the normal commit; if a real collision happens, the
+     union driver auto-resolves it (below) rather than blocking the merge.
+   - **`.gitattributes` sets `PROGRESS.md merge=union`** — the actual mitigation for the shared
+     top-of-log insertion point every session writes to. A same-spot collision (two branches open
+     concurrently, or a hand-edit while a session is mid-flight) auto-resolves by keeping both
+     sides' text instead of blocking on conflict markers; chronological ordering between two such
+     entries may need a quick manual nudge afterward, but no merge should ever get stuck on this
+     file. This is what makes bundling the ledger entry back into feature branches (above) safe.
    - Skip opening a PR only if there is truly nothing to commit (pure investigation, no file
      changes) — but still check issues/PRs at session start regardless.
    - **When resolving a merge conflict on someone else's PR branch, commit it before doing

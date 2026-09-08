@@ -94,6 +94,9 @@ DATA = ROOT / "data"
 # come out joined across Lake Michigan. The CB file is the same geography clipped to the
 # shoreline, with identical GEOIDs, so county_to_district.csv joins unchanged.
 # The shoreline check in validate_shoreline() will fail loudly if you point this at TIGER.
+# Re-fetch from https://www.census.gov/geographies/mapping-files/time-series/geo/cartographic-boundary.html
+# (year -> County -> 1:500,000 scale) -- verified live 2026-09-07, issue #8. data/census/ isn't
+# tracked in git (one-time input, not read at runtime) -- see .gitignore's comment.
 COUNTY_SHAPEFILE = str(DATA / "census" / "cb_2024_us_county_500k.shp")   # 2022+ vintage required
 CROSSWALK_CSV  = str(DATA / "county_to_district.csv")
 COURTS_CSV     = str(DATA / "courts.csv")
@@ -106,7 +109,9 @@ OUT_DIR        = str(DATA / "out" / "assets" / "geo")                # national.
 # border too. ~400 km^2 of MT + ID land changes district.
 #
 # Boundary source: NPS "Administrative Boundaries of National Park System Units"
-# (NGDA / NPS Land Resources Division). Filter to UNIT_CODE = 'YELL'.
+# (NGDA / NPS Land Resources Division). Filter to UNIT_CODE = 'YELL'. Re-fetch from
+# https://public-nps.opendata.arcgis.com/datasets/nps-boundary-1/explore -- verified live
+# 2026-09-07, issue #8. data/nps/ isn't tracked in git (one-time input) -- see .gitignore.
 YELLOWSTONE = True
 YNP_BOUNDARY   = str(DATA / "nps" / "nps_boundary.shp")
 YNP_UNIT_FIELD = "UNIT_CODE"
