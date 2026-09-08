@@ -528,30 +528,16 @@ try {
     `scrolling the pane to its end actually brings the last icon fully into view (${mobileScroll.overflowPxBefore}px past the fold -> ${mobileScroll.overflowPxAfter}px)`);
   assert(!mobileScroll.docOverflowsX, "no horizontal overflow anywhere on the page at 380px width");
 
-  console.log("REGRESSION (issue #50): Summary > SCOTUS FedSoc key and the tri-selector no longer overlap the title/pane buttons at mobile widths");
+  console.log("REGRESSION (issue #50): Summary > SCOTUS FedSoc key (mobile only) and the tri-selector (every width) no longer overlap the title/pane buttons");
   await ev(`document.querySelector('.ctt-selector-back')?.click()`); await sleep(500);
   await ev(`document.querySelector('.ctt-selector-item[data-court-id="summary"]').click()`); await sleep(400);
   await ev(`[...document.querySelectorAll('.ctt-mode-opt')].find(b=>b.textContent==='Supreme Court')?.click()`); await sleep(400);
-  // Sweep the full width range this media query is actually active for (a phone wide enough to
-  // exceed 640px in landscape leaves the breakpoint entirely and was never the bug) — bug 2's fix
-  // was tuned against real measurements at these exact widths, not derived from CSS constants
-  // alone (see that fix's own CSS comment for why the naive box-center calculation undershot).
-  for (const [w, h] of [[380, 700], [480, 700], [600, 700]]) {
-    await send("Emulation.setDeviceMetricsOverride", { width: w, height: h, deviceScaleFactor: 1, mobile: true });
-    await sleep(300);
+  const checkBug2 = async (w) => {
     // A tab click focuses the <button>, which Chrome's default focus-scroll behavior can nudge
     // into view within .ctt-pane-body's own scroll container — an artifact of the test's click,
     // not a real layout issue. Force it back to the top before measuring, matching what a reader
     // who simply opens Summary fresh (never scrolled) actually sees.
     await ev(`document.querySelector('.ctt-pane-body').scrollTop = 0`);
-    const bug1 = JSON.parse(await ev(`(() => {
-      const title = document.querySelector('.ctt-summary-subtitle'), meta = document.querySelector('.ctt-pane-meta'),
-        key = document.querySelector('.ctt-scotus-affil-key');
-      const t = title.getBoundingClientRect(), m = meta.getBoundingClientRect(), k = key.getBoundingClientRect();
-      return JSON.stringify({ titleBottom: t.bottom, metaBottom: m.bottom, keyTop: k.top });
-    })()`));
-    assert(bug1.keyTop >= bug1.titleBottom - 1 && bug1.keyTop >= bug1.metaBottom - 1,
-      `[${w}px] bug 1: FedSoc key sits below the title/meta (keyTop ${bug1.keyTop} vs titleBottom ${bug1.titleBottom}, metaBottom ${bug1.metaBottom})`);
     const bug2 = JSON.parse(await ev(`(() => {
       // The operator's own spec explicitly tolerates the tab's PADDED BUTTON BOX overlapping the
       // close/stow circles — only the actual glyph pixels touching is the real bug ("some overlap
@@ -570,6 +556,33 @@ try {
     })()`));
     assert(!bug2.closeOverlap && !bug2.stowOverlap,
       `[${w}px] bug 2: the tri-selector's last tab does not overlap the close/stow buttons`);
+  };
+  // Bug 1's fix is mobile-only (the FedSoc key shares the desktop title's header band on purpose
+  // — see the "sits right-aligned in the SAME horizontal band" check earlier in this file, which
+  // asserts the OPPOSITE at desktop width); bug 2's fix applies at every width per the operator
+  // (2026-09-08) — sweep the mobile breakpoint's own range (a phone wide enough to exceed 640px in
+  // landscape leaves it entirely) plus two ordinary desktop widths, checking bug 2 at all five and
+  // bug 1 only within the breakpoint.
+  for (const [w, h] of [[380, 700], [480, 700], [600, 700]]) {
+    await send("Emulation.setDeviceMetricsOverride", { width: w, height: h, deviceScaleFactor: 1, mobile: true });
+    await sleep(300);
+    await ev(`document.querySelector('.ctt-pane-body').scrollTop = 0`);
+    const bug1 = JSON.parse(await ev(`(() => {
+      const title = document.querySelector('.ctt-summary-subtitle'), meta = document.querySelector('.ctt-pane-meta'),
+        key = document.querySelector('.ctt-scotus-affil-key');
+      const t = title.getBoundingClientRect(), m = meta.getBoundingClientRect(), k = key.getBoundingClientRect();
+      return JSON.stringify({ titleBottom: t.bottom, metaBottom: m.bottom, keyTop: k.top });
+    })()`));
+    assert(bug1.keyTop >= bug1.titleBottom - 1 && bug1.keyTop >= bug1.metaBottom - 1,
+      `[${w}px] bug 1: FedSoc key sits below the title/meta (keyTop ${bug1.keyTop} vs titleBottom ${bug1.titleBottom}, metaBottom ${bug1.metaBottom})`);
+    await checkBug2(w);
+  }
+  await send("Emulation.clearDeviceMetricsOverride");
+  await sleep(300);
+  for (const w of [900, 1180]) {
+    await send("Emulation.setDeviceMetricsOverride", { width: w, height: 800, deviceScaleFactor: 1, mobile: false });
+    await sleep(300);
+    await checkBug2(w);
   }
   await send("Emulation.clearDeviceMetricsOverride");
 } catch (e) { console.log("*** ", e.message); failures++; }
