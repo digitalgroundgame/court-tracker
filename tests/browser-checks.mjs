@@ -62,7 +62,18 @@ try {
     const p = pending.get(m.id);
     if (p) { pending.delete(m.id); m.error ? p.rej(new Error(m.error.message)) : p.res(m.result); }
   };
-  await send("Runtime.enable"); await sleep(2800);
+  await send("Runtime.enable");
+  // Same class of problem as the CDP-port wait above, caught the same way (2026-09-08): a FIXED
+  // 2800ms here assumed the app finishes its first fetch+render in that window, which held
+  // locally but not on a cold/shared Actions runner -- confirmed live, this exact assertion is
+  // what failed first when the fixed sleep ran out early. Poll for the actual element instead of
+  // guessing a bigger fixed number.
+  let mounted = false;
+  for (let i = 0; i < 100; i++) {
+    if (await ev(`!!document.querySelector('.ctt-block[data-court-id="ca8"] .ctt-sq')`)) { mounted = true; break; }
+    await sleep(150);
+  }
+  if (!mounted) throw new Error("app never rendered ca8's seat block after 15s -- did mount() throw? check for a PAGE ERROR line above.");
 
   console.log("seat-block squares are the same on-screen size in every view");
   const natEdge = await ev(`document.querySelector('.ctt-block[data-court-id="ca8"] .ctt-sq').getBoundingClientRect().width`);

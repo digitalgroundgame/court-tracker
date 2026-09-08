@@ -72,6 +72,13 @@ tracker (Phase-4 tail items open, PLUS a brand-new third pane view — "Change",
 >   (30s, still `break`s immediately once ready so the common fast case is untouched) and replaced
 >   the silent fall-through into a second doomed fetch with an actionable error naming the port and
 >   `CHROME_BIN`.
+>   3. **That fix alone wasn't the whole story** — pushed it, watched real CI, and a DIFFERENT
+>   assertion failed first this time (`.ctt-block[data-court-id="ca8"] .ctt-sq` → `undefined`, the
+>   very first thing the suite checks). Same class of bug, one step later: a FIXED
+>   `await sleep(2800)` right after `Runtime.enable`, assuming the app finishes its first
+>   fetch+render inside that window — true locally, not guaranteed on the same cold/shared runner.
+>   Replaced it with a real poll for that exact element (up to 15s), same pattern as the CDP-port
+>   fix, rather than just guessing a bigger fixed number a second time.
 > - Blockers: none. **Next**: issue #6 (destroy()/unmount() for SPA-style embedding); issue #50
 > (the mobile overlap bugs + collision-avoidance algorithm) whenever picked up.
 
