@@ -11,6 +11,7 @@ tracker (Phase-4 tail items open, PLUS a brand-new third pane view — "Change",
 (aw), operator review round addressed session (ax)) and the appointments beeswarm
 (feature-complete first version, operator refinement rounds ongoing; see sessions ai→at, aw).
 **Last updated:** 2026-09-08 (cw)
+**Last updated:** 2026-09-08 (cv)
 
 ## Resume briefing
 <!-- Replaced wholesale at the end of each session — this is not an appended log, it's a
@@ -36,6 +37,18 @@ this writing — check `gh pr list` before assuming either has landed**:
   actually building it.
 See the Session log entries for both for the full detail; each branch is independent and can merge
 in either order.
+**Next task**: issue #50's judge-icon collision-avoidance algorithm — the large feature spec still
+open in that issue (its two concrete text-overlap bugs are DONE, session (cv), 2026-09-08 — see
+Session log). **Before implementing**, the operator needs to confirm one specific sub-point: the
+spec's "Step 0" label-overflow fix also wants to replace the general no-photo icon fallback
+(`initials()` in `embed/court-tracker.js`, used everywhere in the app, not just crowded arcs) with
+a "full distinct-name-initials" computation — the issue's own text flags this as a global behavior
+change broader than the collision fix itself and asks to confirm it's really wanted before
+building it. Surface that question before starting the algorithm work; don't decide it
+unilaterally. The spec also names several open implementation choices to make and document in the
+PR rather than block on (exact buffer-tolerance size, the 2/3-base-size rounding convention, what
+counts as a "distinct name part" for suffixes like Jr./III) — read the full spec in the issue body
+on GitHub, not duplicated here.
 
 **Check `gh issue list`/`gh pr list` at session start regardless** — a newer issue or a PR review
 comment can still supersede this.
@@ -85,6 +98,24 @@ comment can still supersede this.
   `embed/court-tracker.js` now sets `j.full_name = j.justice_name` right after fetch, so
   `makeIcon`/`initials`/`showDetail` etc. all keep working unchanged). Same shape for any future
   "this field left the contract but the reference renderer still wants it" situation.
+- **Measuring "does text overlap a fixed UI element" needs the text's own rect, not its container's
+  padded box** (session (cv), issue #50 bug 2): a button's full `getBoundingClientRect()` includes
+  padding the operator's own "some overlap is acceptable, only text-touching is the bug" standard
+  explicitly tolerates. `document.createRange().selectNodeContents(el).getBoundingClientRect()`
+  gives the tight box around the actually-rendered glyphs instead — use that pattern for any
+  future "does the text touch X" regression check, not the element's own outer rect.
+- **A CSS fix "derived from fixed constants" (box positions/sizes) can still be wrong once text
+  wrapping is involved** (session (cv), issue #50 bug 2): a pure box-center calculation
+  (`.ctt-pane-close`'s position/size vs. the tri-selector's margin) gave the right direction but
+  undershot, because a wrapped 2-line tab centers its text within its own taller box — shifting
+  the box's top by N px doesn't move centered text down by N px. When text wrapping is in play,
+  verify the actual fix empirically in a real browser (measuring the text's own rect, per the
+  point above) rather than trusting arithmetic on box constants alone.
+- **Issue #21 (pinned GitHub issue, standing git workflow) needs periodic refreshing** — it's a
+  human-facing pointer to `CLAUDE.md` §7.6, not auto-synced, and had gone stale within 48 hours
+  of a policy reversal (PR #46) during the 2026-09-07/08 workflow-churn stretch. Refreshed session
+  (cv), 2026-09-08, cross-referenced against real PR numbers — worth a periodic check whenever a
+  session touches the git-workflow section of `CLAUDE.md` again.
 
 ## Phase 0 — Scaffold & contracts  ✅ DONE (2026-07-10)
 - [x] Create repo skeleton per `CLAUDE.md` §Repo map; confirm `index.html` loads an empty shell.
@@ -467,6 +498,59 @@ Prove the whole app shell and asset schema on one circuit with hand-authored sam
   that algorithm is intended to eventually apply at both mobile AND non-mobile widths, not just
   crowded mobile arcs (nothing about that part is built yet).
 - Blockers: none.
+### 2026-09-08 (cv) — Issue #21 refreshed; issue #50's two mobile-380px bugs fixed (feature spec still open)
+- Phase: 4. Refreshed the pinned issue #21 (GitHub) — it still described the fresh-ledger-branch
+  convention PR #46 reversed the day before (2026-09-08), among other drift. Rebuilt it from
+  `CLAUDE.md` §7.6 (the authoritative text) plus `PROGRESS.md`'s own session-log history,
+  cross-referenced against real PR numbers: #17 (original formalization), #19/#20 (the 3-way
+  ledger-conflict fix, since superseded), #26 (the "implied core-file change" example the hard-stop
+  rule cites), #30 (the commit-immediately-on-conflict caution), #32/#33 (the core-protocol-file
+  hard stop + its implied-change clarification), #43 (the squash-title `gh pr edit --title`
+  gotcha), #44/#45 (adopted `--squash`, a suggestion from contributor @tadjh), #46 (reversed #19).
+  No repo file changed — a GitHub issue body isn't tracked in git, so nothing to commit/PR for it.
+- Issue #50: fixed the two concrete, reproducible bugs (NOT the larger judge-icon
+  collision-avoidance feature spec in the same issue — see Resume briefing; that part is still
+  open and has its own explicit "confirm before implementing" gate from the operator).
+  - **Bug 1** (Summary > SCOTUS FedSoc key overlapping the title at ~380px): the key's desktop
+    `position:absolute; top:8px; right:0` placement (deliberately sharing the title's header band)
+    runs into the title once the panel is narrow enough that the title's own text reaches that
+    far right. Mobile-only override drops it to `position:static`, flowing onto its own line right
+    after the title/meta instead.
+  - **Bug 2** (the Supreme Court/Appellate/District tri-selector overlapping the pane's stow/close
+    buttons — **every width**, per an operator mid-session correction: the original fix went into
+    the mobile media query only, but the ask was for all orientations): harder than the issue's
+    own literal numbers suggested. The operator's "align the selector's top with the button's
+    vertical center" gave the right DIRECTION (+8px) but not enough MARGIN once measured for real:
+    a wrapped 2-line tab centers its text within its own taller box, so an 8px shift of the box's
+    top doesn't move the (centered) text down by the same 8px. Real-browser measurement (a DOM
+    `Range` around the tab's actual text — not its full padded button box, since the operator's own
+    spec explicitly tolerates padding/background overlap and only glyph-touching is the real bug)
+    showed the naive calculation left ~1px of genuine text-vs-button overlap at 380/480px; tuned to
+    +14px empirically in `.ctt-summary-switch`'s BASE rule (not the mobile media query), verified
+    with a several-px safety margin across both the mobile breakpoint's full range (380/480/600px)
+    and two ordinary desktop widths (900/1180px). Confirmed visually too (manual CDP screenshots
+    at both a mobile and a desktop width), not just by the geometry assertions.
+    `.ctt-pane-body > .ctt-summary-content`'s existing `flex:1 1 auto` already absorbs the extra
+    height (no manual margin-redistribution needed), and since the tri-selector is shared across
+    all three Summary sub-tabs, the SCOTUS/District pixel-parity invariant (sessions (cb)/(cc)/(cl))
+    is unaffected regardless of how tall it ends up being. Bug 1 stays mobile-only by design — the
+    FedSoc key deliberately shares the desktop title's header band, and an existing
+    `browser-checks.mjs` assertion already covers that desktop behavior on purpose.
+  - Verification: `tests/browser-checks.mjs` gained a permanent regression section (bug 1 checked
+    at 380/480/600px, bug 2 at 380/480/600/900/1180px). Full jsdom suite (`embed/` and `--dist`)
+    and real-Chrome CDP checks (`embed/` and `dist/`) all pass.
+- The feature spec's confirm-before-implementing gate was resolved mid-session: the operator
+  confirmed (2026-09-08) the no-photo icon fallback SHOULD become a global "full distinct-name-
+  initials" change (e.g. "John Quincy Adams" -> "JQA", not "JA"), and clarified the collision-
+  avoidance algorithm itself is intended to eventually apply at both mobile and non-mobile widths
+  too (worth remembering when that part is actually built — nothing about it has been implemented
+  yet beyond this initials groundwork). See the next session-log entry for the initials() change
+  itself (separate branch/PR from this one).
+- Next: the full ring/arc collision-avoidance algorithm (intra-/inter-ring resolution, the
+  buffer-tolerance region, icon-shrink floor) — see Resume briefing.
+- Blockers: none remaining on issue #50 that need operator input; the algorithm's own open
+  implementation choices (exact buffer size, 2/3-base-size rounding convention, what counts as a
+  "distinct name part" for a suffix) are flagged in the issue as choices to document, not gates.
 
 ### 2026-09-08 (cu) — Issue #28: Schema 2.0 batch (appointments typing, circuit_justices dedup, seat_blocks vocabulary unification)
 - Phase: 4 (data-contract work, not a Phase-4 checklist item). Landed the three MAJOR candidates
