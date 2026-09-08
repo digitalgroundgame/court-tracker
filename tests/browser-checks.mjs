@@ -585,6 +585,63 @@ try {
     await checkBug2(w);
   }
   await send("Emulation.clearDeviceMetricsOverride");
+
+  console.log("issue #50: judge-icon collision avoidance");
+  await ev(`document.querySelector('.ctt-pane-close')?.click()`); await sleep(300);
+  {
+    // Step 0: a name that would render as two wrapped lines under its icon (Nitza Ileana
+    // Quiñones Alejandro, paed — the longest display_name in the current dataset) switches to
+    // its full distinct-name-initials instead, on ANY width — nothing here is mobile-gated.
+    await ev(`document.querySelector('.ctt-selector-item[data-court-id="ca3"]')?.click()`); await sleep(500);
+    await ev(`document.querySelector('.ctt-drill')?.click()`); await sleep(1800);
+    await ev(`document.querySelector('.ctt-selector-item[data-court-id="paed"]')?.click()`); await sleep(600);
+    await ev(`[...document.querySelectorAll(".ctt-toggle")].find(b => b.textContent === "Majority")?.click()`); await sleep(700);
+    const step0 = await ev(`(() => {
+      const node = [...document.querySelectorAll('.ctt-judge')].find(n => /Quiñones/.test(n._judge?.full_name || ''));
+      if (!node) return JSON.stringify({ found: false });
+      const label = node.querySelector('.ctt-judge-label');
+      return JSON.stringify({ found: true, text: label.textContent,
+        lines: Math.round(label.getBoundingClientRect().height / 12) });
+    })()`);
+    const s0 = JSON.parse(step0);
+    assert(s0.found, "the longest real display_name in the dataset (paed) is on the bench to check");
+    assert(s0.text === "NIQA", `Step 0 swapped the would-wrap label to full distinct-name-initials (got "${s0.text}")`);
+
+    console.log("  no label overlaps a neighboring icon by more than a small buffer, on a large real bench (paed, desktop)");
+    const overlapReport = await ev(`(() => {
+      const icons = [...document.querySelectorAll('.ctt-judge-stage .ctt-judge')]
+        .filter(n => !n.classList.contains('ctt-vacant') && !n.classList.contains('ctt-justice'));
+      let worst = 0;
+      for (const a of icons) {
+        const lr = a.querySelector('.ctt-judge-label').getBoundingClientRect();
+        for (const b of icons) {
+          if (a === b) continue;
+          const br = b.querySelector('.ctt-avatar').getBoundingClientRect();
+          const ox = Math.min(lr.right, br.right) - Math.max(lr.left, br.left);
+          const oy = Math.min(lr.bottom, br.bottom) - Math.max(lr.top, br.top);
+          if (ox > 0 && oy > 0) worst = Math.max(worst, Math.min(ox, oy));
+        }
+      }
+      return worst;
+    })()`);
+    // A generous ceiling, not a tight one: this asserts the algorithm keeps residual overlap
+    // SMALL (no egregious text-buried-in-a-neighboring-icon case), not that it hits zero — the
+    // spec's own Step 3 stops at a size floor and accepts the best result found, so a few px of
+    // buffer-tolerated overlap on a genuinely crowded real bench is expected, not a regression.
+    assert(overlapReport < 12, `worst remaining label/icon overlap stays small (${overlapReport}px)`);
+  }
+
+  console.log("  a resize after initial mount doesn't leave Summary > SCOTUS's ring wrongly stuck on initials (regression: stale-transform double-scaling bug)");
+  await ev(`document.querySelector('.ctt-selector-back')?.click()`); await sleep(400);
+  await ev(`document.querySelector('.ctt-selector-item[data-court-id="summary"]')?.click()`); await sleep(600);
+  await send("Emulation.setDeviceMetricsOverride", { width: 380, height: 900, deviceScaleFactor: 1, mobile: true });
+  await sleep(500);
+  const scotusAfterResize = await ev(`JSON.stringify([...document.querySelectorAll('.ctt-judge-stage .ctt-judge:not(.ctt-vacant)')]
+    .map(n => n.querySelector('.ctt-judge-label').textContent))`);
+  const labels = JSON.parse(scotusAfterResize);
+  assert(labels.includes("Gorsuch") && labels.includes("Kagan"),
+    `a resize to 380px doesn't force SCOTUS's short surnames to initials when they fit fine (got ${JSON.stringify(labels)})`);
+  await send("Emulation.clearDeviceMetricsOverride");
 } catch (e) { console.log("*** ", e.message); failures++; }
 finally { try { ws && ws.close(); } catch {} chrome.kill(); }
 

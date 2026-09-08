@@ -10,7 +10,7 @@
 tracker (Phase-4 tail items open, PLUS a brand-new third pane view — "Change", built session
 (aw), operator review round addressed session (ax)) and the appointments beeswarm
 (feature-complete first version, operator refinement rounds ongoing; see sessions ai→at, aw).
-**Last updated:** 2026-09-08 (cw)
+**Last updated:** 2026-09-08 (cx)
 
 ## Resume briefing
 <!-- Replaced wholesale at the end of each session — this is not an appended log, it's a
@@ -23,20 +23,10 @@ logged date. Session log entries `(bt)`-`(ce)` drifted up to +7 days ahead of th
 git-commit dates from exactly this mistake; see `CLAUDE.md` §7 and the `(cp)` 2026-09-08 entry
 below for the full incident and the corrected dates (ground truth: `git log --format=%ad`).
 
-**Next task**: issue #50's judge-icon collision-avoidance algorithm itself — the ring/arc part of
-the spec (intra-/inter-ring collision resolution, the buffer-tolerance region, the icon-shrink
-floor). Both prerequisite pieces are DONE and merged: the issue's two concrete text-overlap bugs
-(session (cv), 2026-09-08 — includes a mid-session operator correction that bug 2's fix needed to
-apply at every width, not just mobile) and the general no-photo icon fallback generalized to full
-distinct-name-initials (session (cw), 2026-09-08 — operator confirmed via `AskUserQuestion`,
-"yes, global change"). See those two Session log entries for the full detail.
-
-The operator has also confirmed the collision-avoidance algorithm itself is intended to
-**eventually apply at both mobile AND non-mobile widths**, not just crowded mobile arcs — build it
-that way from the start rather than mobile-first. The spec names several open implementation
-choices to make and document in the PR rather than block on (exact buffer-tolerance size, the
-2/3-base-size rounding convention, what counts as a "distinct name part" for suffixes like
-Jr./III) — read the full spec in the issue body on GitHub, not duplicated here.
+**Next task**: issue #50's ring/arc collision-avoidance algorithm is DONE (session (cx),
+2026-09-08 — PR open for operator review, check `gh pr list`). If it's merged by the time you
+read this, there's no obvious next task on issue #50 — re-check `gh issue list` fresh. If it's
+still open, don't start a second implementation; review the existing PR's diff/description first.
 
 **Check `gh issue list`/`gh pr list` at session start regardless** — a newer issue or a PR review
 comment can still supersede this.
@@ -104,6 +94,25 @@ comment can still supersede this.
   of a policy reversal (PR #46) during the 2026-09-07/08 workflow-churn stretch. Refreshed session
   (cv), 2026-09-08, cross-referenced against real PR numbers — worth a periodic check whenever a
   session touches the git-workflow section of `CLAUDE.md` again.
+- **Measuring a `.ctt-judge` icon's label geometry needs `measureLabelNatural()` (issue #50,
+  session (cx)), never a bare `label.getBoundingClientRect()`** — two real, confirmed bugs found
+  building the collision-avoidance algorithm, both now fixed by that one helper:
+  1. `.ctt-judge` carries `transition: transform 480ms ...`. Clearing `node.style.transform` to
+     read the label's UNSCALED size doesn't apply instantly — it *animates* — so a synchronous
+     read right after still reflects the OLD (scaled) box for that whole tick. Fix: toggle the
+     existing `.ctt-no-transition` class (the same one `handoff()` already uses for the identical
+     "read true geometry now, not mid-transition" need) around the read, with an `offsetWidth`
+     flush on each side.
+  2. `.ctt-judge-label` is a plain block div, so it takes its PARENT's full 52px width regardless
+     of how short the text is — `getBoundingClientRect().width` on the label itself is a
+     near-constant ~52px for every judge, not a text-length signal at all. Fix: a
+     `document.createRange().selectNodeContents(label).getBoundingClientRect()` around the text
+     gives the tight glyph box instead (same technique issue #50's own bug-2 fix already
+     established in `tests/browser-checks.mjs`). `rect.height` stays reliable on its own — a block
+     genuinely grows its OWN height to fit wrapped content, so line-count detection needed no fix.
+  Both were caught only by testing a REAL resize-after-mount scenario in an actual browser, not by
+  a fresh-mount-only check — worth remembering as a testing pattern for any future icon-geometry
+  work: mount at one width, then resize, don't just test fresh mounts at each width in isolation.
 
 ## Phase 0 — Scaffold & contracts  ✅ DONE (2026-07-10)
 - [x] Create repo skeleton per `CLAUDE.md` §Repo map; confirm `index.html` loads an empty shell.
@@ -452,6 +461,55 @@ Prove the whole app shell and asset schema on one circuit with hand-authored sam
 - Next: ...
 - Blockers: ...
 -->
+
+### 2026-09-08 (cx) — Issue #50: judge-icon ring/arc collision-avoidance algorithm
+- Phase: 4. The last piece of issue #50 — the operator's own multi-step ring/arc
+  collision-avoidance spec (both prerequisite pieces, the two mobile-380px bugs and the global
+  no-photo-initials generalization, were already merged — see the (cv)/(cw) entries below).
+  Surveyed real data BEFORE writing any algorithm code: a real bench (ca9, 29 active judges) at
+  desktop width already had 16 real label-vs-neighbor-icon overlaps under the EXISTING
+  `planRings()`/`S_MIN` icon-spacing system, which only ever guaranteed icon-CENTER spacing, never
+  accounted for LABEL extent — this confirmed the operator's concern was real, pervasive (not a
+  narrow mobile edge case), and worth building for.
+- Implemented, following the spec's own step structure: **Step 0** (a label that wraps to 2 lines,
+  or substantially overflows its icon's width on one line, switches to the full-distinct-initials
+  fallback issue #50's earlier `initials()` generalization already provides) runs in BOTH Timeline
+  and Majority views, always re-derived from `display_name` fresh (never sticky) so it re-evaluates
+  correctly across repeated layout calls. **Steps 1/2** (uniform ring-radius growth for intra-ring
+  collisions, then non-uniform inter-ring gap adjustment anchored at the centermost ring) apply to
+  the general N-seat arc (`layoutArc`, every court except SCOTUS). **Step 3** (icon-shrink to a
+  2/3-of-base floor, re-running 0/1/2 at each size, keeping the best result) applies to both
+  `layoutArc` and Summary > SCOTUS's own hand-tuned ring formula (`layoutScotusRing`) — Steps 1/2
+  deliberately don't touch SCOTUS's ring, to avoid fighting its existing icon-to-icon non-overlap
+  clamps. Nothing here is gated behind a viewport-width media query — confirmed working identically
+  at 380/480/desktop widths, per the operator's mid-session clarification that the algorithm should
+  apply at both mobile and non-mobile from the start.
+- Several specifics were genuinely left open by the spec (buffer-tolerance size, the "substantially
+  overflows" width factor, the 2/3-floor rounding convention, which ring is "centermost" for an
+  even ring count, and how to treat the hover-driven "highlighted icon" exception given this is a
+  static layout-time algorithm) — made reasonable documented choices for each rather than blocking;
+  full reasoning lives in the code comments directly above `COLLISION_BUFFER_PX` in
+  `embed/court-tracker.js`, not duplicated here.
+- **Two real, confirmed measurement bugs found and fixed while verifying against real courts in a
+  real browser** (a fresh-mount-only test plan never would have caught either — see the
+  Conventions entry above for the technical detail): (1) `.ctt-judge`'s own CSS transition made a
+  same-tick "clear the transform, measure, restore" trick read stale (still-scaled) geometry,
+  which on a resize-after-mount left SCOTUS's entire ring wrongly stuck showing bare initials at
+  widths where every surname genuinely fit fine; (2) `.ctt-judge-label`'s box width is a
+  near-constant ~52px regardless of text length (a plain block takes its parent's full width), so
+  measuring the label's own rect instead of its actual text content made the "substantially
+  overflows" check fire on icon SCALE alone, unrelated to the judge's actual name length. Both
+  fixed by one new shared helper, `measureLabelNatural()`.
+- Verification: `tests/browser-checks.mjs` gained a permanent section — Step 0 on the real
+  longest-name judge in the dataset (paed's Nitza Ileana Quiñones Alejandro, confirmed swapped to
+  "NIQA"), a bounded-residual-overlap check on a large real bench (paed, desktop — worst overlap
+  stays under a generous ceiling, not required to hit exactly zero per the spec's own "buffer
+  tolerance" and Step-3 best-effort framing), and a dedicated resize-after-mount regression test
+  locking in bug (1) above. Full jsdom suite (`embed/` and `--dist`) and real-Chrome CDP checks
+  (`embed/` and `dist/`) all pass — no regressions in any pre-existing geometry assertion.
+- Next: no obvious follow-up task on issue #50 itself — see Resume briefing. Re-check
+  `gh issue list` fresh next session.
+- Blockers: none.
 
 ### 2026-09-08 (cw) — Issue #50: no-photo icon fallback generalized to full distinct-name-initials
 - Phase: 4. Second of two prerequisite pieces for issue #50's larger collision-avoidance feature
