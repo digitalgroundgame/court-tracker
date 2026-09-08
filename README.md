@@ -66,6 +66,22 @@ repo root: both copies resolve their assets as `new URL("../", import.meta.url)`
 either one find `data/`, `assets/geo/` and `assets/photos/`. The second widget embeds identically
 (`appointments-chart[.min].{js,css}` into `<div id="appointments-chart-root">`).
 
+**Serving the script from elsewhere than the data?** (e.g. the script on a CDN, `data/`/`assets/`
+on your own origin) — override the asset root, either declaratively:
+```html
+<div id="court-tracker-root" data-asset-root="https://data.example.org/court-tracker/"></div>
+```
+or programmatically, if you're calling `mount()` yourself instead of relying on auto-mount:
+```js
+import { mount } from "./court-tracker.js";
+mount(document.getElementById("court-tracker-root"), { assetRoot: "https://data.example.org/court-tracker/" });
+```
+The `mount()` argument wins if both are set. Either form accepts a relative path too (resolved
+against the *host page's* location, not the script's) — e.g. `data-asset-root="/court-data/"`.
+Leave it unset for the default: everything resolves relative to the script's own URL, as above.
+Cross-origin hosting needs the data host to send CORS headers, since every asset load is a
+`fetch`. No code change either way — still a data/config-only knob.
+
 ## Development (tests and build)
 ```
 npm install            # dev-only deps: jsdom (headless smoke) + esbuild (minifier)
