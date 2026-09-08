@@ -376,7 +376,28 @@
 .ctt-affil-opt:last-of-type, .ctt-mode-opt:last-of-type { border-radius: 0 6px 6px 0; }
 /* Summary pane: a larger-than-usual SCOTUS|Appellate|District switch (operator ask) — same
    segmented-control shape as .ctt-mode-switch, sized up. */
-.ctt-summary-switch { margin: 4px 0 14px; width: 100%; }
+/* Issue #50 bug 2 (operator ask, 2026-09-08: applies at every width, not just the mobile
+   breakpoint below): the selector's OWN top offset from the pane's top edge is fixed
+   (.ctt-pane-body's 12px top padding + this element's own margin-top) regardless of viewport
+   width — it visibly collides with the close (×)/stow (▲) circles once a tab's TEXT (not just its
+   padded button box — the operator's own spec explicitly tolerates box/padding overlap, only
+   glyph pixels touching the button is the real bug) reaches down far enough to meet the circles'
+   fixed vertical range (.ctt-pane-close: top:8px, 32px diameter, so its bottom edge sits at a
+   fixed 40px from the pane's top). The operator's own "align the selector's top with the button's
+   vertical center" spec (~+8px from a pure box-center calculation) was the right DIRECTION but
+   not enough MARGIN once actually measured in a real browser: a tab that wraps to 2 lines centers
+   that text within its own (much taller) box, so an 8px shift of the box's top doesn't move a
+   CENTERED text block down by the same 8px. Tuned empirically instead (a fixed calculation would
+   need the exact wrapped-line-count/box-height relationship, which itself varies by width) to
+   +14px over the original 4px margin-top, verified with a several-px clearance margin across the
+   full width range — 380/480/600/900/1180px (both wrapped-2-line mobile tabs and single-line
+   desktop ones) — tests/browser-checks.mjs. Taken half from the existing bottom margin (14px ->
+   4px) and half as real net growth: `.ctt-pane-body > .ctt-summary-content`'s own
+   `flex: 1 1 auto` (see that rule's comment) already shrinks to absorb whatever height this
+   selector ends up needing, and since the selector is SHARED by all three Summary sub-tabs,
+   growing it shifts SCOTUS's and District's content down by the identical amount — their
+   pixel-parity with each other (session (cb)/(cc)/(cl) — see PROGRESS.md) is unaffected. */
+.ctt-summary-switch { margin: 18px 0 4px; width: 100%; }
 .ctt-summary-switch .ctt-mode-opt {
   font-size: 17px; font-weight: 650; padding: 14px 20px; flex: 1 1 0;
 }
@@ -746,4 +767,9 @@
   .ctt-title-row { flex-wrap: wrap; row-gap: 6px; }
   .ctt-search { width: 100%; max-width: none; }
   .ctt-search-results { left: 0; right: 0; width: auto; max-width: none; }
+  /* Issue #50 bug 1: at this width the FedSoc key's absolute top:8px/right:0 placement (desktop's
+     "same header band as the title" — see the base rule's own comment) runs into the title text,
+     since the title now spans much more of the narrower panel width. Drop the key to its own
+     line, in normal flow right after the title/meta, instead of floating over them. */
+  .ctt-scotus-affil-key { position: static; justify-content: flex-end; margin: 2px 0 4px; }
 }
