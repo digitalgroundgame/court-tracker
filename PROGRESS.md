@@ -12,6 +12,29 @@ tracker (Phase-4 tail items open, PLUS a brand-new third pane view — "Change",
 (feature-complete first version, operator refinement rounds ongoing; see sessions ai→at, aw).
 **Last updated:** 2026-09-07
 
+> **SESSION (cp) cont'd (7), 2026-09-07 — Folded the `PROGRESS.md` ledger entry back into feature
+> branches, reversing yesterday's fresh-branch rule.**
+> - **Origin**: tadjh (a contributor session) pointed out that since we now squash-merge, including
+> the ledger entry in the same PR as the code lets the squash commit's title (= PR title, since
+> `--squash` uses it) match the `PROGRESS.md` heading directly — one commit on `main` per session-log
+> entry, synced and browsable either place, instead of two.
+> - **Assessed honestly before adopting**: squash-merge does NOT by itself solve the original
+> collision this session (cp) hit yesterday (three branches — (cn)/(co)/(cp) — independently
+> prepending an entry at the same top-of-log line). What actually makes reverting safe is the
+> `.gitattributes` union-merge driver added alongside that original fix, already tested and proven
+> in PR #19: a same-spot collision auto-resolves instead of blocking. Squash-merge just removed the
+> justification for paying two PRs per unit of work on top of that.
+> - **`CLAUDE.md` §7 point 6 updated**: the ledger entry rides in the same branch/PR as the code
+> again; the union-merge driver is now framed as the actual mitigation (not just a backstop); PR
+> title discipline (`(letter) — Heading`, exactly matching the `PROGRESS.md` heading) reinforced,
+> since that title is literally what lands as the commit message under `--squash`. Also fixed a
+> stray inaccuracy caught while in that paragraph: it still said the repo was private, true only
+> through session (co) — corrected to note it's been public since 2026-09-06.
+> - **Retrofitting in progress**: PR #41 (issue #8), opened before this reversal, gets its own
+> `PROGRESS.md` entry added directly rather than a follow-up ledger PR, so we're consistent from
+> here on rather than half-migrated.
+> - Blockers: none.
+
 > **SESSION (cp) cont'd (6), 2026-09-07 — Adopted `--squash` merges (PR #44), first live test
 > confirmed clean.**
 > - **Origin**: tadjh (a contributor session) flagged that falling behind a fast-moving `main`
