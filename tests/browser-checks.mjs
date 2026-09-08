@@ -52,6 +52,32 @@ try {
   const natEdge = await ev(`document.querySelector('.ctt-block[data-court-id="ca8"] .ctt-sq').getBoundingClientRect().width`);
   assert(Math.abs(natEdge - 6.5) < 0.6, `national square edge ~6.5px (got ${natEdge?.toFixed?.(2)})`);
   await ev(`document.querySelector('.ctt-selector-item[data-court-id="ca8"]').click()`); await sleep(500);
+
+  // Issue #7 audit: cohort highlight + the judge detail box must be reachable by a bare CLICK
+  // alone, with NO preceding mouseenter/hover event ever dispatched — this whole file never
+  // simulates hover anywhere, so if this passes, tap-only reachability holds for real, not just
+  // by code inspection. onIconClick() calls the same highlightCohort()/showDetail() a hover would,
+  // then additionally pins the panel — verified directly rather than trusted from reading the code.
+  console.log("judge-icon detail box + same-president cohort highlight are reachable by click alone, no hover needed");
+  const firstJudge = JSON.parse(await ev(`(() => {
+    const icons = [...document.querySelectorAll(".ctt-judge-stage .ctt-judge")];
+    const target = icons.find(n => !n.classList.contains("ctt-vacant"));
+    target.click();
+    const president = target.querySelector(".ctt-judge-label")?.textContent || "";
+    return JSON.stringify({
+      found: !!target,
+      pinned: document.querySelector(".ctt-detail")?.classList.contains("ctt-pinned") || false,
+      hasName: !!document.querySelector(".ctt-detail-name")?.textContent,
+      cohortCount: document.querySelectorAll(".ctt-judge-stage .ctt-judge.ctt-copresident").length,
+    });
+  })()`));
+  assert(firstJudge.found, "a non-vacant judge icon exists in ca8's bench to click");
+  assert(firstJudge.pinned, "clicking a judge icon (no prior hover) pins the detail panel");
+  assert(firstJudge.hasName, "clicking a judge icon (no prior hover) populates the detail box");
+  assert(firstJudge.cohortCount >= 1,
+    `clicking a judge icon (no prior hover) highlights its appointing-president cohort (${firstJudge.cohortCount} marked)`);
+  await ev(`document.querySelector(".ctt-detail-close")?.click()`);
+
   await ev(`document.querySelector('.ctt-drill').click()`); await sleep(1800);
   const locEdge = await ev(`document.querySelector('.ctt-local-layer .ctt-block[data-court-id="moed"] .ctt-sq').getBoundingClientRect().width`);
   assert(Math.abs(locEdge - natEdge) < 0.3,
@@ -435,6 +461,46 @@ try {
   const sotoSepVisible = await ev(`getComputedStyle(document.querySelector('.ctt-search-result .ctt-search-sep')).display !== 'none'`);
   assert(sotoSepVisible, "...and the '· ' joiner stays visible there, since it's genuinely inline");
   await ev(`document.querySelector('.ctt-search-clear').click()`);
+
+  // Issue #7: the ~380px mobile layout had never been eyeballed in a real browser since Phase 1.
+  // Resizing an existing CDP session (rather than a fresh Chrome launch) re-evaluates the
+  // `max-width: 640px` layout media query in place. A large-bench court's Majority arc looked
+  // "cut off" at first glance in manual screenshots — root-caused to `.ctt-pane-body`'s
+  // intentional overflow-y:auto internal scroll (CLAUDE.md §6's "fixed outer widget height"), NOT
+  // a clipping bug: confirmed the pane genuinely has more content than fits AND that scrolling it
+  // actually reveals the rest, not just that a scrollbar exists cosmetically.
+  console.log("mobile ~380px: majority arc's internal pane-scroll genuinely reaches every icon, no horizontal overflow anywhere");
+  await send("Emulation.setDeviceMetricsOverride",
+    { width: 380, height: 900, deviceScaleFactor: 1, mobile: true });
+  await sleep(300);
+  await ev(`document.querySelector('.ctt-selector-back')?.click()`); await sleep(600);
+  await ev(`document.querySelector('.ctt-selector-item[data-court-id="ca8"]').click()`); await sleep(500);
+  await ev(`[...document.querySelectorAll(".ctt-toggle")].find(b => b.textContent === "Majority")?.click()`);
+  await sleep(700);
+  const mobileScroll = JSON.parse(await ev(`(() => {
+    const pane = document.querySelector(".ctt-pane-body");
+    const icons = [...document.querySelectorAll(".ctt-judge")];
+    const paneRectBefore = pane.getBoundingClientRect();
+    const before = icons[icons.length - 1].getBoundingClientRect().bottom - paneRectBefore.bottom;
+    pane.scrollTop = pane.scrollHeight;
+    const paneRectAfter = pane.getBoundingClientRect();
+    const after = icons[icons.length - 1].getBoundingClientRect().bottom - paneRectAfter.bottom;
+    return JSON.stringify({
+      hasOverflow: pane.scrollHeight > pane.clientHeight,
+      // Icon bottom relative to the PANE's own bottom edge (both viewport-relative coordinates
+      // already, so this subtraction is apples-to-apples) — positive means still below the fold.
+      overflowPxBefore: Math.round(before), overflowPxAfter: Math.round(after),
+      docOverflowsX: document.documentElement.scrollWidth > document.documentElement.clientWidth,
+    });
+  })()`));
+  assert(mobileScroll.hasOverflow,
+    "the pane genuinely has more bench content than fits at once at 380px (this is expected, not a bug)");
+  assert(mobileScroll.overflowPxBefore > 0,
+    `sanity check: before scrolling, the last icon really is below the pane's fold (${mobileScroll.overflowPxBefore}px past it)`);
+  assert(mobileScroll.overflowPxAfter <= 1,
+    `scrolling the pane to its end actually brings the last icon fully into view (${mobileScroll.overflowPxBefore}px past the fold -> ${mobileScroll.overflowPxAfter}px)`);
+  assert(!mobileScroll.docOverflowsX, "no horizontal overflow anywhere on the page at 380px width");
+  await send("Emulation.clearDeviceMetricsOverride");
 } catch (e) { console.log("*** ", e.message); failures++; }
 finally { try { ws && ws.close(); } catch {} chrome.kill(); }
 

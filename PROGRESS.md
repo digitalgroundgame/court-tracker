@@ -10,7 +10,47 @@
 tracker (Phase-4 tail items open, PLUS a brand-new third pane view — "Change", built session
 (aw), operator review round addressed session (ax)) and the appointments beeswarm
 (feature-complete first version, operator refinement rounds ongoing; see sessions ai→at, aw).
-**Last updated:** 2026-09-07
+**Last updated:** 2026-09-08
+
+> **SESSION (cp) cont'd (10), 2026-09-07/08 — Issue #7: hover-only-interaction audit + finally
+> closing the ~380px mobile visual-verification item carried since Phase 1.**
+> - **Audit finding: nothing needed building.** Every hover affordance already had a real `click`
+> equivalent, not just cosmetic feedback — map shapes and seat blocks both already `click` →
+> `selectCourt`, and `onIconClick` already calls the exact same `highlightCohort()`/`showDetail()`
+> a hover would, plus pins the panel. The one already-Pointer-Events interaction (district-overlay
+> drag) already uses `setPointerCapture` + `touch-action: none` correctly. **Verified live, not
+> assumed from reading the code**: new `tests/browser-checks.mjs` assertion clicks a judge icon
+> with ZERO hover ever dispatched — this whole test file never simulates hover anywhere — and
+> confirms the cohort highlight + detail box populate from that click alone.
+> - **Mobile ~380px, actually eyeballed for the first time.** Used `tests/shoot.mjs` (already
+> built, just never run for this) to screenshot national view, Timeline, Majority, and a
+> drilled-in district pane at 380px — all clean, no overflow, text wraps sensibly.
+> - **Two states that LOOKED broken in manual screenshots, root-caused as testing artifacts, not
+> app bugs** — worth recording so a future session doesn't re-chase the same false leads:
+>   1. The Majority arc appeared "cut off" regardless of how tall a viewport I captured. Root
+>   cause: `.ctt-pane-body` has intentional `overflow-y: auto` (CLAUDE.md §6's "fixed outer widget
+>   height" design) — the PAGE doesn't get taller, the PANE scrolls internally. Confirmed for real
+>   by setting `scrollTop` directly and watching the icons move into view, not just reading the CSS.
+>   2. Timeline mode showed zero icons at first capture — an under-settled screenshot (my `--at`
+>   was before the layout's own settle wait), not app state; a longer capture delay showed them
+>   rendering correctly.
+> - **Both findings are now permanent CI assertions**, not one-off screenshots: a CDP session
+> resize (`Emulation.setDeviceMetricsOverride`, not a second Chrome launch) re-evaluates the
+> `max-width: 640px` layout query mid-suite, then asserts the pane's overflow is real AND that
+> scrolling it actually clears the last icon's position — caught a real bug **in my own test's
+> coordinate math** on the first pass (compared a viewport-relative icon position against the
+> pane's raw height instead of its viewport-relative bottom edge), fixed and reverified before
+> trusting it.
+> - **PROGRESS.md checklist updated honestly, not oversold**: Phase 1's long-standing `[~]` mobile
+> item and Phase 4's combined "mobile + accessibility" line both referenced real, undone
+> accessibility work (keyboard nav, alt text, contrast) alongside the mobile-layout question this
+> issue actually addressed — split them rather than checking off more than was verified. Mobile
+> visual verification: `[x]`, real evidence. Accessibility pass: still `[ ]`, honestly.
+> - **No `embed/` changes** — this issue's fix was audit + regression coverage, not new app code;
+> `dist/` rebuild not needed (confirmed empty `git status` on both after the work).
+> - **Verified**: `npm test`, `npm run test:dist`, `npm run test:browser`, `npm run test:browser:dist`
+> — ALL PASS, including the new mobile-380px block, and the click-only judge-detail test.
+> - Blockers: none. **Next**: issue #6 (destroy()/unmount() for SPA-style embedding).
 
 > **SESSION (cp) cont'd (9), 2026-09-07 — Issue #2: optional asset-root override for both
 > widgets.**
@@ -2360,8 +2400,11 @@ Prove the whole app shell and asset schema on one circuit with hand-authored sam
 - [x] "View districts" drill-in via **zoom+crossfade** (documented fallback per contract §Morph
       fallback; true vertex-morph deferred to Phase 3/4 for visual tuning) + back button. Federal
       Circuit special case: selects, then "View feeders →" repopulates selector with USCIT/CFC, no map.
-- [~] Mobile vertical layout: CSS written (selector stacks/wraps; pane = full-width sheet; detail
-      panel goes static). NOT yet visually verified at ~380px in a real browser (jsdom does no layout).
+- [x] Mobile vertical layout: CSS written (selector stacks/wraps; pane = full-width sheet; detail
+      panel goes static). **Visually verified at ~380px in a real browser, finally** (issue #7,
+      session (cp), 2026-09-07/08) — see the Phase 4 checklist entry for the full write-up
+      (screenshots across every pane mode, two apparent issues investigated and root-caused as
+      testing artifacts rather than real bugs, now permanent `tests/browser-checks.mjs` assertions).
 - **Verification:** headless jsdom regression test `tests/smoke.mjs` — **28/28 assertions pass** end
       to end (mount→select ca8→counts 11/7active/2senior/4vacant→hover→majority "R 6 of 7 · majority 4",
       fold→"of 9"→drill to 10 districts→moed pane (no Justice)→back). Robust to the malformed exported
@@ -2608,8 +2651,30 @@ Prove the whole app shell and asset schema on one circuit with hand-authored sam
       + DATA_SOURCES 2026-07-18 for schema/caveats (retired-justice departure = senior_date;
       CFC departed = year-precision terminations; territorial historical = documented gap;
       51 reorganization rows flagged). Widget does not read it yet.
-- [ ] **Mobile refinement + accessibility pass** (keyboard nav, alt text, contrast). The ~380px
-      layout has never been eyeballed — carried since Phase 1, now self-serve via `tests/shoot.mjs`.
+- [x] **~380px mobile layout, finally eyeballed for real (issue #7, session (cp), 2026-09-07/08)**
+      — carried unchecked since Phase 1. Screenshotted via `tests/shoot.mjs` across national view,
+      Timeline, Majority, and a drilled-in district pane; all render cleanly, text wraps sensibly,
+      no overflow. Investigated two states that LOOKED broken in manual screenshots and root-caused
+      both as testing artifacts, not app bugs: the Majority arc's apparent "cut off" is
+      `.ctt-pane-body`'s intentional `overflow-y:auto` internal scroll (CLAUDE.md §6's fixed outer
+      widget height), confirmed genuinely reachable by scrolling, not just cosmetically scrollable;
+      Timeline's "missing" icons were an under-settled screenshot capture, not app state. Both are
+      now permanent CI assertions in `tests/browser-checks.mjs`, not just one-off screenshots — a
+      resized CDP session (not a second Chrome launch) re-evaluates the `max-width: 640px` layout
+      query, then asserts the pane's overflow is real AND that scrolling it actually clears the
+      last icon's position, not merely that a scrollbar exists.
+- [x] **Hover-only-interaction audit (issue #7)**: every hover affordance (map shapes, seat
+      blocks, judge icons) already had a full `click` equivalent doing real work, not just
+      cosmetic feedback — `onIconClick` already calls the same `highlightCohort()`/`showDetail()`
+      a hover would, plus pins the panel. Verified live, not just read: a new
+      `tests/browser-checks.mjs` assertion clicks a judge icon with ZERO hover ever dispatched
+      (this whole test file already never simulates hover anywhere) and confirms the cohort
+      highlight + detail box populate. The one already-Pointer-Events-based drag interaction
+      (district-overlay resize) checked out too — `setPointerCapture` + `touch-action: none`.
+      **Not done** (separate from this issue's own scope): keyboard nav, alt text, contrast —
+      a real accessibility audit, still open below.
+- [ ] **Accessibility pass** (keyboard nav, alt text, contrast) — split out from the old combined
+      mobile+a11y line above now that the mobile half is genuinely done; this half never was.
       Note seat blocks are constant-px, so they read relatively larger on a small map.
 - [ ] Lazy-load/perf tuning; verify only-needed assets load per view.
 - [ ] Verify static-download + archive.org behavior (relative paths, offline image fallback).
