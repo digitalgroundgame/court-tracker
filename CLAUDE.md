@@ -176,11 +176,36 @@ public-API policy, and `docs/DATA_SOURCES.md` for full collection methodology + 
 ## 7. Working protocol (start / pause / resume)
 
 1. **Session start**: read `CLAUDE.md` + `PROGRESS.md`. Identify the current phase and the next
-   unchecked task. Restate them in one line before starting.
+   unchecked task. Restate them in one line before starting. `PROGRESS.md`'s own
+   `## Resume briefing` section (top of file) is the primary handoff artifact — read it before
+   the phase checklists.
 2. Work in small, committable increments. Prefer finishing a task fully over starting several.
 3. **When approaching the token budget or a natural stopping point**: update `PROGRESS.md` — check
    off completed items, write a dated session-log entry (what changed, what's next, any blockers),
    and leave the repo in a runnable state. Never stop mid-file-write.
+   - **`PROGRESS.md` logging convention** (added 2026-09-08, session (cp), after the top of the
+     file had accumulated a ~2,400-line, 47-entry blockquote buffer over many sessions with no
+     retirement mechanism): the file has exactly two places narrative goes, and they serve
+     different purposes — do not let a third accumulation point regrow.
+     - **`## Session log`**: the permanent, append-only history. Every session's write here is a
+       *condensed* dated entry (a paragraph or few bullets, not a blow-by-blow) — write it
+       condensed the first time; don't plan to compress it later.
+     - **`## Resume briefing`** (top of file, right after `**Last updated:**`): a handoff note for
+       the *next* session only. **Replace this section's content wholesale at session end — never
+       append to it.** It should say: the immediate next task, any standing/parked issues worth
+       knowing about, and conventions/gotchas established this session that aren't obvious from
+       the code. If something in it is still relevant next time, it survives because the next
+       session folds it into its own replacement — not because it was left in place.
+   - **Verify the real current date before writing any dated entry** (added 2026-09-08, session
+     (cp) — a real, confirmed incident: sessions `(bt)` through `(ce)` drifted up to +7 days ahead
+     of their actual git-commit dates because an earlier session estimated or incremented "today"
+     instead of checking it, and every session after silently copied the drift forward). Check the
+     `currentDate` system reminder, or run `date +%Y-%m-%d`, immediately before writing a date into
+     `PROGRESS.md` (session-log headers, the `Last updated` line) or any other dated record.
+     **Never** infer today's date from the last logged entry, a session letter sequence, or
+     elapsed conversation turns — those all compound the same drift. If you ever find a date that
+     looks wrong, cross-check it against `git log --format=%ad` (actual commit timestamps are
+     ground truth) before trusting or correcting it.
 4. Do not advance a phase until its Definition of Done in `docs/BUILD_SEQUENCE.md` is met.
 5. If blocked by a missing external input (geometry SVGs, an API token), record the blocker, build
    against the documented placeholder/stub, and continue with unblocked work.
