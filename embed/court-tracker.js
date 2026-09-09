@@ -2329,7 +2329,20 @@ function majorityDims(w, H = 320) {
   // nothing. The 68px below cy hold the baseline icons' bottom halves (+22), their name
   // labels (to ~cy+40), and the count text (baseline cy+54, see drawMajorityOverlay).
   const cx = w / 2, cy = H - 68;
-  return { H, cx, cy, Rmax: Math.max(60, cy - 30), R0: Math.min(w * 0.26, 132) };
+  // `Wmax` is `Rmax`'s width-axis counterpart — issue #50's "Constraint on steps 1 & 2: both
+  // must stay within the size of the actual user-viewable area" applies to BOTH axes, not just
+  // height, but `Rmax` alone only ever bounded height (nothing here ever checked whether a
+  // ring's radius pushed seats past the pane's own left/right edges). Since `cx === w/2`, a
+  // ring's radius must not exceed `cx` itself to keep `cx ± radius` inside `[0, w]`; the -30
+  // margin (same fudge `Rmax` already reserves for a label past its own icon) leaves a little
+  // room for a seat's label to extend past its icon at the arc's own horizontal extremes,
+  // instead of shaving it exactly to the pixel. Confirmed as a real, live bug (operator report):
+  // without this, growth (Steps 1/2) could resolve every label/icon collision while still
+  // leaving the arc wider than the pane, since nothing about that condition ever counted as a
+  // reason to invoke Step 3 — the scrollbar this width gap needs `.ctt-judge-stage.ctt-majority-
+  // scroll` for should now be rare, not something an ordinary/even a large real bench hits at
+  // its own default width.
+  return { H, cx, cy, Rmax: Math.max(60, cy - 30), Wmax: Math.max(60, cx - 30), R0: Math.min(w * 0.26, 132) };
 }
 
 // Distribute N icons across the given ring radii so intra-ring neighbour spacing is as
@@ -2754,7 +2767,19 @@ function leftBleedShift(points) {
 }
 
 function layoutArc(model, w, H, stage) {
-  const { cx, cy, Rmax, R0 } = majorityDims(w, H);
+  const { cx, cy, Rmax, Wmax, R0 } = majorityDims(w, H);
+  // Growth (Steps 1/2, both active-ring and band) is bounded by whichever of the two axes is
+  // tighter — see majorityDims' own comment on Wmax for why height-only was never enough.
+  // `planRings`' own RING-COUNT decision deliberately keeps using plain `Rmax`, not this: it's
+  // fundamentally about how many concentric rings fit VERTICALLY, and on a narrow viewport `Wmax`
+  // can be tight enough to collapse it to a single ring outright — confirmed as a real, severe
+  // regression (mobile ca9/Include effectively stopped rendering, ~50 icons crushed onto one
+  // ring with no per-scale way to recover, since ring count doesn't change with icon size).
+  // `effectiveMax` only constrains the GROWTH steps below, which merely add radius on TOP of
+  // whatever multi-ring plan `planRings` already chose — Step 3 shrinking can genuinely help
+  // THAT (smaller icons need less spacing on the same ring count), unlike a ring count that's
+  // already collapsed before any scale search even begins.
+  const effectiveMax = Math.min(Rmax, Wmax);
   const seats = innerArcSeats(model);            // {judge} | {vacancy}, party-grouped L→R
   const N = seats.length || 1;
   const hasSeniorsBand = S.seniorMode === "show" && model.seniors.length > 0;
@@ -2799,21 +2824,21 @@ function layoutArc(model, w, H, stage) {
       const { rect: r, textWidth } = measureLabelNatural(node);
       return { ring: slot.ri, ang: slot.ang, labelW: textWidth, labelH: r.height };
     });
-    const { radii: a1 } = growRingsForIntra(activeDescs, baseRadii, cx, cy, s, Rmax, COLLISION_BUFFER_PX);
-    const { radii: activeRadii } = adjustInterRingGaps(activeDescs, a1, cx, cy, s, Rmax, COLLISION_BUFFER_PX);
+    const { radii: a1 } = growRingsForIntra(activeDescs, baseRadii, cx, cy, s, effectiveMax, COLLISION_BUFFER_PX);
+    const { radii: activeRadii } = adjustInterRingGaps(activeDescs, a1, cx, cy, s, effectiveMax, COLLISION_BUFFER_PX);
     const activeCollide = findRingCollisions(activeDescs, activeRadii, cx, cy, s, COLLISION_BUFFER_PX);
 
     const outermostRi = activeRadii.length - 1;
     const outermostActiveR = activeRadii[outermostRi];
-    // Both growRingsForIntra and adjustInterRingGaps only ever CAP further growth at Rmax —
-    // neither clamps an already-oversized STARTING radius, since every other caller always
-    // starts from a value already known to be in bounds. The band's natural starting point,
-    // `outermostActiveR + ROW_GAP`, is not: on a crowded bench the active rings alone can
-    // already sit close to Rmax, so adding one more ROW_GAP overshoots it before any growth
-    // loop even runs — confirmed as a real bug (ca9/Show/desktop): with no collision among the
-    // 22 band icons at that starting radius, growRingsForIntra returned it unchanged, still
-    // 39px past Rmax. Clamping the starting point (not just the growth ceiling) fixes it.
-    let bandR = Math.min(Rmax, outermostActiveR + ROW_GAP);
+    // Both growRingsForIntra and adjustInterRingGaps only ever CAP further growth at the ceiling
+    // passed in — neither clamps an already-oversized STARTING radius, since every other caller
+    // always starts from a value already known to be in bounds. The band's natural starting
+    // point, `outermostActiveR + ROW_GAP`, is not: on a crowded bench the active rings alone can
+    // already sit close to the ceiling, so adding one more ROW_GAP overshoots it before any
+    // growth loop even runs — confirmed as a real bug (ca9/Show/desktop): with no collision
+    // among the 22 band icons at that starting radius, growRingsForIntra returned it unchanged,
+    // still past bounds. Clamping the starting point (not just the growth ceiling) fixes it.
+    let bandR = Math.min(effectiveMax, outermostActiveR + ROW_GAP);
     let bandCollide = { intra: false, inter: false };
     if (hasSeniorsBand) {
       const bandR0 = bandR;
@@ -2821,7 +2846,7 @@ function layoutArc(model, w, H, stage) {
         const { rect: r, textWidth } = measureLabelNatural(model._nodeByJudge.get(j));
         return { ring: 0, ang: bandAngle(i), labelW: textWidth, labelH: r.height };
       });
-      const { radii: b1 } = growRingsForIntra(bandDescs, [bandR0], cx, cy, s, Rmax, COLLISION_BUFFER_PX);
+      const { radii: b1 } = growRingsForIntra(bandDescs, [bandR0], cx, cy, s, effectiveMax, COLLISION_BUFFER_PX);
       const outermostDescs = seatNodes
         .map((node, i) => ({ node, ri: (slots[i] || slots[slots.length - 1]).ri, ang: (slots[i] || slots[slots.length - 1]).ang }))
         .filter((p) => p.ri === outermostRi)
@@ -2830,7 +2855,7 @@ function layoutArc(model, w, H, stage) {
           return { ring: 0, ang, labelW: textWidth, labelH: r.height };
         });
       const combined = [...outermostDescs, ...bandDescs.map((d) => ({ ...d, ring: 1 }))];
-      const { radii: b2 } = adjustInterRingGaps(combined, [outermostActiveR, b1[0]], cx, cy, s, Rmax, COLLISION_BUFFER_PX);
+      const { radii: b2 } = adjustInterRingGaps(combined, [outermostActiveR, b1[0]], cx, cy, s, effectiveMax, COLLISION_BUFFER_PX);
       bandR = b2[1];
       bandCollide = {
         intra: findRingCollisions(bandDescs, b1, cx, cy, s, COLLISION_BUFFER_PX).intra,

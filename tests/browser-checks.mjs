@@ -676,6 +676,17 @@ try {
     await sleep(400);
     console.log("  Include mode (already selected on ca9): both edges reachable by scroll");
     await ev(`document.querySelector('.ctt-toggle[data-senior="include"]')?.click()`); await sleep(700);
+
+    // Regression guard: adding a width constraint (Wmax, below) to fix the desktop scrollbar bug
+    // initially broke THIS — passing the tighter width-aware ceiling into planRings' own
+    // ring-COUNT decision could collapse a genuinely multi-ring bench (51 combined judges here)
+    // down to a single ring on a narrow viewport, since ring count doesn't change with icon scale
+    // and nothing in the Step-3 shrink search can undo a ring-count decision made before it runs.
+    // Confirmed as a real, severe regression (screenshot: the arc effectively stopped rendering
+    // anything readable) before `planRings` was changed back to using plain `Rmax` for ring count.
+    const ringCount = await ev(`document.querySelector('.ctt-judge-stage')._model._arcRender.radii.length`);
+    assert(ringCount >= 3, `ca9/Include at 380px still plans multiple rings, not collapsed to one by the width constraint (got ${ringCount})`);
+
     const checkBothEdges = async (label) => {
       const before = JSON.parse(await ev(`(() => {
         const stage = document.querySelector('.ctt-judge-stage');
@@ -729,6 +740,24 @@ try {
     })()`);
     const f = JSON.parse(fit);
     assert(f.scrollWidth <= f.clientWidth + 1, `an ordinary court (ca8) at desktop width has no horizontal overflow at all (scrollWidth ${f.scrollWidth} vs clientWidth ${f.clientWidth})`);
+
+    // The extreme case, not just an ordinary one: ca9 (the dataset's largest bench) at desktop
+    // width used to still show a scrollbar even after Rmax-only growth successfully resolved
+    // every label/icon collision — because nothing about "the arc is wider than the pane" ever
+    // counted as a reason to invoke Step 3 (issue #50's OWN text: growth "must stay within the
+    // size of the actual user-viewable area," which is not height alone). Checked across all
+    // three Seniors modes, since Include and Show reach this width differently.
+    console.log("  ...and the SAME holds for ca9 (the dataset's largest bench) at desktop width, across all three Seniors modes — the case originally reported");
+    await ev(`document.querySelector('.ctt-selector-item[data-court-id="ca9"]')?.click()`); await sleep(600);
+    await ev(`[...document.querySelectorAll(".ctt-toggle")].find(b => b.textContent === "Majority")?.click()`); await sleep(700);
+    for (const mode of ["hide", "include", "show"]) {
+      await ev(`document.querySelector('.ctt-toggle[data-senior="${mode}"]')?.click()`); await sleep(500);
+      const r = JSON.parse(await ev(`(() => {
+        const stage = document.querySelector('.ctt-judge-stage');
+        return JSON.stringify({ scrollWidth: stage.scrollWidth, clientWidth: stage.clientWidth });
+      })()`));
+      assert(r.scrollWidth <= r.clientWidth + 1, `ca9/${mode} at desktop width has no horizontal overflow (scrollWidth ${r.scrollWidth} vs clientWidth ${r.clientWidth})`);
+    }
   }
 
   console.log("  a resize after initial mount doesn't leave Summary > SCOTUS's ring wrongly stuck on initials (regression: stale-transform double-scaling bug)");

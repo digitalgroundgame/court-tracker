@@ -10,7 +10,7 @@
 tracker (Phase-4 tail items open, PLUS a brand-new third pane view — "Change", built session
 (aw), operator review round addressed session (ax)) and the appointments beeswarm
 (feature-complete first version, operator refinement rounds ongoing; see sessions ai→at, aw).
-**Last updated:** 2026-09-08 (de)
+**Last updated:** 2026-09-08 (df)
 
 ## Resume briefing
 <!-- Replaced wholesale at the end of each session — this is not an appended log, it's a
@@ -28,10 +28,22 @@ operator review — check `gh pr list`/`gh pr view 56` before assuming it's stil
 any new work on issue #50. If it's merged, there's no obvious open follow-up on that issue as of
 this writing.
 
-**Current state, as of (de) — read this before touching `layoutArc`/`layoutScotusRing`/anything in
-the "issue #50" section, since this area was rewritten three times in one day (cz→da→db/dc→dd→de)
+**Current state, as of (df) — read this before touching `layoutArc`/`layoutScotusRing`/anything in
+the "issue #50" section, since this area was rewritten FOUR times in one day (cz→da→db/dc→dd→de→df)
 before landing here. Trust THIS section, not any older one, and not the commit-by-commit history
 (several intermediate commits describe states that no longer exist).**
+- **Growth (Steps 1/2) is bounded by BOTH axes, not height alone** (df, the latest addition):
+  `majorityDims` now also returns `Wmax = Math.max(60, cx - 30)`, `Rmax`'s width-axis
+  counterpart — `Rmax` alone (pane height only) let growth fully resolve every label/icon
+  collision while still leaving the arc wider than the pane, since that was never checked as "did
+  this stay within the viewable area." `layoutArc` computes `effectiveMax = Math.min(Rmax, Wmax)`
+  and passes it to `growRingsForIntra`/`adjustInterRingGaps` (both active-ring and the band's own
+  scoped calls, below) and the `bandR` starting-value clamp. **`planRings`'s own ring-COUNT
+  argument stays plain `Rmax`, never `effectiveMax`** — passing the tighter one there collapsed a
+  genuinely multi-ring bench to a single ring on narrow viewports (confirmed as a real regression,
+  screenshot showed the arc effectively stop rendering anything readable), since ring count is
+  decided once, before any Step-3 scale search runs, and doesn't change with icon size. If you're
+  about to pass anything into `planRings`'s 3rd argument, it must be `Rmax`.
 - **Steps 0-3 apply to the active rings**, unchanged in spirit from (cx): Step 0 (label overflow →
   full initials), Steps 1/2 (`growRingsForIntra`/`adjustInterRingGaps`, uniform growth then
   individual gap adjustment), Step 3 (`shrinkForCollisions` for Timeline/SCOTUS; `layoutArc`'s own
@@ -55,13 +67,13 @@ before landing here. Trust THIS section, not any older one, and not the commit-b
   this behavior is wrong") after an earlier, band-scoped-shrink draft actually shipped that. If
   you're about to touch Step 3 for the band: it must never end up at a different scale than the
   active rings, full stop.
-- **`bandR` is hard-capped at `Rmax`** (`Math.min(Rmax, outermostActiveR + ROW_GAP)` as the
-  STARTING value, not just the growth ceiling — `growRingsForIntra`/`adjustInterRingGaps` only
-  ever cap further growth, never an already-oversized input, which is exactly how this bug
-  resurfaced once in (dd) and had to be fixed again in (de)). Without this, a crowded bench's
-  active rings can sit close enough to `Rmax` that `+ROW_GAP` alone overshoots it before any growth
-  loop runs — the band then renders past the stage's own top edge (this is a top-half dome, so
-  "too large a radius" always manifests as spilling ABOVE the stage, into the Seniors toggle row).
+- **`bandR` is hard-capped at `effectiveMax`** (`Math.min(effectiveMax, outermostActiveR +
+  ROW_GAP)` as the STARTING value, not just the growth ceiling — `growRingsForIntra`/
+  `adjustInterRingGaps` only ever cap further growth, never an already-oversized input, which is
+  exactly how this bug resurfaced once in (dd) and had to be fixed again in (de)/(df)). Without
+  this, a crowded bench's active rings can sit close enough to the ceiling that `+ROW_GAP` alone
+  overshoots it before any growth loop runs — the band then renders past the stage's own top edge
+  (top-half dome: "too large a radius" always spills ABOVE the stage, into the Seniors toggle row).
 - **Majority view scrolls horizontally** (`.ctt-judge-stage.ctt-majority-scroll`,
   `leftBleedShift()`, `seatHalfWidth()`) — unconditional whenever `S.majorityMode` is true, NOT
   gated to a width breakpoint: it's geometry-driven (`overflow-x:auto`'s scrollbar only appears
@@ -541,6 +553,57 @@ Prove the whole app shell and asset schema on one circuit with hand-authored sam
 - Next: ...
 - Blockers: ...
 -->
+
+### 2026-09-08 (df) — PR #56: real gap — growth was never width-aware, only height (Rmax); added Wmax, with a real regression found and fixed along the way
+- Phase: 4, same PR (#56, issue #50), still `claude/issue-50-collision-avoidance`. Operator report
+  right after (de): ca9 still shows a horizontal scrollbar at MAX/default width, asking whether
+  icon-shrinking was supposed to trigger to make it fit, and whether "the display area needs to be
+  tightened up very slightly." Both exactly right. Confirmed by grep: `Rmax` (used to bound
+  `growRingsForIntra`/`adjustInterRingGaps` everywhere) is derived purely from pane HEIGHT
+  (`cy - 30`) — nothing anywhere in this algorithm's history has ever checked whether growth
+  pushed seats past the pane's own WIDTH. So Steps 1/2 could fully resolve every label/icon
+  collision while still leaving the arc wider than the pane — and since that never registered as
+  "steps 1/2 failed," Step 3 never triggered for it either. This is a real gap against issue #50's
+  own "must stay within the... actual user-viewable area" text, present since the very first
+  version of this algorithm — not something (de) introduced, just something ca9 (the dataset's
+  largest bench) was finally big enough to expose even at desktop width.
+- **Fix**: `majorityDims` now also returns `Wmax = Math.max(60, cx - 30)` (same `-30` margin
+  convention as `Rmax`, since `cx === w/2` and a ring's radius must stay under `cx` to keep
+  `cx ± radius` inside `[0, w]`). `layoutArc` computes `effectiveMax = Math.min(Rmax, Wmax)` and
+  uses it everywhere growth is bounded (both active-ring and the band's own scoped growth from
+  (de), plus the `bandR` starting-value clamp) — genuinely capping growth by whichever axis is
+  tighter, not height alone.
+- **Real regression found and fixed in the SAME session, before it ever landed**: initially also
+  passed `effectiveMax` into `planRings`' own ring-COUNT decision — on mobile (narrow `Wmax`) this
+  collapsed a genuinely multi-ring bench (ca9's 51 combined judges under Include) down to A
+  SINGLE ring outright, and no amount of Step-3 icon-shrinking could ever undo that, since ring
+  COUNT is decided once, before any scale search runs, and doesn't change with icon size.
+  Confirmed by screenshot: the arc effectively stopped rendering anything readable. **Fixed by
+  keeping `planRings`'s own ceiling argument as plain `Rmax`** (ring count is fundamentally about
+  how many rings fit VERTICALLY, unrelated to width) — `effectiveMax` only bounds the GROWTH
+  steps that add radius on top of whatever multi-ring plan `planRings` already chose, where
+  Step-3 shrinking can genuinely help (smaller icons need less spacing on the SAME ring count).
+  **If you're about to pass anything into `planRings`'s 3rd argument: it must be `Rmax`, never
+  `effectiveMax`/`Wmax` — this is exactly the mistake that caused the regression.**
+- Net behavior, verified directly: desktop — ca9 across all three Seniors modes now has ZERO
+  horizontal overflow (`scrollWidth === clientWidth`), matching the "ideal fit at default/largest
+  width" the operator asked for, achieved via real icon-shrinking (0.75-0.85 scale) rather than
+  scroll. Mobile — multi-ring layout preserved (back to 3-4 rings, not collapsed), genuine
+  shrinking still applies, and residual scroll is still available/used for whatever a narrow
+  viewport genuinely can't fit even at the shrink floor — exactly the "arbitrary via scroll on
+  mobile, tight fit on desktop" split the operator described a few turns earlier, now emerging
+  naturally from ONE mechanism (grow/shrink bounded by both axes, scroll as the final fallback)
+  rather than needing a mobile-specific carve-out.
+- Verification: two new permanent tests — ca9 (not just an ordinary court) has zero horizontal
+  overflow at desktop width across all three Seniors modes (the exact case originally reported),
+  and a regression guard asserting ca9/Include at 380px still plans ≥3 rings (catches the
+  ring-count-collapse bug specifically, so it can't silently come back). Full jsdom suite
+  (`embed/` + `--dist`) and real-Chrome CDP checks (`embed/` + `dist/`) all pass, including every
+  earlier issue #50 assertion. Manually re-screenshotted ca9 at both mobile (multi-ring, readable)
+  and desktop (Include/Show both fit with no scrollbar) to confirm before finalizing. `dist/`
+  rebuilt and committed alongside `embed/`.
+- Next: PR #56 still open, awaiting operator review.
+- Blockers: none.
 
 ### 2026-09-08 (de) — PR #56: rebuilt the senior-band handling from first principles, grounded in issue #50's actual text — scoped radius growth, shared whole-bench scale, horizontal scroll
 - Phase: 4, same PR (#56, issue #50), still `claude/issue-50-collision-avoidance`. Picked back up
