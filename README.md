@@ -5,6 +5,8 @@ district court, who appointed each sitting judge, when, their party, tenure, edu
 affiliations, and vacancies — on a map and in a detail pane. Built to drop into an article-hosting
 site as a single `<div>`, and to keep working as a static download or web archive.
 
+**Live demo:** https://digitalgroundgame.github.io/court-tracker/
+
 ## This package
 This repo is the **specification + working scaffold** handed to a Claude Code instance, which builds
 the app across phases. It is not the finished app yet.

@@ -11,6 +11,7 @@ tracker (Phase-4 tail items open, PLUS a brand-new third pane view — "Change",
 (aw), operator review round addressed session (ax)) and the appointments beeswarm
 (feature-complete first version, operator refinement rounds ongoing; see sessions ai→at, aw).
 **Last updated:** 2026-09-08 (cx)
+**Last updated:** 2026-09-08/09 (cy)
 
 ## Resume briefing
 <!-- Replaced wholesale at the end of each session — this is not an appended log, it's a
@@ -27,18 +28,22 @@ below for the full incident and the corrected dates (ground truth: `git log --fo
 2026-09-08 — PR open for operator review, check `gh pr list`). If it's merged by the time you
 read this, there's no obvious next task on issue #50 — re-check `gh issue list` fresh. If it's
 still open, don't start a second implementation; review the existing PR's diff/description first.
+**Next task**: PR #56 (issue #50's ring/arc collision-avoidance algorithm) is open awaiting
+operator review — check `gh pr list`/`gh pr view 56` before assuming it's still open or starting
+any new work on issue #50. If it's merged, there's no obvious open follow-up on that issue.
+
+The repo is public again as of this session (2026-09-08/09, session (cy)) and GitHub Pages is
+live: https://digitalgroundgame.github.io/court-tracker/ — issue #49 is resolved/closed. Issue #36
+(git-history PII) also had substantial work land this session (see `CLAUDE.md` §7.6 for the
+corrected public/private timeline) — check its current state on GitHub before assuming anything
+further is needed there; some follow-up may still be pending and isn't necessarily tracked in this
+file's detail.
 
 **Check `gh issue list`/`gh pr list` at session start regardless** — a newer issue or a PR review
 comment can still supersede this.
 
-**Standing/parked issues, not scheduled unless picked up explicitly**:
-- **#49** — GitHub Pages blocked by an org-level policy (`digitalgroundgame` org, Free plan,
-  Pages-creation likely restricted at Member privileges), not a repo-plan issue. Deliberately
-  parked; keep testing against the locally-hosted server (`python3 -m http.server 8777`) in the
-  meantime. Do not resurrect the old abandoned `pages.yml`/`build_release.py --dir` workflow from
-  closed PR #1 verbatim — `build_release.py` never landed on `main`.
-- **#36** — git-history PII question, reopened after confirming the repo is public (PR #15 had
-  closed it under a since-corrected private-repo assumption). Deliberately not scheduled.
+**Standing/parked issues, not scheduled unless picked up explicitly**: none as of this writing —
+re-check `gh issue list` fresh, since this list goes stale fast.
 
 **Conventions now live and verified working** (don't relitigate without a reason):
 - Branch → PR → **squash**-merge (`allow_merge_commit: false` server-enforced); the
@@ -509,6 +514,27 @@ Prove the whole app shell and asset schema on one circuit with hand-authored sam
   (`embed/` and `dist/`) all pass — no regressions in any pre-existing geometry assertion.
 - Next: no obvious follow-up task on issue #50 itself — see Resume briefing. Re-check
   `gh issue list` fresh next session.
+### 2026-09-08/09 (cy) — Issue #49 resolved: repo public again, GitHub Pages live
+- Phase: infra, not a Phase-4 task. Issue #49's original diagnosis (an org-level Pages-creation
+  policy) turned out to be based on a stale premise — the repo had reverted to private at some
+  point (cause not tracked; see CLAUDE.md §7.6 for the corrected timeline), and a private repo on
+  a Free-plan org can't use Pages at all, full stop, independent of any org policy. Once a
+  separate git-history matter (issue #36) was handled, made the repo public again
+  (`gh repo edit --visibility public`) and Pages enabled cleanly on the first attempt — the direct
+  API call that previously 422'd now succeeds immediately.
+- Went with the legacy branch-deploy option (`source.branch=main`, `source.path=/`) rather than an
+  Actions-based workflow — no build step needed at all, matching this project's own "no build step
+  at runtime" architecture; GitHub just serves the checked-out tree directly. Added `.nojekyll`
+  (standard practice for a non-Jekyll static site on Pages, even though nothing in the current tree
+  actually triggered Jekyll processing — verified the site rendered correctly before AND after
+  adding it).
+- **Live demo:** https://digitalgroundgame.github.io/court-tracker/ — verified in a real headless
+  Chrome session (not just an HTTP 200 check): widget mounts, national view renders, clicking a
+  circuit opens its pane with real judge photos/data. Documented in `README.md`.
+- Closed issue #49 (resolved) — the abandoned old `pages.yml`/`build_release.py --dir` approach
+  from closed PR #1 was correctly never resurrected, per that issue's own explicit note.
+- Next: no open follow-up on issue #49 itself. PR #56 (issue #50's collision-avoidance algorithm)
+  is still open awaiting review — that's the next item.
 - Blockers: none.
 
 ### 2026-09-08 (cw) — Issue #50: no-photo icon fallback generalized to full distinct-name-initials
