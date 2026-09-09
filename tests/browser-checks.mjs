@@ -586,12 +586,17 @@ try {
   }
   await send("Emulation.clearDeviceMetricsOverride");
 
-  console.log("issue #50: judge-icon collision avoidance (Steps 0-3, active rings — the band-folding follow-up was rolled back, tested separately below)");
+  console.log("issue #50: judge-icon collision avoidance (Step 0 only — Steps 1/2/3 rolled back, see below)");
   await ev(`document.querySelector('.ctt-pane-close')?.click()`); await sleep(300);
   {
     // Step 0: a name that would render as two wrapped lines under its icon (Nitza Ileana
     // Quiñones Alejandro, paed — the longest display_name in the current dataset) switches to
     // its full distinct-name-initials instead, on ANY width — nothing here is mobile-gated.
+    // This is the one piece of issue #50's original spec that's still live: Steps 1/2/3 (ring
+    // growth, inter-ring gap adjustment, icon shrink) were rolled back 2026-09-08/09 after a
+    // screenshot survey showed them pushing rings that were never crowded outward, worst under
+    // Seniors:Include and — surprisingly — under Seniors:Show too. Replaced by horizontal
+    // scroll in Majority view, tested separately below.
     await ev(`document.querySelector('.ctt-selector-item[data-court-id="ca3"]')?.click()`); await sleep(500);
     await ev(`document.querySelector('.ctt-drill')?.click()`); await sleep(1800);
     await ev(`document.querySelector('.ctt-selector-item[data-court-id="paed"]')?.click()`); await sleep(600);
@@ -606,32 +611,9 @@ try {
     const s0 = JSON.parse(step0);
     assert(s0.found, "the longest real display_name in the dataset (paed) is on the bench to check");
     assert(s0.text === "NIQA", `Step 0 swapped the would-wrap label to full distinct-name-initials (got "${s0.text}")`);
-
-    console.log("  no label overlaps a neighboring icon by more than a small buffer, on a large real bench (paed, desktop, Seniors:Hide -- the band is out of scope for this check, see below)");
-    const overlapReport = await ev(`(() => {
-      const icons = [...document.querySelectorAll('.ctt-judge-stage .ctt-judge')]
-        .filter(n => !n.classList.contains('ctt-vacant') && !n.classList.contains('ctt-justice'));
-      let worst = 0;
-      for (const a of icons) {
-        const lr = a.querySelector('.ctt-judge-label').getBoundingClientRect();
-        for (const b of icons) {
-          if (a === b) continue;
-          const br = b.querySelector('.ctt-avatar').getBoundingClientRect();
-          const ox = Math.min(lr.right, br.right) - Math.max(lr.left, br.left);
-          const oy = Math.min(lr.bottom, br.bottom) - Math.max(lr.top, br.top);
-          if (ox > 0 && oy > 0) worst = Math.max(worst, Math.min(ox, oy));
-        }
-      }
-      return worst;
-    })()`);
-    // A generous ceiling, not a tight one: this asserts the algorithm keeps residual overlap
-    // SMALL (no egregious text-buried-in-a-neighboring-icon case), not that it hits zero — the
-    // spec's own Step 3 stops at a size floor and accepts the best result found, so a few px of
-    // buffer-tolerated overlap on a genuinely crowded real bench is expected, not a regression.
-    assert(overlapReport < 12, `worst remaining label/icon overlap stays small (${overlapReport}px)`);
   }
 
-  console.log("Majority view ALSO scrolls horizontally (separate from the collision-avoidance geometry above) to reach seats that would otherwise bleed off either edge");
+  console.log("Majority view scrolls horizontally to reach seats that would otherwise bleed off either edge (replaces the rolled-back ring-growth system)");
   {
     // ca9/Include at a narrow width is a reliable way to force real overflow on both sides: 29
     // active + 22 senior = 51 seats folded into the same rings, on a 380px-wide stage.
@@ -651,7 +633,7 @@ try {
     assert(mr.scrollWidth > mr.clientWidth + 20,
       `ca9/Include at 380px genuinely overflows horizontally, so this is a real test of scrolling (scrollWidth ${mr.scrollWidth} vs clientWidth ${mr.clientWidth})`);
 
-    console.log("  scrolled to the LEFT, the leftmost icon+label is fully on-screen (not permanently bled off — the pre-existing bug this fixes)");
+    console.log("  scrolled to the LEFT, the leftmost icon+label is fully on-screen (not permanently bled off — the bug this replaces)");
     const leftReport = await ev(`(() => {
       const stage = document.querySelector('.ctt-judge-stage');
       stage.scrollLeft = 0;
@@ -682,21 +664,6 @@ try {
     })()`);
     const rr = JSON.parse(rightReport);
     assert(rr.maxRight <= rr.stageR + 2, `scrolled fully right, no label sits right of the stage's own edge (label right ${rr.maxRight.toFixed(1)} vs stage right ${rr.stageR.toFixed(1)})`);
-
-    console.log("  the senior 'show' band (deliberately NOT collision-checked — see layoutArc's header comment) still gets reached by this same horizontal scroll when it bleeds");
-    await ev(`document.querySelector('.ctt-toggle[data-senior="show"]')?.click()`); await sleep(700);
-    const bandLeftReport = await ev(`(() => {
-      const stage = document.querySelector('.ctt-judge-stage');
-      stage.scrollLeft = 0;
-      const stageL = stage.getBoundingClientRect().left;
-      const seniors = [...stage.querySelectorAll('.ctt-judge.ctt-senior')].filter((n) => getComputedStyle(n).opacity !== '0');
-      let minLeft = Infinity;
-      for (const n of seniors) minLeft = Math.min(minLeft, n.querySelector('.ctt-judge-label').getBoundingClientRect().left);
-      return JSON.stringify({ stageL, minLeft, seniorCount: seniors.length });
-    })()`);
-    const blr = JSON.parse(bandLeftReport);
-    assert(blr.seniorCount >= 15, `ca9's senior band is really on the bench for this check (got ${blr.seniorCount})`);
-    assert(blr.minLeft >= blr.stageL - 2, `scrolled fully left, no senior-band label sits left of the stage's own edge (label left ${blr.minLeft.toFixed(1)} vs stage left ${blr.stageL.toFixed(1)})`);
 
     console.log("  Timeline mode never gets the scroll class (this is Majority-only)");
     await ev(`[...document.querySelectorAll(".ctt-toggle")].find(b => b.textContent === "Timeline")?.click()`); await sleep(500);
