@@ -10,7 +10,7 @@
 tracker (Phase-4 tail items open, PLUS a brand-new third pane view — "Change", built session
 (aw), operator review round addressed session (ax)) and the appointments beeswarm
 (feature-complete first version, operator refinement rounds ongoing; see sessions ai→at, aw).
-**Last updated:** 2026-09-08 (cz)
+**Last updated:** 2026-09-08 (da)
 
 ## Resume briefing
 <!-- Replaced wholesale at the end of each session — this is not an appended log, it's a
@@ -23,29 +23,32 @@ logged date. Session log entries `(bt)`-`(ce)` drifted up to +7 days ahead of th
 git-commit dates from exactly this mistake; see `CLAUDE.md` §7 and the `(cp)` 2026-09-08 entry
 below for the full incident and the corrected dates (ground truth: `git log --format=%ad`).
 
-**Next task**: PR #56 (issue #50's ring/arc collision-avoidance algorithm, now including a
-(cz)-session follow-up round — see below) is open awaiting operator review — check `gh pr
+**Next task**: PR #56 (issue #50's ring/arc collision-avoidance algorithm — but see immediately
+below, most of it is now rolled back) is open awaiting operator review — check `gh pr
 list`/`gh pr view 56` before assuming it's still open or starting any new work on issue #50. If
 it's merged, there's no obvious open follow-up on that issue as of this writing.
 
-**(cz) session, same PR #56, three fixes on top of (cx)'s original algorithm** (full detail in the
-Session log entry below, not repeated here):
-1. `.ctt-judge-label` switched from a plain fill-block to `width: fit-content` — root-caused the
-   operator's "labels aren't centered, text runs off right" report to a real Chrome behavior
-   (`text-align:center` can't apply a negative left-offset when content is wider than a
-   FIXED-width box, so overflow goes right-only) that was also quietly feeding a ~2px asymmetry
-   into the collision math's symmetric-rect assumption. Fixed at the CSS root rather than
-   compensating in the math, per the operator's own diagnosis.
-2. `.ctt-majority-line` opacity 1 -> 0.5 (operator ask, already a round number). One shared class
-   covers every Majority view (general arcs + Summary > SCOTUS's ring).
-3. The senior "show" band (grayed outer ring) now goes through the SAME
-   growRingsForIntra/adjustInterRingGaps/shrinkForCollisions pipeline as the active rings, treated
-   as one more ring past the last active one — it previously sat at a fixed offset with NO
-   collision detection and no Rmax ceiling at all. "Include" mode needed no change; it was already
-   covered (`innerArcSeats()` folds included seniors into the ordinary seat list).
-All verified in real Chrome (ca8/ca9 for the band case — ca9 has the dataset's largest senior
-cohort, 22), `tests/browser-checks.mjs` gained permanent coverage for the band case, full
-jsdom+CDP suites pass for both `embed/` and `dist/`.
+**(da) session, same PR #56 — Steps 1/2/3 of the collision-avoidance algorithm ROLLED BACK,
+replaced by Majority-view horizontal scroll** (full detail in the Session log entry below, not
+repeated here). The operator's own conclusion, after reviewing a screenshot showcase artifact
+built earlier in that conversation: the ring-growth system "doesn't matter all that much for
+desktop," and pushing rings that were never crowded outward to fix crowding elsewhere (worst
+under Include, but — a real surprise — also under Show, once the senior band got folded into the
+same growth pipeline in session (cz)) wasn't worth it. **If you're about to touch anything
+described by an OLDER entry below as part of that ring-growth system (`growRingsForIntra`,
+`adjustInterRingGaps`, `shrinkForCollisions`, `findRingCollisions`, `COLLISION_BUFFER_PX`,
+`SHRINK_ROUND_PX`) — stop, it no longer exists; those entries are historical, not current.**
+What's still live from issue #50: Step 0 only (`resolveLabelOverflow`, label → full-distinct-
+initials on wrap/overflow) — a text fix, not ring geometry, never part of the rollback. New in its
+place: `.ctt-judge-stage.ctt-majority-scroll` + `leftBleedShift()` — Majority view now scrolls
+horizontally rather than reshaping the arc; see the "measuring an icon's label geometry" and
+"transform-positioned children DO count toward an overflow:auto ancestor's scrollWidth in Chrome"
+convention notes below before touching this again.
+
+The (cz) session's OTHER two fixes are unaffected by this rollback and still stand: `.ctt-judge-
+label`'s `width:fit-content` centering fix, and `.ctt-majority-line`'s opacity 0.5. Both verified
+in real Chrome, `tests/browser-checks.mjs` has coverage, full jsdom+CDP suites pass for both
+`embed/` and `dist/`.
 
 The repo is public again (since session (cy), 2026-09-08/09) and GitHub Pages is live:
 https://digitalgroundgame.github.io/court-tracker/ — issue #49 is resolved/closed. Issue #36
@@ -149,17 +152,41 @@ re-check `gh issue list` fresh, since this list goes stale fast.
   widget a centered block might hold content wider than its container (long president names,
   court names, etc.) — the fix pattern (fit-content + margin:auto, in place of a filled block) is
   the one to reach for again rather than re-deriving it.
-- **A geometry-adjustment algorithm that's parameterized over "a list of rings" can absorb a new
-  ring-like element (a fixed-offset band, a special zone) just by appending it to that list**
-  (session (cz), issue #50 follow-up — the senior "show" band): `layoutArc`'s
-  `growRingsForIntra`/`adjustInterRingGaps`/`findRingCollisions`/`shrinkForCollisions` never
-  actually cared what a "ring" represented, only that seat descs carry a `ring` index into a
-  shared `radii` array — so folding the band in as one more entry at the end of that array (own
-  fixed angles, only its radius solved for) covered it with zero changes to any of those shared
-  functions. Worth remembering next time something that "isn't really a ring" (another band, a
-  special badge zone) needs the same collision-aware treatment: check whether it can be
-  represented as just another entry in the existing list before writing new adjustment logic for
-  it.
+- **SUPERSEDED, kept for the history — do not build on this pattern**: session (cz) noted that a
+  geometry-adjustment algorithm parameterized over "a list of rings" (issue #50's Steps 1/2/3)
+  could absorb a new ring-like element just by appending it to that list, using the senior "show"
+  band as the example. Session (da) rolled that whole ring-growth system back (see its Session log
+  entry and the Resume briefing above) — `growRingsForIntra`/`adjustInterRingGaps`/
+  `findRingCollisions`/`shrinkForCollisions` no longer exist. The band is back to a plain fixed
+  `outermost + ROW_GAP` offset. Kept this entry only so a future session doesn't go looking for
+  code this describes and wonder if it was deleted by mistake — it wasn't.
+- **`overflow:auto`'s "the other axis becomes auto too if you set one of overflow-x/overflow-y to
+  anything but visible" rule is a real, load-bearing CSS behavior, not a corner case to route
+  around** (session (da), issue #50 follow-up — Majority-view horizontal scroll): wanted
+  `overflow-x:auto` on `.ctt-judge-stage` without opening up a second, redundant vertical
+  scrollbar nested inside the pane's own. Since the UA forces the "visible" axis to `auto` too
+  once the other isn't `visible`, the fix is to set the OTHER axis explicitly rather than fight
+  it — `overflow-y:hidden` here, safe specifically because `majorityStageHeight()` already sizes
+  the stage to avoid needing vertical scroll in practice. Reach for this pattern (pick the other
+  axis's value deliberately) any time one axis needs `auto`/`scroll` and the natural instinct is
+  to leave the other at the default.
+- **A `position:absolute` child positioned via `transform:translate()` (not `left`/`top`) DOES
+  count toward an `overflow:auto` ancestor's `scrollWidth`/`scrollHeight` in Chrome** (session
+  (da), confirmed directly with an isolated test page before relying on it, since a strict reading
+  of the CSS Transforms spec suggests transforms shouldn't affect scrollable overflow at all —
+  Chrome's actual, testable behavior differs and is what to rely on for this codebase). This is
+  what makes issue #50's whole horizontal-scroll fix work without a wrapper element: `place()`
+  already positions every `.ctt-judge` via `transform:translate(...)`, so shifting that translate
+  target is enough — no need to introduce a second sized canvas layer just to get scrollable
+  overflow to register.
+- **When a value needs to be "how far past the LEFT edge does the leftmost thing sit," analytic
+  computation from already-known geometry (radius, angle, a real text-width measurement) beats a
+  DOM-measure-then-correct round trip** (session (da)): `leftBleedShift()` computes every seat's
+  planned x-position and half-width (via `measureLabelNatural`, already used for Step 0) BEFORE
+  any `place()` call, derives the one shift value needed, and places everything ONCE at its final
+  position — rather than placing once, measuring the rendered result, and re-placing. Simpler, and
+  avoids the exact class of "read stale/mid-transition geometry" bug issue #50 hit twice already
+  (see the `measureLabelNatural` entry above).
 
 ## Phase 0 — Scaffold & contracts  ✅ DONE (2026-07-10)
 - [x] Create repo skeleton per `CLAUDE.md` §Repo map; confirm `index.html` loads an empty shell.
@@ -577,6 +604,53 @@ Prove the whole app shell and asset schema on one circuit with hand-authored sam
   from closed PR #1 was correctly never resurrected, per that issue's own explicit note.
 - Next: no open follow-up on issue #49 itself. PR #56 (issue #50's collision-avoidance algorithm)
   is still open awaiting review — that's the next item.
+- Blockers: none.
+
+### 2026-09-08 (da) — PR #56: rolled back the ring-growth collision-avoidance system; added Majority-view horizontal scroll instead
+- Phase: 4, same PR (#56, issue #50) as sessions (cx)/(cz) — still `claude/issue-50-collision-avoidance`.
+  Prompted by a screenshot showcase artifact built in a prior turn of this same conversation
+  (13 courts × 3 Seniors modes × 3 widths, real captures): the operator concluded, after seeing
+  it, that "the additional ring rule" (Steps 1/2/3 of issue #50's spec — uniform ring growth,
+  inter-ring gap adjustment, icon-shrink) wasn't worth what it cost. Their own framing: it
+  "doesn't seem to matter all that much for desktop," and on mobile "we may as well just allow
+  horizontal scrolling in majority view specifically" instead — which they'd also independently
+  noticed only ever extended right, never left ("currently it just bleeds left without being able
+  to scroll").
+- **Rollback**: removed `growRingsForIntra`, `adjustInterRingGaps`, `shrinkForCollisions`,
+  `findRingCollisions`, `labelHitsIcon`, `seatPoint`, and the constants that only existed for them
+  (`COLLISION_BUFFER_PX`, `SHRINK_ROUND_PX`, `LABEL_GAP`) — plus every call site in `layoutArc`
+  and `layoutScotusRing`, and the senior-band-as-a-ring extension from session (cz) (which only
+  existed to fold the band into that same now-removed pipeline). `layoutArc`'s senior band is back
+  to a fixed `outermost active ring + ROW_GAP` offset, same as before (cx) ever touched it. Kept:
+  Step 0 (`resolveLabelOverflow`, label → full-distinct-initials when it would wrap or badly
+  overflow) — a general text-overflow fix, not ring geometry, unrelated to what got rolled back.
+- **New**: Majority view (`.ctt-judge-stage.ctt-majority-scroll`, toggled by `layoutJudges()` on
+  `S.majorityMode`) now scrolls horizontally — `overflow-x:auto` (which the CSS spec forces
+  `overflow-y` to also compute as `auto` for, hence the class sets `overflow-y:hidden` explicitly
+  rather than leaving it to that default; `majorityStageHeight()` already sizes the stage to avoid
+  ever needing that in practice). The real fix, though, is `leftBleedShift()`: content rendering
+  PAST the stage's right edge already contributed to its scrollable region and was reachable — a
+  plain, confirmed fact of how `overflow:auto` + `transform:translate()` interact in Chrome
+  (verified directly with an isolated test page before relying on it) — but content at a NEGATIVE
+  x never was, since `scrollLeft` can't go negative. `layoutArc`/`layoutScotusRing` now compute how
+  far the leftmost seat (by analytic position + `measureLabelNatural`'s real label width, not a
+  DOM-measurement round-trip) would sit past x=0, shift EVERY placement in that pass by that same
+  amount (`cx + shiftX` in place of bare `cx`, including the SVG overlay's `cx` via
+  `model._arcRender`), and set `stage.scrollLeft = shiftX` once everything's placed — which
+  reproduces the exact pre-existing default view (nothing changes unless you scroll) while making
+  both edges reachable the same way the right edge already was. Timeline never gets the scroll
+  class, so it's completely unaffected.
+- Verification: replaced the two overlap-ceiling assertions in `tests/browser-checks.mjs` (which
+  tested the now-removed geometry) with a new section that forces real overflow (ca9/Include,
+  380px) and asserts the leftmost and rightmost seat are each fully on-screen once scrolled fully
+  in that direction, plus that Timeline never carries the scroll class. Kept the Step 0 (NIQA
+  initials) assertion unchanged. Full jsdom suite (`embed/` + `--dist`) and real-Chrome CDP checks
+  (`embed/` + `dist/`) all pass; manually re-screenshotted ca9 Hide/Include/Show at desktop (now
+  near-identical footprints — the "hole" is gone) and the mobile scroll-left/scroll-right cases
+  directly to confirm before finalizing. `dist/` rebuilt and committed alongside `embed/`.
+- Next: PR #56 still open, awaiting operator review of this round too. The screenshot showcase
+  artifact from earlier in this conversation is now describing removed behavior — not updated,
+  since nobody asked and it was a live discussion aid, not a repo artifact.
 - Blockers: none.
 
 ### 2026-09-08 (cz) — PR #56 review-round fixes: label centering, majority-line opacity, senior-band collision coverage
