@@ -10,7 +10,7 @@
 tracker (Phase-4 tail items open, PLUS a brand-new third pane view — "Change", built session
 (aw), operator review round addressed session (ax)) and the appointments beeswarm
 (feature-complete first version, operator refinement rounds ongoing; see sessions ai→at, aw).
-**Last updated:** 2026-09-08 (cz)
+**Last updated:** 2026-09-08 (dd)
 
 ## Resume briefing
 <!-- Replaced wholesale at the end of each session — this is not an appended log, it's a
@@ -23,29 +23,39 @@ logged date. Session log entries `(bt)`-`(ce)` drifted up to +7 days ahead of th
 git-commit dates from exactly this mistake; see `CLAUDE.md` §7 and the `(cp)` 2026-09-08 entry
 below for the full incident and the corrected dates (ground truth: `git log --format=%ad`).
 
-**Next task**: PR #56 (issue #50's ring/arc collision-avoidance algorithm, now including a
-(cz)-session follow-up round — see below) is open awaiting operator review — check `gh pr
-list`/`gh pr view 56` before assuming it's still open or starting any new work on issue #50. If
-it's merged, there's no obvious open follow-up on that issue as of this writing.
+**Next task**: PR #56 (issue #50's ring/arc collision-avoidance algorithm) is open awaiting
+operator review — check `gh pr list`/`gh pr view 56` before assuming it's still open or starting
+any new work on issue #50. If it's merged, there's no obvious open follow-up on that issue as of
+this writing.
 
-**(cz) session, same PR #56, three fixes on top of (cx)'s original algorithm** (full detail in the
-Session log entry below, not repeated here):
-1. `.ctt-judge-label` switched from a plain fill-block to `width: fit-content` — root-caused the
-   operator's "labels aren't centered, text runs off right" report to a real Chrome behavior
-   (`text-align:center` can't apply a negative left-offset when content is wider than a
-   FIXED-width box, so overflow goes right-only) that was also quietly feeding a ~2px asymmetry
-   into the collision math's symmetric-rect assumption. Fixed at the CSS root rather than
-   compensating in the math, per the operator's own diagnosis.
-2. `.ctt-majority-line` opacity 1 -> 0.5 (operator ask, already a round number). One shared class
-   covers every Majority view (general arcs + Summary > SCOTUS's ring).
-3. The senior "show" band (grayed outer ring) now goes through the SAME
-   growRingsForIntra/adjustInterRingGaps/shrinkForCollisions pipeline as the active rings, treated
-   as one more ring past the last active one — it previously sat at a fixed offset with NO
-   collision detection and no Rmax ceiling at all. "Include" mode needed no change; it was already
-   covered (`innerArcSeats()` folds included seniors into the ordinary seat list).
-All verified in real Chrome (ca8/ca9 for the band case — ca9 has the dataset's largest senior
-cohort, 22), `tests/browser-checks.mjs` gained permanent coverage for the band case, full
-jsdom+CDP suites pass for both `embed/` and `dist/`.
+**Current state, as of (dd) — read this before touching `layoutArc`/anything in the "issue #50"
+section, since this whole area churned through five same-day commits (cz/da/db/dc/dd) before
+landing here**: the operator ultimately decided the repeated back-and-forth (da rolling back too
+much, db/dc correcting and patching it) wasn't the right path, and asked instead to go back to
+(cz) (`730133f`) directly and take out ONLY its point 3, keeping points 1-2. (dd) did exactly that
+— three `git revert`s (undoing dc, db, da in that order, landing the tree back at `730133f`
+exactly, confirmed with an empty `git diff`), then a fourth, narrower change: applied the reverse
+of `git diff fc3985d 730133f -- embed/court-tracker.js tests/browser-checks.mjs` (i.e., specifically
+undid (cz)'s own point-3 diff, nothing else), confirmed against `git diff fc3985d` afterward
+(empty for those two files). **Net result — this is the actual current state of the code**:
+- Kept (points 1-2 of (cz)): `.ctt-judge-label`'s `width:fit-content` centering fix, and
+  `.ctt-majority-line`'s opacity 0.5. Both purely in `embed/court-tracker.css`, untouched by any
+  of this.
+- Reverted (point 3 of (cz)): the senior "show" band is back to its ORIGINAL (cx) form — a fixed
+  `outermost active ring + ROW_GAP` offset, no collision detection of its own, no Rmax cap beyond
+  that fixed formula. `growRingsForIntra`/`adjustInterRingGaps`/`shrinkForCollisions`/
+  `findRingCollisions`/`labelHitsIcon`/`seatPoint` are unchanged from (cx) and apply to the ACTIVE
+  rings only, exactly as they always did pre-(cz).
+- **Entirely gone, not just reverted**: the Majority-view horizontal-scroll feature (da/db/dc:
+  `.ctt-judge-stage.ctt-majority-scroll`, `leftBleedShift()`, `seatHalfWidth()`, `activeRmax`) and
+  the `bandR`-exceeding-`Rmax` bug it exposed no longer apply — none of that code exists in the
+  tree. If a future ask revisits "seniors bleed off the mobile viewport" or "Show mode overflows
+  vertically," these are UNSOLVED again at this state (by the operator's explicit choice, not an
+  oversight) — don't assume either fix is still present.
+- The `(cx)`→`(cz)` git history genuinely still contains commits `cffd9bf`/`7d111dc`/`ed19958`
+  (da/db/dc) — they were `git revert`ed (three new commits undoing them), not rewritten/force-
+  pushed away, so they're still reachable in this branch's log if anyone ever wants to see exactly
+  what was tried and why it didn't stick. Don't be confused by seeing them in `git log`.
 
 The repo is public again (since session (cy), 2026-09-08/09) and GitHub Pages is live:
 https://digitalgroundgame.github.io/court-tracker/ — issue #49 is resolved/closed. Issue #36
@@ -508,6 +518,43 @@ Prove the whole app shell and asset schema on one circuit with hand-authored sam
 - Next: ...
 - Blockers: ...
 -->
+
+### 2026-09-08 (dd) — PR #56: operator asked to stop iterating and reset to (cz), keeping only points 1-2, dropping point 3 and everything built after it
+- Phase: 4, same PR (#56, issue #50), still `claude/issue-50-collision-avoidance`. Context: after
+  (cz) landed (label-centering fix, majority-line opacity, senior-band-into-collision-pipeline),
+  three more same-day commits followed it — (da) rolled back the ENTIRE Steps 1-3 system by
+  mistake (over-correcting a narrower ask), (db) caught and fixed that, (dc) then found and fixed a
+  real bug (`bandR` could exceed `Rmax`) in the corrected version. The operator's own read on all
+  of that: *"i'm not convinced re-tweaking it repeatedly is a good idea"* — asked to go back to
+  `730133f` ((cz)) directly and take out only its narrowly-scoped point 3, keeping points 1-2,
+  rather than keep patching forward.
+- **Mechanics** (worth recording since this is a different git shape than usual): `git reset --hard`
+  to the named commit was tried first and DENIED by the permission layer — pivoted to three
+  `git revert --no-edit` calls (dc, then db, then da, in that order — newest-first, since they're a
+  strictly linear chain with nothing else interleaved) instead. Non-destructive, no force-push
+  needed. Confirmed the result matched `730133f` exactly with `git diff 730133f HEAD` (empty).
+  Then, for the point-3-only removal: captured `git diff fc3985d 730133f -- embed/court-tracker.js
+  tests/browser-checks.mjs` (the two files (cz)'s point 3 touched — confirmed CSS was untouched by
+  point 3, points 1-2 are 100% of the CSS diff) into a patch file, `git apply --check -R` to confirm
+  it reversed cleanly, then applied for real, then confirmed the RESULT matched `fc3985d` (the
+  original (cx) commit, before (cz) existed) exactly for those two files (`git diff fc3985d --
+  embed/court-tracker.js tests/browser-checks.mjs`, empty). This "diff-two-commits, isolate the one
+  hunk that matters, apply its reverse" technique is the right tool any time a future ask is "keep
+  most of commit X, but undo just this one specific piece of it" — cleaner and more verifiable than
+  hand-editing back to a remembered state.
+- **Net result — see the Resume briefing above for what this actually leaves in the tree.** Kept:
+  (cz) points 1-2 (label centering, majority-line opacity). Reverted: (cz) point 3 (band folded into
+  the collision-avoidance pipeline) — back to its original (cx) fixed-offset form. Gone entirely:
+  the (da)/(db)/(dc) horizontal-scroll feature and the `Rmax` bug it surfaced — none of that ever
+  existed in this state; it's not "fixed then reverted," it's simply not there.
+- Verification: `npm test` (jsdom, `embed/`) and `npm run test:browser` (real Chrome CDP, `embed/`)
+  both pass — this is functionally the same test suite (cz) itself passed, since the code is
+  byte-identical to (cz) minus point 3's own diff. `dist/` rebuilt (`court-tracker.min.js` changed;
+  `.css` didn't, confirmed identical to `730133f`'s own dist CSS).
+- Next: PR #56 still open. The commits `cffd9bf`/`7d111dc`/`ed19958` (da/db/dc) remain in this
+  branch's `git log`, reverted rather than removed — don't be confused by seeing them there, they
+  are NOT part of the current tree state (three revert commits on top undo them completely).
+- Blockers: none.
 
 ### 2026-09-08 (cx) — Issue #50: judge-icon ring/arc collision-avoidance algorithm
 - Phase: 4. The last piece of issue #50 — the operator's own multi-step ring/arc
