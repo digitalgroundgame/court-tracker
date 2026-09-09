@@ -2775,6 +2775,21 @@ function layoutArc(model, w, H, stage) {
   // first (shortest labels possible going in), then the ring geometry (steps 1/2), then — only
   // if collisions remain — Step 3's icon-shrink loop (which re-runs 0/1/2 itself at each size).
   // ACTIVE rings only — the senior band is placed separately below, not part of this pipeline.
+  // `activeRmax`, not bare `Rmax`, caps how far growth can push the OUTERMOST active ring when a
+  // band is present: `planRings` above already reserves one ROW_GAP of headroom for the band by
+  // shrinking its own ring-COUNT budget (`reserveBand`), but that reservation only constrains the
+  // ring COUNT it picks — nothing stopped growth from consuming the same headroom afterward,
+  // right up to bare Rmax, leaving none for the band's own `+ROW_GAP` below. Confirmed as a real,
+  // visible bug (operator report, 2026-09-08/09): on a crowded bench, active-ring growth alone
+  // could reach Rmax, so `bandR` (`outermost + ROW_GAP`) ended up PAST Rmax — and since this is a
+  // top-half dome (seats never go below cy), a too-large radius pushes seats near the arc's own
+  // apex ABOVE the stage's top edge, where `.ctt-majority-scroll`'s `overflow-y:hidden` (needed
+  // for the horizontal-scroll feature) now clips them invisibly, instead of the pre-existing
+  // "spills visibly, looks a bit off" it used to be. Same bug also explains a mobile symptom the
+  // operator separately reported: switching TO Show, the wildly-oversized band inflated
+  // `leftBleedShift`'s shiftX far more than Hide/Include's, so the whole arc visibly jumped
+  // sideways on the mode switch, not just Show's own band changing shape.
+  const activeRmax = hasSeniorsBand ? Rmax - ROW_GAP : Rmax;
   resolveLabelOverflow(stage, 1);
   const buildSeatDescs = () => seatNodes.map((node, i) => {
     const s = slots[i] || slots[slots.length - 1];
@@ -2782,20 +2797,23 @@ function layoutArc(model, w, H, stage) {
     return { ring: s.ri, ang: s.ang, labelW: textWidth, labelH: r.height };
   });
   let scale = 1;
-  const { radii: g1 } = growRingsForIntra(buildSeatDescs(), baseRadii, cx, cy, scale, Rmax, COLLISION_BUFFER_PX);
-  const { radii: g2 } = adjustInterRingGaps(buildSeatDescs(), g1, cx, cy, scale, Rmax, COLLISION_BUFFER_PX);
+  const { radii: g1 } = growRingsForIntra(buildSeatDescs(), baseRadii, cx, cy, scale, activeRmax, COLLISION_BUFFER_PX);
+  const { radii: g2 } = adjustInterRingGaps(buildSeatDescs(), g1, cx, cy, scale, activeRmax, COLLISION_BUFFER_PX);
   let radii = g2;
   const { intra, inter } = findRingCollisions(buildSeatDescs(), radii, cx, cy, scale, COLLISION_BUFFER_PX);
   if (intra || inter) {
-    const best = shrinkForCollisions(stage, buildSeatDescs, baseRadii, cx, cy, Rmax, COLLISION_BUFFER_PX, 1);
+    const best = shrinkForCollisions(stage, buildSeatDescs, baseRadii, cx, cy, activeRmax, COLLISION_BUFFER_PX, 1);
     if (best) { scale = best.scale; radii = best.radii; }
   }
 
   // seniors: grayed outer band, one ROW_GAP beyond the outermost active ring. Absent entirely
   // when seniorMode is "hide" or "include" (folded into the inner arc instead) — Seniors use
   // simple centred spacing — they need not snap to 180°/0° (#19b). Deliberately NOT part of the
-  // collision-avoidance pipeline above (see this section's header comment).
-  const bandR = radii[radii.length - 1] + ROW_GAP;
+  // collision-avoidance pipeline above (see this section's header comment). `Math.min(Rmax, ...)`
+  // is a hard safety net on top of `activeRmax` reserving the room above — belt and suspenders,
+  // since Step 3's shrink loop passes its OWN baseRadii/scale combinations through that reserved
+  // budget too, and this is cheap insurance against ever exceeding the viewable radius again.
+  const bandR = Math.min(Rmax, radii[radii.length - 1] + ROW_GAP);
   const outer = hasSeniorsBand ? model.seniors : [];
   const sn = outer.length || 1;
   const bandAngle = (i) => Math.PI - ((i + 0.5) / sn) * Math.PI;

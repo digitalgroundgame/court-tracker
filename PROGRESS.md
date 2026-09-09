@@ -10,7 +10,7 @@
 tracker (Phase-4 tail items open, PLUS a brand-new third pane view — "Change", built session
 (aw), operator review round addressed session (ax)) and the appointments beeswarm
 (feature-complete first version, operator refinement rounds ongoing; see sessions ai→at, aw).
-**Last updated:** 2026-09-08 (db)
+**Last updated:** 2026-09-08 (dc)
 
 ## Resume briefing
 <!-- Replaced wholesale at the end of each session — this is not an appended log, it's a
@@ -28,24 +28,36 @@ operator review — check `gh pr list`/`gh pr view 56` before assuming it's stil
 any new work on issue #50. If it's merged, there's no obvious open follow-up on that issue as of
 this writing.
 
-**Current state of the collision-avoidance algorithm, as of (db) — read this before touching
-`layoutArc`/`layoutScotusRing`/anything named Step 0-3, since it went through a rollback AND a
-correction in the same day**: Steps 0/1/2/3 are ALL live and apply to the ACTIVE rings, exactly as
-(cx) originally shipped them (`resolveLabelOverflow`, `growRingsForIntra`, `adjustInterRingGaps`,
-`shrinkForCollisions`, `findRingCollisions`, `labelHitsIcon`, `seatPoint` all exist and are used).
-The ONLY piece actually rolled back is (cz)'s extension that folded the senior "show" band into
-that same growth pipeline — the band is back to a plain `outermost active ring + ROW_GAP` fixed
-offset with no collision detection of its own, same as before (cz) touched it. (**(da)'s own
-Session log/briefing text claimed the WHOLE Steps 1/2/3 system was removed — that was wrong, a
-same-day overcorrection the operator caught and (db) fixed; if you're reading an old copy of this
-file or a stale cache, trust (db)'s Session log entry over (da)'s.**) Separately, and NOT rolled
-back: Majority view now also scrolls horizontally (`.ctt-judge-stage.ctt-majority-scroll` +
-`leftBleedShift()`, computed against the FINAL post-Steps-0-3 geometry) — this was always meant as
-an addition/safety-net (esp. for the now-unguarded band), not a replacement for the ring geometry,
-and stands regardless of how the rollback-vs-restore question above resolved.
+**Current state of the collision-avoidance algorithm, as of (dc) — read this before touching
+`layoutArc`/`layoutScotusRing`/anything named Step 0-3 or `Rmax`, since it went through a
+rollback, a correction, AND a real-bug fix all in one day**: Steps 0/1/2/3 are ALL live and apply
+to the ACTIVE rings, exactly as (cx) originally shipped them (`resolveLabelOverflow`,
+`growRingsForIntra`, `adjustInterRingGaps`, `shrinkForCollisions`, `findRingCollisions`,
+`labelHitsIcon`, `seatPoint` all exist and are used). The ONLY piece actually rolled back is (cz)'s
+extension that folded the senior "show" band into that same growth pipeline — the band is back to
+`bandR = Math.min(Rmax, outermost active ring + ROW_GAP)` (the `Math.min` is new in (dc), see
+below) with no collision detection of its own. (**(da)'s own Session log/briefing text claimed the
+WHOLE Steps 1/2/3 system was removed — that was wrong, a same-day overcorrection the operator
+caught and (db) fixed; trust (db)/(dc)'s entries over (da)'s if you're reading a stale copy.**)
+Separately, and NOT rolled back: Majority view also scrolls horizontally
+(`.ctt-judge-stage.ctt-majority-scroll` + `leftBleedShift()`, computed against the FINAL
+post-Steps-0-3 geometry) — always meant as a safety net, not a replacement for the ring geometry.
+**(dc) fix, real bug**: growth (Steps 1-3) could push the active rings' outermost radius right up
+to `Rmax`, consuming the `ROW_GAP` headroom `planRings`'s `reserveBand` flag reserves for the band
+— on a crowded bench (ca9, 22 seniors) `bandR` ended up 39px PAST `Rmax`, and since this is a
+TOP-half dome, that pushed apex-area senior icons ABOVE the stage's own top edge, where (da)'s new
+`overflow-y:hidden` now clips them invisibly (they used to just spill visibly over the toggle row
+— ugly but not literally broken). Same root cause also explained a reported mobile "jump" when
+switching to Show: the oversized band inflated `leftBleedShift`'s shiftX far more than Hide/
+Include's. Fixed with `activeRmax = hasSeniorsBand ? Rmax - ROW_GAP : Rmax` (Steps 1-3 now respect
+the SAME reserved headroom `planRings` does) plus the `Math.min(Rmax, ...)` clamp on `bandR` itself
+as a cheap safety net. If you're about to touch `Rmax`, `ROW_GAP`, or anything in `layoutArc`
+between `planRings` and the `bandR` line, re-read that whole comment block first — it's exactly
+where this bug lived.
 
 The (cz) session's other two fixes (`.ctt-judge-label`'s `width:fit-content` centering, and
-`.ctt-majority-line`'s opacity 0.5) were never in question and still stand as shipped.
+`.ctt-majority-line`'s opacity 0.5) were never in question through any of this and still stand as
+shipped.
 
 The repo is public again (since session (cy), 2026-09-08/09) and GitHub Pages is live:
 https://digitalgroundgame.github.io/court-tracker/ — issue #49 is resolved/closed. Issue #36
@@ -606,6 +618,48 @@ Prove the whole app shell and asset schema on one circuit with hand-authored sam
   from closed PR #1 was correctly never resurrected, per that issue's own explicit note.
 - Next: no open follow-up on issue #49 itself. PR #56 (issue #50's collision-avoidance algorithm)
   is still open awaiting review — that's the next item.
+- Blockers: none.
+
+### 2026-09-08 (dc) — PR #56: real bug — `bandR` could exceed `Rmax`, clipping seniors above the stage on Show + causing a mobile mode-switch jump
+- Phase: 4, same PR (#56, issue #50), still `claude/issue-50-collision-avoidance`. Operator report,
+  immediately after (db) landed: "Seniors:Show is uniquely affected by a too-big-for-viewing-area
+  bug (desktop)... on mobile it seems like switching from Hide or Include to Show, there is an
+  unaccounted-for visual jump, which might be a symptom of the same bug." Both confirmed true, both
+  the same root cause, reproduced directly (ca9, 22 seniors — the dataset's largest band) before
+  touching anything.
+- **Root cause**: `planRings(N, R0, Rmax, hasSeniorsBand)` reserves one `ROW_GAP` of headroom for
+  the band by shrinking its own ring-COUNT budget (`reserveBand`) — but that reservation only ever
+  constrained which ring COUNT it picked. Nothing stopped `growRingsForIntra`/
+  `adjustInterRingGaps`/`shrinkForCollisions` (Steps 1-3, restored to full active-ring use in (db))
+  from growing the chosen rings' RADII right up to bare `Rmax` afterward, consuming the very
+  headroom `reserveBand` meant to protect. On a crowded bench needing real growth to resolve
+  Include-style collisions, the outermost active ring landed AT `Rmax`, so `bandR` (`outermost +
+  ROW_GAP`) ended up 39px PAST `Rmax` on ca9/desktop (320 vs Rmax 281). This is a TOP-half dome
+  (`majorityDims`: seats never go below `cy`), so a too-large radius pushes seats near the arc's
+  own apex ABOVE the stage's top edge — harmless-but-ugly (visibly overlapping the toggle row)
+  before (da)/(db)'s horizontal-scroll work added `.ctt-majority-scroll { overflow-y: hidden }`,
+  genuinely invisible (clipped) after. The mobile "jump": `leftBleedShift`'s shiftX scales with how
+  far the band's own seats spread horizontally, so the same oversized `bandR` inflated Show's
+  shiftX far more than Hide/Include's, making the WHOLE arc visibly jump sideways on the mode
+  switch, not just the band changing shape.
+- **Fix, two parts**: (1) `activeRmax = hasSeniorsBand ? Rmax - ROW_GAP : Rmax` — Steps 1-3 now cap
+  active-ring growth at this reduced bound instead of bare `Rmax` whenever a band is present, so
+  growth respects the SAME headroom `planRings` already reserves, rather than fighting it. (2)
+  `bandR = Math.min(Rmax, outermost + ROW_GAP)` — a hard safety-net clamp on top, cheap insurance
+  against ever exceeding the viewable radius regardless of how Step 3's own scale search plays out.
+  Verified numerically: ca9/desktop bandR is now exactly 281 (= Rmax), was 320. Mobile: switching
+  Include→Show now moves `cx` by ~2px (was ~50px).
+- Verification: new permanent test (ca9/desktop/Show) asserting `bandR <= Rmax` and that no senior
+  icon's top edge renders above the stage's own top edge — this is the actual visual regression,
+  not just the internal number. Full jsdom suite (`embed/` + `--dist`) and real-Chrome CDP checks
+  (`embed/` + `dist/`) all pass, including the restored Step 1-3 overlap check and both
+  horizontal-scroll sections from (da)/(db). Manually re-screenshotted ca9/Show/desktop to confirm
+  the top row of seniors now sits with visible clearance instead of crowding the toggle row.
+  `dist/` rebuilt (`court-tracker.min.js` only).
+- Next: PR #56 still open, awaiting operator review. This is the fourth commit in this PR's review
+  round in one day (cz/da/db/dc) — worth a careful, holistic look before merging rather than
+  reviewing each commit in isolation, since (da) briefly introduced a real regression that (db)
+  and this session both had to correct.
 - Blockers: none.
 
 ### 2026-09-08 (db) — PR #56: correction — (da) over-rolled-back; restored Steps 1/2/3 for active rings, kept only the band-folding piece removed

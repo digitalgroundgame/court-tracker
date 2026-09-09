@@ -631,6 +631,30 @@ try {
     assert(overlapReport < 12, `worst remaining label/icon overlap stays small (${overlapReport}px)`);
   }
 
+  console.log("Seniors:Show's band radius stays within Rmax (regression: growth on the active rings alone could reach Rmax, leaving no room for the band's +ROW_GAP, pushing top-of-arc seniors above the stage's own edge where overflow-y:hidden now clips them invisibly)");
+  {
+    // ca9 (22 seniors, the dataset's largest band) at desktop width is where this was originally
+    // caught: active-ring growth (needed regardless, to resolve real Include-style crowding) ate
+    // the ROW_GAP headroom planRings() reserved for the band, so bandR ended up PAST Rmax.
+    await ev(`document.querySelector('.ctt-selector-back')?.click()`); await sleep(400);
+    await ev(`document.querySelector('.ctt-selector-item[data-court-id="ca9"]')?.click()`); await sleep(600);
+    await ev(`[...document.querySelectorAll(".ctt-toggle")].find(b => b.textContent === "Majority")?.click()`); await sleep(700);
+    await ev(`document.querySelector('.ctt-toggle[data-senior="show"]')?.click()`); await sleep(700);
+    const bandReport = await ev(`(() => {
+      const stage = document.querySelector('.ctt-judge-stage');
+      const model = stage._model, ar = model._arcRender;
+      const stageR = stage.getBoundingClientRect();
+      const seniors = [...stage.querySelectorAll('.ctt-judge.ctt-senior')].filter((n) => getComputedStyle(n).opacity !== '0');
+      let minTop = Infinity;
+      for (const n of seniors) minTop = Math.min(minTop, n.getBoundingClientRect().top);
+      return JSON.stringify({ bandR: ar.bandR, Rmax: Math.max(60, ar.cy - 30), stageTop: stageR.top, minTop, seniorCount: seniors.length });
+    })()`);
+    const br = JSON.parse(bandReport);
+    assert(br.seniorCount >= 15, `ca9's senior band is really on the bench for this check (got ${br.seniorCount})`);
+    assert(br.bandR <= br.Rmax + 1, `bandR stays within Rmax (bandR ${br.bandR.toFixed(1)} vs Rmax ${br.Rmax.toFixed(1)})`);
+    assert(br.minTop >= br.stageTop - 2, `no senior icon renders above the stage's own top edge (icon top ${br.minTop.toFixed(1)} vs stage top ${br.stageTop.toFixed(1)})`);
+  }
+
   console.log("Majority view ALSO scrolls horizontally (separate from the collision-avoidance geometry above) to reach seats that would otherwise bleed off either edge");
   {
     // ca9/Include at a narrow width is a reliable way to force real overflow on both sides: 29
