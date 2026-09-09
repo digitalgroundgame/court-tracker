@@ -10,7 +10,6 @@
 tracker (Phase-4 tail items open, PLUS a brand-new third pane view — "Change", built session
 (aw), operator review round addressed session (ax)) and the appointments beeswarm
 (feature-complete first version, operator refinement rounds ongoing; see sessions ai→at, aw).
-**Last updated:** 2026-09-08 (cx)
 **Last updated:** 2026-09-08/09 (cy)
 
 ## Resume briefing
@@ -24,10 +23,6 @@ logged date. Session log entries `(bt)`-`(ce)` drifted up to +7 days ahead of th
 git-commit dates from exactly this mistake; see `CLAUDE.md` §7 and the `(cp)` 2026-09-08 entry
 below for the full incident and the corrected dates (ground truth: `git log --format=%ad`).
 
-**Next task**: issue #50's ring/arc collision-avoidance algorithm is DONE (session (cx),
-2026-09-08 — PR open for operator review, check `gh pr list`). If it's merged by the time you
-read this, there's no obvious next task on issue #50 — re-check `gh issue list` fresh. If it's
-still open, don't start a second implementation; review the existing PR's diff/description first.
 **Next task**: PR #56 (issue #50's ring/arc collision-avoidance algorithm) is open awaiting
 operator review — check `gh pr list`/`gh pr view 56` before assuming it's still open or starting
 any new work on issue #50. If it's merged, there's no obvious open follow-up on that issue.
