@@ -631,6 +631,42 @@ try {
     assert(overlapReport < 12, `worst remaining label/icon overlap stays small (${overlapReport}px)`);
   }
 
+  console.log("  issue #50 follow-up: the 'show seniors' grayed outer band is covered by the SAME collision-avoidance pipeline, not just Step 0");
+  {
+    // ca9 (9th Circuit) carries the largest real senior cohort in the dataset (22) — the band's
+    // own worst case, and previously UNCHECKED entirely: it sat at a fixed offset with no
+    // collision detection (band-vs-band or band-vs-outermost-active-ring) and no Rmax ceiling.
+    await ev(`document.querySelector('.ctt-selector-back')?.click()`); await sleep(400);
+    await ev(`document.querySelector('.ctt-selector-item[data-court-id="ca9"]')?.click()`); await sleep(600);
+    await ev(`[...document.querySelectorAll(".ctt-toggle")].find(b => b.textContent === "Majority")?.click()`); await sleep(700);
+    await ev(`document.querySelector('.ctt-toggle[data-senior="show"]')?.click()`); await sleep(700);
+    const bandReport = await ev(`(() => {
+      const icons = [...document.querySelectorAll('.ctt-judge-stage .ctt-judge')]
+        .filter(n => !n.classList.contains('ctt-vacant') && !n.classList.contains('ctt-justice'));
+      let worst = 0;
+      for (const a of icons) {
+        const lr = a.querySelector('.ctt-judge-label').getBoundingClientRect();
+        for (const b of icons) {
+          if (a === b) continue;
+          const br = b.querySelector('.ctt-avatar').getBoundingClientRect();
+          const ox = Math.min(lr.right, br.right) - Math.max(lr.left, br.left);
+          const oy = Math.min(lr.bottom, br.bottom) - Math.max(lr.top, br.top);
+          if (ox > 0 && oy > 0) worst = Math.max(worst, Math.min(ox, oy));
+        }
+      }
+      const seniors = icons.filter((n) => n.classList.contains("ctt-senior"));
+      const stageR = document.querySelector(".ctt-judge-stage").getBoundingClientRect();
+      const seniorsFitStage = seniors.every((n) => n.querySelector(".ctt-avatar").getBoundingClientRect().bottom <= stageR.bottom + 1);
+      return JSON.stringify({ seniorCount: seniors.length, worst, seniorsFitStage });
+    })()`);
+    const br = JSON.parse(bandReport);
+    assert(br.seniorCount >= 15, `ca9's senior band is really on the bench for this check (got ${br.seniorCount})`);
+    // Same generous-not-tight ceiling as the paed check above — the point is bounded residual
+    // overlap on a genuinely crowded band, not a zero-overlap guarantee.
+    assert(br.worst < 15, `worst remaining label/icon overlap in the senior band stays bounded (${br.worst}px)`);
+    assert(br.seniorsFitStage, "every senior-band icon still lands inside the stage's own viewable area (band radius respects Rmax)");
+  }
+
   console.log("  a resize after initial mount doesn't leave Summary > SCOTUS's ring wrongly stuck on initials (regression: stale-transform double-scaling bug)");
   await ev(`document.querySelector('.ctt-selector-back')?.click()`); await sleep(400);
   await ev(`document.querySelector('.ctt-selector-item[data-court-id="summary"]')?.click()`); await sleep(600);

@@ -10,7 +10,7 @@
 tracker (Phase-4 tail items open, PLUS a brand-new third pane view — "Change", built session
 (aw), operator review round addressed session (ax)) and the appointments beeswarm
 (feature-complete first version, operator refinement rounds ongoing; see sessions ai→at, aw).
-**Last updated:** 2026-09-08/09 (cy)
+**Last updated:** 2026-09-08 (cz)
 
 ## Resume briefing
 <!-- Replaced wholesale at the end of each session — this is not an appended log, it's a
@@ -23,13 +23,33 @@ logged date. Session log entries `(bt)`-`(ce)` drifted up to +7 days ahead of th
 git-commit dates from exactly this mistake; see `CLAUDE.md` §7 and the `(cp)` 2026-09-08 entry
 below for the full incident and the corrected dates (ground truth: `git log --format=%ad`).
 
-**Next task**: PR #56 (issue #50's ring/arc collision-avoidance algorithm) is open awaiting
-operator review — check `gh pr list`/`gh pr view 56` before assuming it's still open or starting
-any new work on issue #50. If it's merged, there's no obvious open follow-up on that issue.
+**Next task**: PR #56 (issue #50's ring/arc collision-avoidance algorithm, now including a
+(cz)-session follow-up round — see below) is open awaiting operator review — check `gh pr
+list`/`gh pr view 56` before assuming it's still open or starting any new work on issue #50. If
+it's merged, there's no obvious open follow-up on that issue as of this writing.
 
-The repo is public again as of this session (2026-09-08/09, session (cy)) and GitHub Pages is
-live: https://digitalgroundgame.github.io/court-tracker/ — issue #49 is resolved/closed. Issue #36
-(git-history PII) also had substantial work land this session (see `CLAUDE.md` §7.6 for the
+**(cz) session, same PR #56, three fixes on top of (cx)'s original algorithm** (full detail in the
+Session log entry below, not repeated here):
+1. `.ctt-judge-label` switched from a plain fill-block to `width: fit-content` — root-caused the
+   operator's "labels aren't centered, text runs off right" report to a real Chrome behavior
+   (`text-align:center` can't apply a negative left-offset when content is wider than a
+   FIXED-width box, so overflow goes right-only) that was also quietly feeding a ~2px asymmetry
+   into the collision math's symmetric-rect assumption. Fixed at the CSS root rather than
+   compensating in the math, per the operator's own diagnosis.
+2. `.ctt-majority-line` opacity 1 -> 0.5 (operator ask, already a round number). One shared class
+   covers every Majority view (general arcs + Summary > SCOTUS's ring).
+3. The senior "show" band (grayed outer ring) now goes through the SAME
+   growRingsForIntra/adjustInterRingGaps/shrinkForCollisions pipeline as the active rings, treated
+   as one more ring past the last active one — it previously sat at a fixed offset with NO
+   collision detection and no Rmax ceiling at all. "Include" mode needed no change; it was already
+   covered (`innerArcSeats()` folds included seniors into the ordinary seat list).
+All verified in real Chrome (ca8/ca9 for the band case — ca9 has the dataset's largest senior
+cohort, 22), `tests/browser-checks.mjs` gained permanent coverage for the band case, full
+jsdom+CDP suites pass for both `embed/` and `dist/`.
+
+The repo is public again (since session (cy), 2026-09-08/09) and GitHub Pages is live:
+https://digitalgroundgame.github.io/court-tracker/ — issue #49 is resolved/closed. Issue #36
+(git-history PII) also had substantial work land in that session (see `CLAUDE.md` §7.6 for the
 corrected public/private timeline) — check its current state on GitHub before assuming anything
 further is needed there; some follow-up may still be pending and isn't necessarily tracked in this
 file's detail.
@@ -103,16 +123,43 @@ re-check `gh issue list` fresh, since this list goes stale fast.
      existing `.ctt-no-transition` class (the same one `handoff()` already uses for the identical
      "read true geometry now, not mid-transition" need) around the read, with an `offsetWidth`
      flush on each side.
-  2. `.ctt-judge-label` is a plain block div, so it takes its PARENT's full 52px width regardless
-     of how short the text is — `getBoundingClientRect().width` on the label itself is a
-     near-constant ~52px for every judge, not a text-length signal at all. Fix: a
-     `document.createRange().selectNodeContents(label).getBoundingClientRect()` around the text
+  2. At the time (session (cx)), `.ctt-judge-label` was a plain block div that took its PARENT's
+     full 52px width regardless of how short the text was — `getBoundingClientRect().width` on the
+     label itself was a near-constant ~52px for every judge, not a text-length signal at all. Fix:
+     a `document.createRange().selectNodeContents(label).getBoundingClientRect()` around the text
      gives the tight glyph box instead (same technique issue #50's own bug-2 fix already
      established in `tests/browser-checks.mjs`). `rect.height` stays reliable on its own — a block
      genuinely grows its OWN height to fit wrapped content, so line-count detection needed no fix.
+     **Session (cz) changed `.ctt-judge-label` itself to `width: fit-content`** (see the next bullet)
+     — `rect.width` is now mostly meaningful too, but the Range-based measurement above is still
+     what the collision code actually uses (more precise, and unchanged by this), so this pattern
+     remains the right one to reach for.
   Both were caught only by testing a REAL resize-after-mount scenario in an actual browser, not by
   a fresh-mount-only check — worth remembering as a testing pattern for any future icon-geometry
   work: mount at one width, then resize, don't just test fresh mounts at each width in isolation.
+- **A block-level element with `text-align:center` does NOT overflow symmetrically once its
+  content is wider than the box — Chrome anchors the overflowing line flush at the box's START
+  edge and lets it spill only toward the END (right, for LTR)** (session (cz), issue #50
+  follow-up — this is what the operator's "labels aren't centered, run off right" report actually
+  was, confirmed by direct measurement: a 56px line in a 52px `.ctt-judge-label` box rendered 0px
+  left overflow / ~4px right, not symmetric ~2px/~2px). `margin:auto` centering only works if the
+  box's own width can still shrink/grow to its content — a block that's forced to fill a fixed
+  container can't do that, so it can't overflow symmetrically either. Fix used here: `width:
+  fit-content` on the label. This is a general CSS trap worth recognizing anywhere else in either
+  widget a centered block might hold content wider than its container (long president names,
+  court names, etc.) — the fix pattern (fit-content + margin:auto, in place of a filled block) is
+  the one to reach for again rather than re-deriving it.
+- **A geometry-adjustment algorithm that's parameterized over "a list of rings" can absorb a new
+  ring-like element (a fixed-offset band, a special zone) just by appending it to that list**
+  (session (cz), issue #50 follow-up — the senior "show" band): `layoutArc`'s
+  `growRingsForIntra`/`adjustInterRingGaps`/`findRingCollisions`/`shrinkForCollisions` never
+  actually cared what a "ring" represented, only that seat descs carry a `ring` index into a
+  shared `radii` array — so folding the band in as one more entry at the end of that array (own
+  fixed angles, only its radius solved for) covered it with zero changes to any of those shared
+  functions. Worth remembering next time something that "isn't really a ring" (another band, a
+  special badge zone) needs the same collision-aware treatment: check whether it can be
+  represented as just another entry in the existing list before writing new adjustment logic for
+  it.
 
 ## Phase 0 — Scaffold & contracts  ✅ DONE (2026-07-10)
 - [x] Create repo skeleton per `CLAUDE.md` §Repo map; confirm `index.html` loads an empty shell.
@@ -530,6 +577,55 @@ Prove the whole app shell and asset schema on one circuit with hand-authored sam
   from closed PR #1 was correctly never resurrected, per that issue's own explicit note.
 - Next: no open follow-up on issue #49 itself. PR #56 (issue #50's collision-avoidance algorithm)
   is still open awaiting review — that's the next item.
+- Blockers: none.
+
+### 2026-09-08 (cz) — PR #56 review-round fixes: label centering, majority-line opacity, senior-band collision coverage
+- Phase: 4, same PR (#56, issue #50) as session (cx) — resumed a session the operator had stopped
+  mid-work (an uncommitted `.ctt-majority-line` opacity change was already sitting in the working
+  tree; kept it, it's exactly what's described below). Three fixes, all still on
+  `claude/issue-50-collision-avoidance`, not a new branch.
+- **Label centering** (root-caused, not just patched around): the operator reported labels
+  visibly off-centre, overflowing right — measured directly (real Chrome, ca8/ca9 Majority arcs)
+  and confirmed it's a real CSS behavior, not a measurement artifact: `.ctt-judge-label` was a
+  plain block that always fills its 52px parent, so a single unbreakable word wider than that
+  (e.g. a long surname, or the bespoke "Circ. Justice <surname>" label) can't get a negative
+  left-offset from `text-align:center` inside a box narrower than its own content — Chrome anchors
+  the line flush at the box's left edge and lets it overflow ONLY rightward (confirmed: a 56px
+  line in the 52px box rendered 0px left / ~4px right, not the ~2px/~2px true centering needs).
+  This wasn't just cosmetic: `measureLabelNatural()`'s Range-based width feeds `labelHitsIcon()`'s
+  collision math, which assumes the rendered label is symmetric around the icon's x — a real,
+  if modest (~2px), mismatch, consistent with the operator's suspicion that it was nudging the
+  algorithm into abbreviations/spacing it didn't actually need. Fix: `width: fit-content` (+
+  `-webkit-` fallback) on `.ctt-judge-label`, so it shrink-wraps for anything that fits and only
+  grows past the container for genuine unbreakable overflow — where `margin:auto` then centers
+  the wider box normally, restoring true symmetric overflow. Verified directly: the paed
+  worst-overlap regression check's own measured value dropped from ~12px (the test's prior
+  ceiling) to 4.8px after this fix, with no ceiling change needed.
+- **Majority-line opacity**: `.ctt-majority-line`'s opacity 1 -> 0.5 (operator ask: half as
+  prominent, already a round number, no further rounding needed) — one shared class, so this one
+  change covers every Majority view (general arcs + Summary > SCOTUS's ring) already, no
+  additional call sites.
+- **Senior "show" band now goes through the same collision-avoidance pipeline as the active
+  rings** (issue #50 follow-up — the operator flagged the algorithm needed extending to the
+  senior show/include cases): audited both. "Include" needed no change — `innerArcSeats()`
+  already folds included seniors into the ordinary seat list, so they were always part of the
+  same pipeline as everyone else. "Show"'s grayed outer band was the real gap: it sat at a fixed
+  `outermost-active-ring + ROW_GAP` offset with NO collision check at all (band-vs-band or
+  band-vs-outermost-ring could clash freely) and no `Rmax` ceiling either. `layoutArc()` now
+  treats the band as one more ring — one past the last active ring — in the exact same
+  `growRingsForIntra`/`adjustInterRingGaps`/`shrinkForCollisions` calls (band members keep their
+  fixed centred-spacing ANGLE; only the shared band radius is solved for). Note this shifts which
+  ring counts as "centermost" for Step 2's anchor when a band is present (it's now picked over
+  the full ring set, band included) — a deliberate, spec-consistent read, documented in the code
+  comment above `layoutArc`.
+- Verification: `tests/browser-checks.mjs` gained a new permanent section using ca9 (22 seniors —
+  the largest real senior cohort in the dataset, and the band's own worst case) — asserts bounded
+  residual overlap (same "generous ceiling, not zero" framing the existing paed check uses) and
+  that every senior-band icon still lands inside the stage's own viewable area post-fix. Full
+  jsdom suite (`embed/` + `--dist`) and real-Chrome CDP checks (`embed/` + `dist/`) all pass, incl.
+  every pre-existing issue #50 assertion; `dist/` rebuilt and committed alongside `embed/`.
+- Next: PR #56 still awaiting operator review/merge — nothing else outstanding on issue #50 that
+  this session is aware of. Re-check `gh issue list`/`gh pr list` fresh next session regardless.
 - Blockers: none.
 
 ### 2026-09-08 (cw) — Issue #50: no-photo icon fallback generalized to full distinct-name-initials

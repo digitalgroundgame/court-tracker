@@ -2527,6 +2527,15 @@ function innerArcSeats(model) {
 //    ring's own 3px box-shadow is never realistically what tips a real collision into "tolerated."
 //  - an EVEN ring count has no single "centermost" ring for Step 2's anchor; this implementation
 //    anchors at the inner one of the two middle rings (index floor((k-1)/2)).
+// Follow-up (also issue #50): the "show seniors" grayed outer band is now covered by steps 1/2/3
+// too, not just Step 0 — it used to sit at a fixed `outermost active ring + ROW_GAP` offset with
+// no collision check at all (band-vs-band, or band-vs-outermost-active-ring, could clash freely,
+// and the offset had no Rmax ceiling either). `layoutArc` now folds the band in as one more ring,
+// one past the last active ring, into the exact same radii array/growth/gap pipeline — so the
+// "EVEN ring count" note above applies with the band counted as a ring too when it's present.
+// "Include seniors" needed no separate change: `innerArcSeats` already folds those seniors into
+// the ordinary seat list, so they were always part of the same active-ring pipeline as everyone
+// else.
 // Applies to Majority-mode's general N-seat arc (layoutArc, below) and — Step 0 only — to
 // Timeline's grid (layoutJudges' own call site) and Summary > SCOTUS's fixed ring
 // (layoutScotusRing): nowhere here is gated behind a viewport width, so it runs identically at
@@ -2728,26 +2737,50 @@ function layoutArc(model, w, H, stage) {
   const seatNodes = seats.map((seat) =>
     seat.vacancy ? model._vacancyNodes[vi0++] : model._nodeByJudge.get(seat.judge));
 
+  // seniors ("show" mode only — "include" already goes through the inner-arc `seats` above,
+  // since `innerArcSeats` folds them in itself): a grayed outer band, simple centred spacing
+  // (they need not snap to 180°/0°, #19b) — but its RADIUS is issue #50 follow-up work, treated
+  // as one more ring (index bandRingIdx, one past the last active ring) in the very same
+  // growth/gap-adjustment/shrink pipeline below, rather than the fixed `outermost + ROW_GAP` this
+  // used to be. That old fixed offset never participated in collision detection at all — a
+  // crowded band could clash with itself, or with the outermost active ring, with nothing here
+  // ever catching or resolving it, and it had no Rmax ceiling either. Angle is still fixed per
+  // senior (band members don't reorder), only the shared band radius is solved for.
+  const outer = hasSeniorsBand ? model.seniors : [];
+  const sn = outer.length || 1;
+  const bandAngle = (i) => Math.PI - ((i + 0.5) / sn) * Math.PI;
+  const bandRingIdx = baseRadii.length;
+  const baseRadiiFull = hasSeniorsBand ? [...baseRadii, baseRadii[baseRadii.length - 1] + ROW_GAP] : baseRadii;
+
   // issue #50: resolve label/icon collisions before committing to final positions. Step 0 runs
   // first (shortest labels possible going in), then the ring geometry (steps 1/2), then — only
   // if collisions remain — Step 3's icon-shrink loop (which re-runs 0/1/2 itself at each size).
   resolveLabelOverflow(stage, 1);
-  const buildSeatDescs = () => seatNodes.map((node, i) => {
-    const s = slots[i] || slots[slots.length - 1];
-    const { rect: r, textWidth } = measureLabelNatural(node);
-    return { ring: s.ri, ang: s.ang, labelW: textWidth, labelH: r.height };
-  });
+  const buildSeatDescs = () => {
+    const descs = seatNodes.map((node, i) => {
+      const s = slots[i] || slots[slots.length - 1];
+      const { rect: r, textWidth } = measureLabelNatural(node);
+      return { ring: s.ri, ang: s.ang, labelW: textWidth, labelH: r.height };
+    });
+    outer.forEach((j, i) => {
+      const { rect: r, textWidth } = measureLabelNatural(model._nodeByJudge.get(j));
+      descs.push({ ring: bandRingIdx, ang: bandAngle(i), labelW: textWidth, labelH: r.height });
+    });
+    return descs;
+  };
   let scale = 1;
-  const { radii: g1 } = growRingsForIntra(buildSeatDescs(), baseRadii, cx, cy, scale, Rmax, COLLISION_BUFFER_PX);
+  const { radii: g1 } = growRingsForIntra(buildSeatDescs(), baseRadiiFull, cx, cy, scale, Rmax, COLLISION_BUFFER_PX);
   const { radii: g2 } = adjustInterRingGaps(buildSeatDescs(), g1, cx, cy, scale, Rmax, COLLISION_BUFFER_PX);
   let radii = g2;
   const { intra, inter } = findRingCollisions(buildSeatDescs(), radii, cx, cy, scale, COLLISION_BUFFER_PX);
   if (intra || inter) {
-    const best = shrinkForCollisions(stage, buildSeatDescs, baseRadii, cx, cy, Rmax, COLLISION_BUFFER_PX, 1);
+    const best = shrinkForCollisions(stage, buildSeatDescs, baseRadiiFull, cx, cy, Rmax, COLLISION_BUFFER_PX, 1);
     if (best) { scale = best.scale; radii = best.radii; }
   }
+  const activeRadii = hasSeniorsBand ? radii.slice(0, bandRingIdx) : radii;
+  const bandR = hasSeniorsBand ? radii[bandRingIdx] : 0;
 
-  const finalSlots = slots.map((s) => ({ ...s, r: radii[s.ri] }));
+  const finalSlots = slots.map((s) => ({ ...s, r: activeRadii[s.ri] }));
   seats.forEach((seat, i) => {
     const node = seatNodes[i];
     const s = finalSlots[i] || finalSlots[finalSlots.length - 1];
@@ -2755,15 +2788,9 @@ function layoutArc(model, w, H, stage) {
     node.classList.add("ctt-in-arc");
   });
 
-  // seniors: grayed outer band, one ROW_GAP beyond the outermost active ring. Absent entirely
-  // when seniorMode is "hide" or "include" (folded into the inner arc instead) — Seniors use
-  // simple centred spacing — they need not snap to 180°/0° (#19b).
-  const bandR = radii[radii.length - 1] + ROW_GAP;
-  const outer = hasSeniorsBand ? model.seniors : [];
-  const sn = outer.length || 1;
   outer.forEach((j, i) => {
     const node = model._nodeByJudge.get(j);
-    const ang = Math.PI - ((i + 0.5) / sn) * Math.PI;
+    const ang = bandAngle(i);
     place(node, cx + bandR * Math.cos(ang), cy - bandR * Math.sin(ang), true, scale);
     node.classList.add("ctt-in-arc");
   });
@@ -2775,7 +2802,7 @@ function layoutArc(model, w, H, stage) {
   }
 
   if (model._justiceNode) place(model._justiceNode, cx, cy - R0 * 0.3, true, scale);
-  model._arcRender = { cx, cy, radii, bandR, hasSeniorsBand };  // for the overlay
+  model._arcRender = { cx, cy, radii: activeRadii, bandR, hasSeniorsBand };  // for the overlay
 }
 
 // Summary > SCOTUS's fixed double-ring layout (operator ask, 2026-09-03): unlike layoutArc's
