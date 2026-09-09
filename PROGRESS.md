@@ -10,7 +10,7 @@
 tracker (Phase-4 tail items open, PLUS a brand-new third pane view — "Change", built session
 (aw), operator review round addressed session (ax)) and the appointments beeswarm
 (feature-complete first version, operator refinement rounds ongoing; see sessions ai→at, aw).
-**Last updated:** 2026-09-08 (dd)
+**Last updated:** 2026-09-08 (de)
 
 ## Resume briefing
 <!-- Replaced wholesale at the end of each session — this is not an appended log, it's a
@@ -28,34 +28,57 @@ operator review — check `gh pr list`/`gh pr view 56` before assuming it's stil
 any new work on issue #50. If it's merged, there's no obvious open follow-up on that issue as of
 this writing.
 
-**Current state, as of (dd) — read this before touching `layoutArc`/anything in the "issue #50"
-section, since this whole area churned through five same-day commits (cz/da/db/dc/dd) before
-landing here**: the operator ultimately decided the repeated back-and-forth (da rolling back too
-much, db/dc correcting and patching it) wasn't the right path, and asked instead to go back to
-(cz) (`730133f`) directly and take out ONLY its point 3, keeping points 1-2. (dd) did exactly that
-— three `git revert`s (undoing dc, db, da in that order, landing the tree back at `730133f`
-exactly, confirmed with an empty `git diff`), then a fourth, narrower change: applied the reverse
-of `git diff fc3985d 730133f -- embed/court-tracker.js tests/browser-checks.mjs` (i.e., specifically
-undid (cz)'s own point-3 diff, nothing else), confirmed against `git diff fc3985d` afterward
-(empty for those two files). **Net result — this is the actual current state of the code**:
-- Kept (points 1-2 of (cz)): `.ctt-judge-label`'s `width:fit-content` centering fix, and
-  `.ctt-majority-line`'s opacity 0.5. Both purely in `embed/court-tracker.css`, untouched by any
-  of this.
-- Reverted (point 3 of (cz)): the senior "show" band is back to its ORIGINAL (cx) form — a fixed
-  `outermost active ring + ROW_GAP` offset, no collision detection of its own, no Rmax cap beyond
-  that fixed formula. `growRingsForIntra`/`adjustInterRingGaps`/`shrinkForCollisions`/
-  `findRingCollisions`/`labelHitsIcon`/`seatPoint` are unchanged from (cx) and apply to the ACTIVE
-  rings only, exactly as they always did pre-(cz).
-- **Entirely gone, not just reverted**: the Majority-view horizontal-scroll feature (da/db/dc:
-  `.ctt-judge-stage.ctt-majority-scroll`, `leftBleedShift()`, `seatHalfWidth()`, `activeRmax`) and
-  the `bandR`-exceeding-`Rmax` bug it exposed no longer apply — none of that code exists in the
-  tree. If a future ask revisits "seniors bleed off the mobile viewport" or "Show mode overflows
-  vertically," these are UNSOLVED again at this state (by the operator's explicit choice, not an
-  oversight) — don't assume either fix is still present.
-- The `(cx)`→`(cz)` git history genuinely still contains commits `cffd9bf`/`7d111dc`/`ed19958`
-  (da/db/dc) — they were `git revert`ed (three new commits undoing them), not rewritten/force-
-  pushed away, so they're still reachable in this branch's log if anyone ever wants to see exactly
-  what was tried and why it didn't stick. Don't be confused by seeing them in `git log`.
+**Current state, as of (de) — read this before touching `layoutArc`/`layoutScotusRing`/anything in
+the "issue #50" section, since this area was rewritten three times in one day (cz→da→db/dc→dd→de)
+before landing here. Trust THIS section, not any older one, and not the commit-by-commit history
+(several intermediate commits describe states that no longer exist).**
+- **Steps 0-3 apply to the active rings**, unchanged in spirit from (cx): Step 0 (label overflow →
+  full initials), Steps 1/2 (`growRingsForIntra`/`adjustInterRingGaps`, uniform growth then
+  individual gap adjustment), Step 3 (`shrinkForCollisions` for Timeline/SCOTUS; `layoutArc`'s own
+  inline shrink search for the general arc, see below).
+- **The senior "show" band gets its own SCOPED radius growth (Steps 1/2), but NOT its own scale**:
+  RADIUS: the band grows its own radius to resolve its own icons' crowding, then — if it still
+  collides with the outermost ACTIVE ring — only the band moves further out (never the active
+  ring). Reuses `growRingsForIntra`/`adjustInterRingGaps` unmodified, just with band-scoped or
+  `[fixedActiveR, movableBandR]` inputs (a 2-entry array makes index 0 `adjustInterRingGaps`' own
+  `centerIdx` for k=2, structurally guaranteed not to move). Grounded directly in issue #50's own
+  text: "Constraint on steps 1 & 2: ...an expansion that would overflow that area is not a valid
+  application," and the Step-3 tie-break language ("don't shrink more than necessary...") is a
+  GENERAL principle per the operator, not Step-3-only — growing an uninvolved ring's radius is
+  "more than necessary" even when it stays within `Rmax`. SCALE (Step 3): if a shrink is needed at
+  all, ONE scale applies to the WHOLE bench (active + band together) — `layoutArc`'s `resolveAt(s)`
+  closure re-runs both groups' scoped radius steps at a shared candidate `s`, and the shrink search
+  picks a single winning `s` for everyone. This asymmetry is deliberate, not an oversight: an
+  uninvolved ring growing its RADIUS wastes space for nothing (bad), but two DIFFERENT icon sizes
+  in the same view if only the band shrinks is a different, real bug — confirmed live by the
+  operator mid-session ("the senior judge icons are getting shrunk when none of the others are.
+  this behavior is wrong") after an earlier, band-scoped-shrink draft actually shipped that. If
+  you're about to touch Step 3 for the band: it must never end up at a different scale than the
+  active rings, full stop.
+- **`bandR` is hard-capped at `Rmax`** (`Math.min(Rmax, outermostActiveR + ROW_GAP)` as the
+  STARTING value, not just the growth ceiling — `growRingsForIntra`/`adjustInterRingGaps` only
+  ever cap further growth, never an already-oversized input, which is exactly how this bug
+  resurfaced once in (dd) and had to be fixed again in (de)). Without this, a crowded bench's
+  active rings can sit close enough to `Rmax` that `+ROW_GAP` alone overshoots it before any growth
+  loop runs — the band then renders past the stage's own top edge (this is a top-half dome, so
+  "too large a radius" always manifests as spilling ABOVE the stage, into the Seniors toggle row).
+- **Majority view scrolls horizontally** (`.ctt-judge-stage.ctt-majority-scroll`,
+  `leftBleedShift()`, `seatHalfWidth()`) — unconditional whenever `S.majorityMode` is true, NOT
+  gated to a width breakpoint: it's geometry-driven (`overflow-x:auto`'s scrollbar only appears
+  when `scrollWidth > clientWidth`), which already gives the operator's actual ask — an "ideal
+  fit," no scrollbar, at the default/largest width, with the scrollbar appearing organically as
+  the viewport narrows and content genuinely stops fitting. Covers Include's own crowding (real,
+  if usually small — a few px on the single most extreme desktop court) AND the band's. `.ctt-
+  judge-stage` needs `overflow-y:hidden` set explicitly alongside `overflow-x:auto` (the UA
+  computes the "visible" axis to `auto` too otherwise) — safe specifically because the `bandR`/
+  `Rmax` fix above means nothing should ever need vertical room past the stage's own height again.
+  Timeline never gets the scroll class.
+- This is architecturally close to what `(da)`/`(db)`/`(dc)` built for the scroll piece (same
+  Chrome gotchas apply — `transform:translate()`-positioned children DO count toward an
+  `overflow:auto` ancestor's `scrollWidth`; analytic pre-`place()` computation beats a
+  DOM-measure-then-correct round trip) but the band-collision piece is a genuinely NEW design,
+  not a restoration of `(cz)`'s or `(dc)`'s — neither of those scoped radius growth per ring-group
+  while sharing one whole-bench scale.
 
 The repo is public again (since session (cy), 2026-09-08/09) and GitHub Pages is live:
 https://digitalgroundgame.github.io/court-tracker/ — issue #49 is resolved/closed. Issue #36
@@ -518,6 +541,70 @@ Prove the whole app shell and asset schema on one circuit with hand-authored sam
 - Next: ...
 - Blockers: ...
 -->
+
+### 2026-09-08 (de) — PR #56: rebuilt the senior-band handling from first principles, grounded in issue #50's actual text — scoped radius growth, shared whole-bench scale, horizontal scroll
+- Phase: 4, same PR (#56, issue #50), still `claude/issue-50-collision-avoidance`. Picked back up
+  after (dd)'s reset to (cz)+points-1-2 immediately re-exposed the original `bandR`-exceeds-`Rmax`
+  bug (never fixed in (cz)/(cx), only ever fixed in the later, since-reverted (dc)) — the operator
+  asked "did you read issue #50?" and it turned out to matter a lot: the issue's own text already
+  specifies "Constraint on steps 1 & 2: both must stay within the size of the actual user-viewable
+  area... an expansion that would overflow that area is not a valid application," AND that Step
+  3's tie-break language ("don't shrink more than necessary just because a larger reduction also
+  worked") is a GENERAL principle, not Step-3-only — confirmed by the operator directly. That
+  reframed the whole senior-band question: growing every ring in one shared array (cz's original
+  approach) satisfies the viewable-area bound but still grows rings that have no collision of
+  their own whenever the band alone is crowded, which is MORE expansion than the situation needs —
+  a real violation of the general principle, even though it's a spec-compliant application of
+  Step 1's literal "expand all rings together" text. Working through several fork points with the
+  operator (a full transcript is more useful than a paraphrase — see the conversation, not
+  reconstructed detail here) landed on the actual design implemented:
+  - **Steps 1/2 (radius growth) are scoped separately per ring-group**: the senior "show" band
+    gets its OWN growth (resolving its own icons' intra-band crowding) and its OWN inter-ring push
+    against the outermost ACTIVE ring (only the band moves; the active ring is never the one with
+    the problem) — reusing `growRingsForIntra`/`adjustInterRingGaps` completely unmodified, just
+    with band-only or `[fixedActiveR, movableBandR]` scoped inputs (a 2-entry array makes index 0
+    `adjustInterRingGaps`' own `centerIdx` for k=2, so it's structurally guaranteed to never move).
+    "Include" mode needed nothing here — `innerArcSeats()` already folds included seniors into the
+    ordinary active seat list, so it was always covered by the plain active-ring pipeline.
+  - **Step 3 (icon shrink) is NOT scoped the same way — a real, separate bug found mid-session**:
+    an initial band-scoped shrink (mirroring the radius scoping) produced senior icons shrinking
+    to a DIFFERENT size than active icons when only the band needed it — operator caught this
+    directly ("the senior judge icons are getting shrunk when none of the others are. this
+    behavior is wrong") before it shipped. Fixed by unifying: one `resolveAt(scale)` closure now
+    re-runs BOTH the active AND band scoped radius steps at a single candidate scale, and Step 3's
+    search picks ONE scale used for the whole bench — never an active-only or band-only one. The
+    asymmetry (scope radius per-group, but scale whole-bench) is deliberate: growing an
+    uninvolved ring's RADIUS wastes space for no reason (the thing the operator's original
+    complaint was about), but if shrinking is genuinely needed at all, two different icon sizes in
+    the same view is a different, new kind of wrong (visual inconsistency) that scoping doesn't
+    avoid, it just creates.
+  - **The `bandR`-starting-value bug** (same root cause as the old (dc) fix, rediscovered):
+    `growRingsForIntra`/`adjustInterRingGaps` only ever CAP further growth at `Rmax` — neither
+    clamps an already-oversized STARTING value, and the band's natural start
+    (`outermostActiveR + ROW_GAP`) can already exceed `Rmax` before any growth loop runs on a
+    crowded bench. Fixed with an explicit `Math.min(Rmax, ...)` on the starting radius, not just
+    the growth ceiling.
+  - **Horizontal scroll**: reinstated (`.ctt-judge-stage.ctt-majority-scroll`, `leftBleedShift()`,
+    `seatHalfWidth()` — same mechanism `(da)` originally built, same Chrome-transform-counts-
+    toward-scrollWidth and overflow-x/y-coupling gotchas, both reconfirmed still true), covering
+    BOTH Include's own crowding and the band's — unconditional in Majority mode (no fixed
+    breakpoint), so it's purely geometry-driven: an ordinary court shows no scrollbar at all at
+    desktop width (verified, new test), and the scrollbar only appears once content genuinely
+    doesn't fit as the viewport narrows — exactly the operator's ask ("ideal fit" at the default
+    width, "arbitrary" horizontal room on mobile via scroll).
+- Verification: three new permanent test sections in `tests/browser-checks.mjs` — (1) `bandR`
+  stays within `Rmax` and no senior icon renders above the stage's own top edge (ca9, 22 seniors,
+  the original repro), PLUS a same-scale assertion reading each icon's live `transform` directly
+  (not internal state) to guard the "two different sizes" bug from ever regressing silently; (2)
+  horizontal scroll reaches both edges for Include AND Show (band) at 380px; (3) an ordinary court
+  has zero horizontal overflow at desktop width. Full jsdom suite (`embed/` + `--dist`) and
+  real-Chrome CDP checks (`embed/` + `dist/`) all pass. Manually re-screenshotted ca9/Show at
+  desktop: toggle row now fully clear, active and senior icons visibly the same (shrunk) size
+  together, not mismatched. `dist/` rebuilt and committed alongside `embed/`.
+- Next: PR #56 still open, awaiting operator review. This PR's `layoutArc` has now been rewritten
+  three times in one day (cz→da→db/dc→dd→de) — genuinely worth a full, careful read of the CURRENT
+  diff against `main` rather than trying to reason about it from the commit-by-commit history.
+- Blockers: none.
 
 ### 2026-09-08 (dd) — PR #56: operator asked to stop iterating and reset to (cz), keeping only points 1-2, dropping point 3 and everything built after it
 - Phase: 4, same PR (#56, issue #50), still `claude/issue-50-collision-avoidance`. Context: after

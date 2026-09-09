@@ -631,6 +631,106 @@ try {
     assert(overlapReport < 12, `worst remaining label/icon overlap stays small (${overlapReport}px)`);
   }
 
+  console.log("issue #50 follow-up: the senior 'show' band gets its own scoped RADIUS growth (never inflates active-ring radii), capped at Rmax, sharing one whole-bench SCALE if a shrink is ever needed");
+  {
+    // ca9 (22 seniors, the dataset's largest band) is where the Rmax-overshoot bug was originally
+    // caught: active-ring growth (needed regardless, to resolve real crowding) plus a fixed
+    // `+ROW_GAP` band offset could together exceed Rmax with no cap at all.
+    await ev(`document.querySelector('.ctt-selector-back')?.click()`); await sleep(400);
+    await ev(`document.querySelector('.ctt-selector-item[data-court-id="ca9"]')?.click()`); await sleep(600);
+    await ev(`[...document.querySelectorAll(".ctt-toggle")].find(b => b.textContent === "Majority")?.click()`); await sleep(700);
+    await ev(`document.querySelector('.ctt-toggle[data-senior="show"]')?.click()`); await sleep(700);
+    const bandReport = await ev(`(() => {
+      const stage = document.querySelector('.ctt-judge-stage');
+      const model = stage._model, ar = model._arcRender;
+      const stageR = stage.getBoundingClientRect();
+      const seniors = [...stage.querySelectorAll('.ctt-judge.ctt-senior')].filter((n) => getComputedStyle(n).opacity !== '0');
+      const actives = [...stage.querySelectorAll('.ctt-judge:not(.ctt-senior):not(.ctt-vacant):not(.ctt-justice)')];
+      let minTop = Infinity;
+      for (const n of seniors) minTop = Math.min(minTop, n.getBoundingClientRect().top);
+      // Read each icon's OWN scale straight off its live transform, rather than trusting
+      // internal state, so this is a check on what's actually rendered.
+      const scaleOf = (n) => { const m = /scale\\(([\\d.]+)\\)/.exec(n.style.transform); return m ? +m[1] : 1; };
+      const seniorScales = [...new Set(seniors.map(scaleOf).map((s) => s.toFixed(2)))];
+      const activeScales = [...new Set(actives.map(scaleOf).map((s) => s.toFixed(2)))];
+      return JSON.stringify({
+        bandR: ar.bandR, Rmax: Math.max(60, ar.cy - 30), stageTop: stageR.top, minTop,
+        seniorCount: seniors.length, seniorScales, activeScales,
+      });
+    })()`);
+    const br = JSON.parse(bandReport);
+    assert(br.seniorCount >= 15, `ca9's senior band is really on the bench for this check (got ${br.seniorCount})`);
+    assert(br.bandR <= br.Rmax + 1, `bandR stays within Rmax (bandR ${br.bandR.toFixed(1)} vs Rmax ${br.Rmax.toFixed(1)})`);
+    assert(br.minTop >= br.stageTop - 2, `no senior icon renders above the stage's own top edge (icon top ${br.minTop.toFixed(1)} vs stage top ${br.stageTop.toFixed(1)})`);
+    // Not "every icon is exactly 1x" (a genuinely crowded bench may need Step 3 for everyone) —
+    // specifically that senior icons and active icons are never at DIFFERENT scales from each
+    // other, which would mean the band shrank alone while the rest of the bench didn't (or vice
+    // versa) — a real, confirmed bug this asserts against regressing.
+    assert(br.seniorScales.length === 1 && br.activeScales.length === 1 && br.seniorScales[0] === br.activeScales[0],
+      `senior and active icons share ONE scale, never two different ones (senior ${JSON.stringify(br.seniorScales)}, active ${JSON.stringify(br.activeScales)})`);
+  }
+
+  console.log("Majority view scrolls horizontally to reach seats that would otherwise bleed off either edge — covers both Include's own crowding and the senior band's");
+  {
+    await send("Emulation.setDeviceMetricsOverride", { width: 380, height: 900, deviceScaleFactor: 1, mobile: true });
+    await sleep(400);
+    console.log("  Include mode (already selected on ca9): both edges reachable by scroll");
+    await ev(`document.querySelector('.ctt-toggle[data-senior="include"]')?.click()`); await sleep(700);
+    const checkBothEdges = async (label) => {
+      const before = JSON.parse(await ev(`(() => {
+        const stage = document.querySelector('.ctt-judge-stage');
+        return JSON.stringify({ scrollWidth: stage.scrollWidth, clientWidth: stage.clientWidth, hasScrollClass: stage.classList.contains('ctt-majority-scroll') });
+      })()`));
+      assert(before.hasScrollClass, `${label}: the stage carries ctt-majority-scroll in Majority mode`);
+      assert(before.scrollWidth > before.clientWidth + 20,
+        `${label}: genuinely overflows horizontally at 380px, so this is a real test (scrollWidth ${before.scrollWidth} vs clientWidth ${before.clientWidth})`);
+      const left = JSON.parse(await ev(`(() => {
+        const stage = document.querySelector('.ctt-judge-stage');
+        stage.scrollLeft = 0;
+        const stageL = stage.getBoundingClientRect().left;
+        const icons = [...stage.querySelectorAll('.ctt-judge')].filter((n) => !n.classList.contains('ctt-vacant') && getComputedStyle(n).opacity !== '0');
+        let minLeft = Infinity;
+        for (const n of icons) minLeft = Math.min(minLeft, n.querySelector('.ctt-judge-label').getBoundingClientRect().left);
+        return JSON.stringify({ stageL, minLeft });
+      })()`));
+      assert(left.minLeft >= left.stageL - 2, `${label}: scrolled fully left, no label sits left of the stage's own edge (label left ${left.minLeft.toFixed(1)} vs stage left ${left.stageL.toFixed(1)})`);
+      const right = JSON.parse(await ev(`(() => {
+        const stage = document.querySelector('.ctt-judge-stage');
+        stage.scrollLeft = stage.scrollWidth - stage.clientWidth;
+        const stageR = stage.getBoundingClientRect().right;
+        const icons = [...stage.querySelectorAll('.ctt-judge')].filter((n) => !n.classList.contains('ctt-vacant') && getComputedStyle(n).opacity !== '0');
+        let maxRight = -Infinity;
+        for (const n of icons) maxRight = Math.max(maxRight, n.querySelector('.ctt-judge-label').getBoundingClientRect().right);
+        return JSON.stringify({ stageR, maxRight });
+      })()`));
+      assert(right.maxRight <= right.stageR + 2, `${label}: scrolled fully right, no label sits right of the stage's own edge (label right ${right.maxRight.toFixed(1)} vs stage right ${right.stageR.toFixed(1)})`);
+    };
+    await checkBothEdges("Include");
+
+    console.log("  Show mode: the senior band (deliberately not collision-checked against active rings) is still reachable both directions");
+    await ev(`document.querySelector('.ctt-toggle[data-senior="show"]')?.click()`); await sleep(700);
+    await checkBothEdges("Show");
+
+    console.log("  Timeline mode never gets the scroll class (this is Majority-only)");
+    await ev(`[...document.querySelectorAll(".ctt-toggle")].find(b => b.textContent === "Timeline")?.click()`); await sleep(500);
+    const timelineHasClass = await ev(`document.querySelector('.ctt-judge-stage').classList.contains('ctt-majority-scroll')`);
+    assert(!timelineHasClass, "Timeline's stage does not carry ctt-majority-scroll");
+    await send("Emulation.clearDeviceMetricsOverride");
+  }
+
+  console.log("Majority view shows NO scrollbar at the default/largest width for an ordinary court (geometry-driven, not a fixed breakpoint — an 'ideal fit' at desktop)");
+  {
+    await ev(`document.querySelector('.ctt-selector-back')?.click()`); await sleep(400);
+    await ev(`document.querySelector('.ctt-selector-item[data-court-id="ca8"]')?.click()`); await sleep(600);
+    await ev(`[...document.querySelectorAll(".ctt-toggle")].find(b => b.textContent === "Majority")?.click()`); await sleep(700);
+    const fit = await ev(`(() => {
+      const stage = document.querySelector('.ctt-judge-stage');
+      return JSON.stringify({ scrollWidth: stage.scrollWidth, clientWidth: stage.clientWidth });
+    })()`);
+    const f = JSON.parse(fit);
+    assert(f.scrollWidth <= f.clientWidth + 1, `an ordinary court (ca8) at desktop width has no horizontal overflow at all (scrollWidth ${f.scrollWidth} vs clientWidth ${f.clientWidth})`);
+  }
+
   console.log("  a resize after initial mount doesn't leave Summary > SCOTUS's ring wrongly stuck on initials (regression: stale-transform double-scaling bug)");
   await ev(`document.querySelector('.ctt-selector-back')?.click()`); await sleep(400);
   await ev(`document.querySelector('.ctt-selector-item[data-court-id="summary"]')?.click()`); await sleep(600);
