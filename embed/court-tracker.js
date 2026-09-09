@@ -2333,16 +2333,26 @@ function majorityDims(w, H = 320) {
   // must stay within the size of the actual user-viewable area" applies to BOTH axes, not just
   // height, but `Rmax` alone only ever bounded height (nothing here ever checked whether a
   // ring's radius pushed seats past the pane's own left/right edges). Since `cx === w/2`, a
-  // ring's radius must not exceed `cx` itself to keep `cx ± radius` inside `[0, w]`; the -30
-  // margin (same fudge `Rmax` already reserves for a label past its own icon) leaves a little
-  // room for a seat's label to extend past its icon at the arc's own horizontal extremes,
-  // instead of shaving it exactly to the pixel. Confirmed as a real, live bug (operator report):
-  // without this, growth (Steps 1/2) could resolve every label/icon collision while still
-  // leaving the arc wider than the pane, since nothing about that condition ever counted as a
-  // reason to invoke Step 3 — the scrollbar this width gap needs `.ctt-judge-stage.ctt-majority-
-  // scroll` for should now be rare, not something an ordinary/even a large real bench hits at
-  // its own default width.
-  return { H, cx, cy, Rmax: Math.max(60, cy - 30), Wmax: Math.max(60, cx - 30), R0: Math.min(w * 0.26, 132) };
+  // ring's radius must not exceed `cx` itself to keep `cx ± radius` inside `[0, w]`; the margin
+  // below leaves room for a seat's label to extend past its icon at the arc's own horizontal
+  // extremes, instead of shaving it exactly to the pixel. Confirmed as a real, live bug (operator
+  // report): without this, growth (Steps 1/2) could resolve every label/icon collision while
+  // still leaving the arc wider than the pane, since nothing about that condition ever counted as
+  // a reason to invoke Step 3 — the scrollbar this width gap needs `.ctt-judge-stage.ctt-majority-
+  // scroll` for should now be rare, not something an ordinary/even a large real bench hits at its
+  // own default width.
+  // `Wmax`'s own margin is wider than `Rmax`'s (40 vs 30) — a real, environment-specific gap
+  // (added, CI-only regression): the SAME court/mode (ca9/Include, desktop width) fit with zero
+  // overflow locally but overflowed by a few px in CI's headless Chrome, purely from label-text
+  // WIDTH metrics differing by font-rendering environment (`Rmax`'s margin absorbs a label's
+  // HEIGHT reach — a much less text/font-sensitive axis — so it keeps its original value). This
+  // is fundamentally a fixed heuristic, not an exact per-label guarantee (no constant margin can
+  // promise zero overflow for literally any name in any font) — if this specific class of CI
+  // failure recurs for a different court/name, the fix is the same: widen this margin further,
+  // not loosen the test's own tolerance (the test's tolerance is what VERIFIES the real behavior
+  // users would see — loosening it without also fixing this margin would leave the actual
+  // scrollbar showing in that same environment, just unflagged).
+  return { H, cx, cy, Rmax: Math.max(60, cy - 30), Wmax: Math.max(60, cx - 40), R0: Math.min(w * 0.26, 132) };
 }
 
 // Distribute N icons across the given ring radii so intra-ring neighbour spacing is as

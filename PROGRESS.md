@@ -10,7 +10,7 @@
 tracker (Phase-4 tail items open, PLUS a brand-new third pane view — "Change", built session
 (aw), operator review round addressed session (ax)) and the appointments beeswarm
 (feature-complete first version, operator refinement rounds ongoing; see sessions ai→at, aw).
-**Last updated:** 2026-09-09 (dg)
+**Last updated:** 2026-09-09 (dh)
 
 ## Resume briefing
 <!-- Replaced wholesale at the end of each session — this is not an appended log, it's a
@@ -28,15 +28,21 @@ operator review — check `gh pr list`/`gh pr view 56` before assuming it's stil
 any new work on issue #50. If it's merged, there's no obvious open follow-up on that issue as of
 this writing.
 
-**Current state, as of (dg) — read this before touching `layoutArc`/`layoutScotusRing`/anything in
+**Current state, as of (dh) — read this before touching `layoutArc`/`layoutScotusRing`/anything in
 the "issue #50" section, since this area was rewritten repeatedly in a short span
-(cz→da→db/dc→dd→de→df→dg) before landing here. Trust THIS section, not any older one, and not the
-commit-by-commit history (several intermediate commits describe states that no longer exist).**
+(cz→da→db/dc→dd→de→df→dg→dh) before landing here. Trust THIS section, not any older one, and not
+the commit-by-commit history (several intermediate commits describe states that no longer exist).**
 - **Growth (Steps 1/2) is bounded by BOTH axes, not height alone** (df): `majorityDims` also
-  returns `Wmax = Math.max(60, cx - 30)`, `Rmax`'s width-axis counterpart — `Rmax` alone (pane
+  returns `Wmax = Math.max(60, cx - 40)`, `Rmax`'s width-axis counterpart — `Rmax` alone (pane
   height only) let growth fully resolve every label/icon collision while still leaving the arc
   wider than the pane, since that was never checked as "did this stay within the viewable area."
-  `layoutArc` computes `effectiveMax = Math.min(Rmax, Wmax)` and passes it to
+  **`Wmax`'s margin is `-40`, NOT the same `-30` `Rmax` uses** (widened dh, after a CI-only
+  failure: the exact same court/mode fit with zero slack locally but overflowed by a few px in
+  CI's headless Chrome — purely from label-text WIDTH metrics differing by font-rendering
+  environment; `Rmax`'s HEIGHT-axis margin is much less font-sensitive and was left alone). This
+  is a heuristic, not an exact guarantee — if a similar CI-only "desktop overflow" failure recurs
+  for a different court/name, widen this margin further; do NOT loosen the test's own tolerance
+  instead (see (dh)'s session-log entry for why). `layoutArc` computes `effectiveMax = Math.min(Rmax, Wmax)` and passes it to
   `growRingsForIntra`/`adjustInterRingGaps` (both active-ring and the band's own scoped calls,
   below). **`planRings`'s own ring-COUNT argument stays plain `Rmax`, never `effectiveMax`** —
   passing the tighter one there collapsed a genuinely multi-ring bench to a single ring on narrow
@@ -569,6 +575,51 @@ Prove the whole app shell and asset schema on one circuit with hand-authored sam
 - Next: ...
 - Blockers: ...
 -->
+
+### 2026-09-09 (dh) — PR #56: CI-only failure — ca9/Include's "zero overflow at desktop" check failed by 6px in GitHub Actions (never locally); Wmax's margin widened
+- Phase: 4, same PR (#56, issue #50), still `claude/issue-50-collision-avoidance`. Right after (dg),
+  the operator asked to clean up the PR description and squash-merge — pulled CI status first
+  (routine before any merge) and found `real-browser checks` failing on a check that passes
+  locally: `ca9/include at desktop width has no horizontal overflow (scrollWidth 606 vs
+  clientWidth 600)`, a 6px miss against the test's own `+1px` tolerance.
+- **Confirmed NOT caused by (dg)**: `gh run view` on the PRIOR commit (df, before this session's
+  band fix) showed the exact same failure, byte-identical numbers (606 vs 600). Pre-existing,
+  latent since (df) — this session's own (dg) work didn't introduce or worsen it.
+- **Root cause**: reproduced locally — scrollWidth/clientWidth come out EXACTLY equal (600/600),
+  zero slack either way. `Wmax`'s `-30` margin (the fixed heuristic reserving room for a label to
+  extend past its own icon at the arc's horizontal extremes) is a GUESS, not an exact per-label
+  measurement — real label width depends on the ACTUAL rendered glyphs (`measureLabelNatural`'s
+  `Range`-based `textWidth`, computed live per node), which varies with the font stack the
+  rendering environment actually has installed. CI's headless Chrome resolves the CSS font-family
+  fallback chain to different actual glyphs than the local dev machine's Chrome — same names, same
+  code, same test, different real-world width by a few px. This is fundamentally unavoidable with
+  any FIXED margin constant: no single number can be provably sufficient for arbitrary text in an
+  unknown font environment, only "sufficient in practice, tuned against what's actually been seen."
+- **Considered and rejected**: extending Step 3's own search to treat any measured pane-edge
+  overflow as another "unacceptable collision" type (reusing `seatHalfWidth`'s real per-label
+  measurement instead of `Wmax`'s fixed guess). Technically more principled, but risks a real
+  regression: it would make Step 3 shrink icons on ANY width whenever natural content exceeds the
+  pane, including MOBILE — which directly contradicts the operator's earlier explicit instruction
+  this same PR that mobile's viewable width should stay "arbitrary," with scroll (not extra
+  shrinking) as the intended fallback there. There's no width-breakpoint variable in this codebase
+  to safely scope such a check to "desktop only" (geometry-driven by design, no fixed breakpoints)
+  — implementing this properly would need real design discussion, not a quick CI fix. Reverted
+  before it ever left this session's working tree.
+- **Fix actually applied**: widened `Wmax`'s own margin from `-30` to `-40` (`Rmax`'s margin is
+  UNCHANGED — the failure is specifically a label-WIDTH phenomenon, and `Rmax` bounds the
+  HEIGHT axis, a much less font-sensitive dimension). This is honestly a heuristic bump, not a
+  structural fix — **if this exact class of CI-only failure recurs for a different court/name,
+  widen this margin further; do NOT loosen the test's own tolerance instead** — the test's
+  tolerance is what verifies the ACTUAL user-visible behavior (a real scrollbar would still show
+  in that font environment even if the test were made to ignore it).
+- Verified: all four suites pass locally (`npm test`, `test:dist`, `test:browser`,
+  `test:browser:dist`); the (dg) band-gap diagnostic sweep and the mobile-380px overflow diagnostic
+  both re-checked and still hold (gap stays a consistent positive value, never negative; mobile
+  still genuinely overflows, scroll fallback intact). Pushed and awaiting the actual CI re-run
+  before merging — this fix cannot be fully verified from a local run, since the failure is
+  specifically about CI's own font environment.
+- Next: once CI confirms green, finish cleaning up the PR #56 description (operator ask: fold in
+  an explanation of how the whole algorithm works, not just a changelog) and squash-merge.
 
 ### 2026-09-09 (dg) — PR #56: the senior band was rendering INSIDE the outer active ring below ~1000px wide (not "locked to the perimeter"); bandR's own effectiveMax clamp was the cause
 - Phase: 4, same PR (#56, issue #50), still `claude/issue-50-collision-avoidance`. Operator report:
