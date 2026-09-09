@@ -10,7 +10,7 @@
 tracker (Phase-4 tail items open, PLUS a brand-new third pane view — "Change", built session
 (aw), operator review round addressed session (ax)) and the appointments beeswarm
 (feature-complete first version, operator refinement rounds ongoing; see sessions ai→at, aw).
-**Last updated:** 2026-09-08 (da)
+**Last updated:** 2026-09-08 (db)
 
 ## Resume briefing
 <!-- Replaced wholesale at the end of each session — this is not an appended log, it's a
@@ -23,32 +23,29 @@ logged date. Session log entries `(bt)`-`(ce)` drifted up to +7 days ahead of th
 git-commit dates from exactly this mistake; see `CLAUDE.md` §7 and the `(cp)` 2026-09-08 entry
 below for the full incident and the corrected dates (ground truth: `git log --format=%ad`).
 
-**Next task**: PR #56 (issue #50's ring/arc collision-avoidance algorithm — but see immediately
-below, most of it is now rolled back) is open awaiting operator review — check `gh pr
-list`/`gh pr view 56` before assuming it's still open or starting any new work on issue #50. If
-it's merged, there's no obvious open follow-up on that issue as of this writing.
+**Next task**: PR #56 (issue #50's ring/arc collision-avoidance algorithm) is open awaiting
+operator review — check `gh pr list`/`gh pr view 56` before assuming it's still open or starting
+any new work on issue #50. If it's merged, there's no obvious open follow-up on that issue as of
+this writing.
 
-**(da) session, same PR #56 — Steps 1/2/3 of the collision-avoidance algorithm ROLLED BACK,
-replaced by Majority-view horizontal scroll** (full detail in the Session log entry below, not
-repeated here). The operator's own conclusion, after reviewing a screenshot showcase artifact
-built earlier in that conversation: the ring-growth system "doesn't matter all that much for
-desktop," and pushing rings that were never crowded outward to fix crowding elsewhere (worst
-under Include, but — a real surprise — also under Show, once the senior band got folded into the
-same growth pipeline in session (cz)) wasn't worth it. **If you're about to touch anything
-described by an OLDER entry below as part of that ring-growth system (`growRingsForIntra`,
-`adjustInterRingGaps`, `shrinkForCollisions`, `findRingCollisions`, `COLLISION_BUFFER_PX`,
-`SHRINK_ROUND_PX`) — stop, it no longer exists; those entries are historical, not current.**
-What's still live from issue #50: Step 0 only (`resolveLabelOverflow`, label → full-distinct-
-initials on wrap/overflow) — a text fix, not ring geometry, never part of the rollback. New in its
-place: `.ctt-judge-stage.ctt-majority-scroll` + `leftBleedShift()` — Majority view now scrolls
-horizontally rather than reshaping the arc; see the "measuring an icon's label geometry" and
-"transform-positioned children DO count toward an overflow:auto ancestor's scrollWidth in Chrome"
-convention notes below before touching this again.
+**Current state of the collision-avoidance algorithm, as of (db) — read this before touching
+`layoutArc`/`layoutScotusRing`/anything named Step 0-3, since it went through a rollback AND a
+correction in the same day**: Steps 0/1/2/3 are ALL live and apply to the ACTIVE rings, exactly as
+(cx) originally shipped them (`resolveLabelOverflow`, `growRingsForIntra`, `adjustInterRingGaps`,
+`shrinkForCollisions`, `findRingCollisions`, `labelHitsIcon`, `seatPoint` all exist and are used).
+The ONLY piece actually rolled back is (cz)'s extension that folded the senior "show" band into
+that same growth pipeline — the band is back to a plain `outermost active ring + ROW_GAP` fixed
+offset with no collision detection of its own, same as before (cz) touched it. (**(da)'s own
+Session log/briefing text claimed the WHOLE Steps 1/2/3 system was removed — that was wrong, a
+same-day overcorrection the operator caught and (db) fixed; if you're reading an old copy of this
+file or a stale cache, trust (db)'s Session log entry over (da)'s.**) Separately, and NOT rolled
+back: Majority view now also scrolls horizontally (`.ctt-judge-stage.ctt-majority-scroll` +
+`leftBleedShift()`, computed against the FINAL post-Steps-0-3 geometry) — this was always meant as
+an addition/safety-net (esp. for the now-unguarded band), not a replacement for the ring geometry,
+and stands regardless of how the rollback-vs-restore question above resolved.
 
-The (cz) session's OTHER two fixes are unaffected by this rollback and still stand: `.ctt-judge-
-label`'s `width:fit-content` centering fix, and `.ctt-majority-line`'s opacity 0.5. Both verified
-in real Chrome, `tests/browser-checks.mjs` has coverage, full jsdom+CDP suites pass for both
-`embed/` and `dist/`.
+The (cz) session's other two fixes (`.ctt-judge-label`'s `width:fit-content` centering, and
+`.ctt-majority-line`'s opacity 0.5) were never in question and still stand as shipped.
 
 The repo is public again (since session (cy), 2026-09-08/09) and GitHub Pages is live:
 https://digitalgroundgame.github.io/court-tracker/ — issue #49 is resolved/closed. Issue #36
@@ -152,14 +149,19 @@ re-check `gh issue list` fresh, since this list goes stale fast.
   widget a centered block might hold content wider than its container (long president names,
   court names, etc.) — the fix pattern (fit-content + margin:auto, in place of a filled block) is
   the one to reach for again rather than re-deriving it.
-- **SUPERSEDED, kept for the history — do not build on this pattern**: session (cz) noted that a
-  geometry-adjustment algorithm parameterized over "a list of rings" (issue #50's Steps 1/2/3)
-  could absorb a new ring-like element just by appending it to that list, using the senior "show"
-  band as the example. Session (da) rolled that whole ring-growth system back (see its Session log
-  entry and the Resume briefing above) — `growRingsForIntra`/`adjustInterRingGaps`/
-  `findRingCollisions`/`shrinkForCollisions` no longer exist. The band is back to a plain fixed
-  `outermost + ROW_GAP` offset. Kept this entry only so a future session doesn't go looking for
-  code this describes and wonder if it was deleted by mistake — it wasn't.
+- **PARTIALLY SUPERSEDED — read carefully, this is the one entry in this file that got corrected
+  same-day**: session (cz) noted that a geometry-adjustment algorithm parameterized over "a list
+  of rings" (issue #50's Steps 1/2/3) could absorb a new ring-like element just by appending it to
+  that list, using the senior "show" band as the example. Session (da) then rolled back — but
+  (da)'s OWN Session log/briefing text over-described this as removing the WHOLE Steps 1/2/3
+  system (`growRingsForIntra`/`adjustInterRingGaps`/`findRingCollisions`/`shrinkForCollisions` "no
+  longer exist"). That was wrong: the operator's actual ask (clarified same day, session (db)) was
+  to roll back ONLY (cz)'s band-folding piece. **Steps 1/2/3 are live and unchanged from (cx),
+  applying to the active rings** (which includes Seniors:Include's larger seat count — that was
+  never part of what (cz) added or what got rolled back). Only the band is back to its plain fixed
+  `outermost + ROW_GAP` offset with no collision detection of its own. If another file, an old
+  cache, or your own memory says "Steps 1/2/3 were removed" — that's (da)'s mistaken framing, not
+  the current, corrected state; trust (db)'s Session log entry instead.
 - **`overflow:auto`'s "the other axis becomes auto too if you set one of overflow-x/overflow-y to
   anything but visible" rule is a real, load-bearing CSS behavior, not a corner case to route
   around** (session (da), issue #50 follow-up — Majority-view horizontal scroll): wanted
@@ -604,6 +606,45 @@ Prove the whole app shell and asset schema on one circuit with hand-authored sam
   from closed PR #1 was correctly never resurrected, per that issue's own explicit note.
 - Next: no open follow-up on issue #49 itself. PR #56 (issue #50's collision-avoidance algorithm)
   is still open awaiting review — that's the next item.
+- Blockers: none.
+
+### 2026-09-08 (db) — PR #56: correction — (da) over-rolled-back; restored Steps 1/2/3 for active rings, kept only the band-folding piece removed
+- Phase: 4, same PR (#56, issue #50), still `claude/issue-50-collision-avoidance`. The operator
+  clarified immediately after (da) landed: *"i meant a rollback of a very specific subcomponent of
+  the sometimes-additional-ring change we had just added on top of the 0-3 steps algorithm."*
+  (da) had removed the ENTIRE Steps 1/2/3 system (`growRingsForIntra`/`adjustInterRingGaps`/
+  `shrinkForCollisions`/`findRingCollisions`/`labelHitsIcon`/`seatPoint` and every call site) —
+  too much. What the operator actually meant by "the additional ring rule"/"sometimes-additional-
+  ring change" was specifically session (cz)'s extension that folded the senior "show" band into
+  that same shared growth pipeline as one more ring — NOT the original (cx) algorithm applying
+  normally to the active rings (which includes Seniors:Include's larger active seat count, since
+  `innerArcSeats()` already folds included seniors into the ordinary seat list — that was never
+  part of what (cz) added, and was never what the operator was pointing at).
+- **Restored in full, exactly as (cx) shipped them**: `seatPoint`, `labelHitsIcon`,
+  `findRingCollisions`, `growRingsForIntra` (Step 1), `adjustInterRingGaps` (Step 2),
+  `shrinkForCollisions` (Step 3), `COLLISION_BUFFER_PX`, `SHRINK_ROUND_PX`, `LABEL_GAP` — and their
+  use in both `layoutArc` (general arc, ACTIVE rings only) and `layoutScotusRing` (Step 3 only, as
+  before). **Re-removed, this time correctly scoped**: only the (cz) piece that folded the senior
+  band into that pipeline as `bandRingIdx`/`baseRadiiFull`. The band is back to `outermost active
+  ring + ROW_GAP`, no collision detection of its own — exactly its (cx)-era form, one session
+  before (cz) ever touched it.
+- **(da)'s horizontal-scroll addition is unaffected and stays** — the operator's ask there
+  ("allow horizontal scrolling in majority view... should allow seeing the leftmost-positioned
+  judge icon too") was independent of how much of the ring-growth system survived. `leftBleedShift`
+  now runs against the FINAL radii/scale Steps 0-3 settle on (not raw baseRadii), so it acts as a
+  safety net for whatever the geometry — deliberately, for the band — doesn't resolve, rather than
+  a replacement for the geometry. Verified this still covers the band case specifically (new test,
+  ca9/Show, 22 seniors): the band bleeding left is still reachable by scroll even though it's no
+  longer collision-avoided.
+- Verification: restored the "no label overlaps a neighboring icon" overlap-ceiling assertion (an
+  active-rings-only check, paed/Hide/desktop, unaffected by the band question either way) that
+  (da) had deleted; kept (da)'s horizontal-scroll left/right assertions; added a new one for the
+  senior-band case specifically. Full jsdom suite (`embed/` + `--dist`) and real-Chrome CDP checks
+  (`embed/` + `dist/`) all pass. Manually re-screenshotted ca9 Include (now shows the fuller
+  ring-grown footprint again, not the cramped/overlapping one (da) produced) and Show (active rings
+  compact like Hide again — no more band-driven push-out) to confirm before finalizing. `dist/`
+  rebuilt (`court-tracker.min.js` only — no CSS changed this round).
+- Next: PR #56 still open, awaiting operator review of this corrected round.
 - Blockers: none.
 
 ### 2026-09-08 (da) — PR #56: rolled back the ring-growth collision-avoidance system; added Majority-view horizontal scroll instead
