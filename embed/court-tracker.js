@@ -2333,26 +2333,23 @@ function majorityDims(w, H = 320) {
   // must stay within the size of the actual user-viewable area" applies to BOTH axes, not just
   // height, but `Rmax` alone only ever bounded height (nothing here ever checked whether a
   // ring's radius pushed seats past the pane's own left/right edges). Since `cx === w/2`, a
-  // ring's radius must not exceed `cx` itself to keep `cx ± radius` inside `[0, w]`; the margin
-  // below leaves room for a seat's label to extend past its icon at the arc's own horizontal
-  // extremes, instead of shaving it exactly to the pixel. Confirmed as a real, live bug (operator
-  // report): without this, growth (Steps 1/2) could resolve every label/icon collision while
-  // still leaving the arc wider than the pane, since nothing about that condition ever counted as
-  // a reason to invoke Step 3 — the scrollbar this width gap needs `.ctt-judge-stage.ctt-majority-
-  // scroll` for should now be rare, not something an ordinary/even a large real bench hits at its
-  // own default width.
-  // `Wmax`'s own margin is wider than `Rmax`'s (40 vs 30) — a real, environment-specific gap
-  // (added, CI-only regression): the SAME court/mode (ca9/Include, desktop width) fit with zero
-  // overflow locally but overflowed by a few px in CI's headless Chrome, purely from label-text
-  // WIDTH metrics differing by font-rendering environment (`Rmax`'s margin absorbs a label's
-  // HEIGHT reach — a much less text/font-sensitive axis — so it keeps its original value). This
-  // is fundamentally a fixed heuristic, not an exact per-label guarantee (no constant margin can
-  // promise zero overflow for literally any name in any font) — if this specific class of CI
-  // failure recurs for a different court/name, the fix is the same: widen this margin further,
-  // not loosen the test's own tolerance (the test's tolerance is what VERIFIES the real behavior
-  // users would see — loosening it without also fixing this margin would leave the actual
-  // scrollbar showing in that same environment, just unflagged).
-  return { H, cx, cy, Rmax: Math.max(60, cy - 30), Wmax: Math.max(60, cx - 40), R0: Math.min(w * 0.26, 132) };
+  // ring's radius must not exceed `cx` itself to keep `cx ± radius` inside `[0, w]`; the -30
+  // margin (same fudge `Rmax` already reserves for a label past its own icon) leaves a little
+  // room for a seat's label to extend past its icon at the arc's own horizontal extremes,
+  // instead of shaving it exactly to the pixel. Confirmed as a real, live bug (operator report):
+  // without this, growth (Steps 1/2) could resolve every label/icon collision while still
+  // leaving the arc wider than the pane, since nothing about that condition ever counted as a
+  // reason to invoke Step 3 — the scrollbar this width gap needs `.ctt-judge-stage.ctt-majority-
+  // scroll` for should now be rare, not something an ordinary/even a large real bench hits at
+  // its own default width.
+  // NOTE: this margin only bounds RING-RADIUS growth (Steps 1/2) — it is NOT what determines
+  // whether a label actually pokes past the pane's edge. That's measured separately and exactly
+  // by `seatHalfWidth`/`leftBleedShift` at the end of `layoutArc`. Widening this constant was
+  // tried once (session dh) to chase a CI-only overflow and had ZERO effect (proved by CI
+  // reproducing byte-identical numbers before and after) — see `layoutArc`'s `resolveAt` for the
+  // fix that actually worked (checking REAL measured pane-edge overflow inside the Step-3 search,
+  // not this fixed heuristic). Don't widen this again for that class of bug.
+  return { H, cx, cy, Rmax: Math.max(60, cy - 30), Wmax: Math.max(60, cx - 30), R0: Math.min(w * 0.26, 132) };
 }
 
 // Distribute N icons across the given ring radii so intra-ring neighbour spacing is as
@@ -2567,6 +2564,16 @@ function innerArcSeats(model) {
 const COLLISION_BUFFER_PX = 3;
 const OVERFLOW_WIDTH_FACTOR = 1.15;
 const SHRINK_ROUND_PX = 5;
+// `layoutArc`'s Step-3 search treats a SMALL measured pane-edge overflow (under this) as another
+// unacceptable-collision type worth nudging the scale down for — closing exactly the kind of few-
+// px, font-rendering-driven gap that showed up as a real CI-only failure (session dh: a court that
+// fit with 0px slack locally measured a few px over in CI, from the SAME label text rendering at a
+// different real width there). Bounded deliberately: a genuinely narrow/mobile pane routinely
+// overflows by 150px+ for a large bench, and that must NOT trigger extra shrinking — the operator
+// was explicit that mobile's viewable width stays "arbitrary," relying on horizontal scroll rather
+// than being shrunk to fit. This tolerance is what keeps the check scoped to "just barely misses"
+// without touching that design.
+const PANE_EDGE_TOLERANCE_PX = 40;
 const LABEL_GAP = 3;             // matches .ctt-judge-label's own margin-top
 const AVATAR_R = 22;             // .ctt-avatar's 44px diameter, radius, at scale 1
 
@@ -2879,9 +2886,34 @@ function layoutArc(model, w, H, stage) {
         inter: findRingCollisions(combined, b2, cx, cy, s, COLLISION_BUFFER_PX).inter,
       };
     }
+    // Real horizontal-extent check, using each label's OWN measured width (`seatHalfWidth`) — not
+    // `effectiveMax`'s fixed margin, which only bounds RING-RADIUS growth and has no direct tie to
+    // what a specific label actually measures. A particular judge's surname can legitimately need
+    // more or less room than that generic margin assumes (confirmed live: the SAME court/mode fit
+    // with zero px slack locally but genuinely overflowed by a few px in CI, purely from label-
+    // width metrics differing by font-rendering environment — widening the margin heuristic had
+    // ZERO effect on this, since it was never what determined the final measured overflow).
+    // Counting a SMALL residual overflow (within `PANE_EDGE_TOLERANCE_PX`) as another
+    // "unacceptable collision" type lets Step 3 nudge the scale down to close it, same as any
+    // other collision. Deliberately bounded to SMALL overflow only — a genuinely narrow/mobile
+    // pane where content is fundamentally too wide (routinely 150px+ over in practice) must NOT
+    // trigger this: the operator was explicit that mobile's viewable width stays "arbitrary,"
+    // relying on the horizontal-scroll fallback rather than extra shrinking. The tolerance is what
+    // keeps this scoped to "just barely misses, nudge it shut" without touching that design.
+    const finalSlots = slots.map((sl) => ({ ...sl, r: activeRadii[sl.ri] }));
+    const points = seatNodes.map((node, i) => {
+      const sl = finalSlots[i] || finalSlots[finalSlots.length - 1];
+      return { x: cx + sl.r * Math.cos(sl.ang), halfW: seatHalfWidth(node, s) };
+    });
+    outer.forEach((j, i) => points.push({ x: cx + bandR * Math.cos(bandAngle(i)), halfW: seatHalfWidth(model._nodeByJudge.get(j), s) }));
+    if (model._justiceNode) points.push({ x: cx, halfW: seatHalfWidth(model._justiceNode, s) });
+    const span = Math.max(...points.map((p) => p.x + p.halfW)) - Math.min(...points.map((p) => p.x - p.halfW));
+    const overflowPx = span - w;
+    const overflowsPane = overflowPx > 1 && overflowPx <= PANE_EDGE_TOLERANCE_PX;
+
     const remaining = (activeCollide.intra ? 1 : 0) + (activeCollide.inter ? 1 : 0) +
-      (bandCollide.intra ? 1 : 0) + (bandCollide.inter ? 1 : 0);
-    return { radii: activeRadii, bandR, remaining };
+      (bandCollide.intra ? 1 : 0) + (bandCollide.inter ? 1 : 0) + (overflowsPane ? 1 : 0);
+    return { radii: activeRadii, bandR, remaining, points };
   };
 
   let scale = 1;
@@ -2903,15 +2935,10 @@ function layoutArc(model, w, H, stage) {
   const radii = result.radii, bandR = result.bandR;
   const finalSlots = slots.map((s) => ({ ...s, r: radii[s.ri] }));
 
-  // ---- Majority-view horizontal scroll (see leftBleedShift's own comment): measured against
-  // the FINAL geometry above (active rings + band + Circuit Justice), all at the SAME scale now.
-  const extent = seatNodes.map((node, i) => {
-    const s = finalSlots[i] || finalSlots[finalSlots.length - 1];
-    return { x: cx + s.r * Math.cos(s.ang), halfW: seatHalfWidth(node, scale) };
-  });
-  outer.forEach((j, i) => extent.push({ x: cx + bandR * Math.cos(bandAngle(i)), halfW: seatHalfWidth(model._nodeByJudge.get(j), scale) }));
-  if (model._justiceNode) extent.push({ x: cx, halfW: seatHalfWidth(model._justiceNode, scale) });
-  const shiftX = leftBleedShift(extent);
+  // ---- Majority-view horizontal scroll (see leftBleedShift's own comment): `result.points` is
+  // the SAME extent `resolveAt` already computed for the winning scale above (active rings + band
+  // + Circuit Justice, all at the SAME scale) — reused here rather than recomputed.
+  const shiftX = leftBleedShift(result.points);
   const cx2 = cx + shiftX;
 
   seats.forEach((seat, i) => {

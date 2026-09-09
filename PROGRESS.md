@@ -10,7 +10,7 @@
 tracker (Phase-4 tail items open, PLUS a brand-new third pane view — "Change", built session
 (aw), operator review round addressed session (ax)) and the appointments beeswarm
 (feature-complete first version, operator refinement rounds ongoing; see sessions ai→at, aw).
-**Last updated:** 2026-09-09 (dh)
+**Last updated:** 2026-09-09 (di)
 
 ## Resume briefing
 <!-- Replaced wholesale at the end of each session — this is not an appended log, it's a
@@ -28,27 +28,41 @@ operator review — check `gh pr list`/`gh pr view 56` before assuming it's stil
 any new work on issue #50. If it's merged, there's no obvious open follow-up on that issue as of
 this writing.
 
-**Current state, as of (dh) — read this before touching `layoutArc`/`layoutScotusRing`/anything in
+**Current state, as of (di) — read this before touching `layoutArc`/`layoutScotusRing`/anything in
 the "issue #50" section, since this area was rewritten repeatedly in a short span
-(cz→da→db/dc→dd→de→df→dg→dh) before landing here. Trust THIS section, not any older one, and not
-the commit-by-commit history (several intermediate commits describe states that no longer exist).**
+(cz→da→db/dc→dd→de→df→dg→dh→di) before landing here. Trust THIS section, not any older one, and not
+the commit-by-commit history (several intermediate commits describe states that no longer exist —
+(dh) in particular describes a fix that was tried, pushed, and then PROVEN wrong by CI itself in
+the very next session; see (di)'s session-log entry for the full story if curious, but don't trust
+(dh)'s own "current state" framing).**
 - **Growth (Steps 1/2) is bounded by BOTH axes, not height alone** (df): `majorityDims` also
-  returns `Wmax = Math.max(60, cx - 40)`, `Rmax`'s width-axis counterpart — `Rmax` alone (pane
+  returns `Wmax = Math.max(60, cx - 30)`, `Rmax`'s width-axis counterpart — `Rmax` alone (pane
   height only) let growth fully resolve every label/icon collision while still leaving the arc
   wider than the pane, since that was never checked as "did this stay within the viewable area."
-  **`Wmax`'s margin is `-40`, NOT the same `-30` `Rmax` uses** (widened dh, after a CI-only
-  failure: the exact same court/mode fit with zero slack locally but overflowed by a few px in
-  CI's headless Chrome — purely from label-text WIDTH metrics differing by font-rendering
-  environment; `Rmax`'s HEIGHT-axis margin is much less font-sensitive and was left alone). This
-  is a heuristic, not an exact guarantee — if a similar CI-only "desktop overflow" failure recurs
-  for a different court/name, widen this margin further; do NOT loosen the test's own tolerance
-  instead (see (dh)'s session-log entry for why). `layoutArc` computes `effectiveMax = Math.min(Rmax, Wmax)` and passes it to
+  `layoutArc` computes `effectiveMax = Math.min(Rmax, Wmax)` and passes it to
   `growRingsForIntra`/`adjustInterRingGaps` (both active-ring and the band's own scoped calls,
   below). **`planRings`'s own ring-COUNT argument stays plain `Rmax`, never `effectiveMax`** —
   passing the tighter one there collapsed a genuinely multi-ring bench to a single ring on narrow
   viewports (confirmed as a real regression), since ring count is decided once, before any Step-3
   scale search runs, and doesn't change with icon size. If you're about to pass anything into
   `planRings`'s 3rd argument, it must be `Rmax`.
+- **`Wmax`'s margin does NOT need widening for CI-only overflow failures — that was tried (dh) and
+  proven to have ZERO effect (di), since `Wmax`/`effectiveMax` only bounds RING-RADIUS growth, not
+  whether an individual label actually pokes past the pane edge.** That's handled by the NEXT
+  bullet instead — read it before touching this again.
+- **Step 3's search also treats a SMALL measured pane-edge overflow as another unacceptable-
+  collision type** (di): `resolveAt(s)` computes the real extent via `seatHalfWidth` (the same
+  per-label measurement `leftBleedShift` needs anyway) and, if the natural span exceeds the pane
+  width by more than 1px but less than `PANE_EDGE_TOLERANCE_PX` (40), counts it toward `remaining`
+  — closing exactly the kind of few-px, font-rendering-driven gap that caused a real CI-only
+  failure (a court that fit with 0px slack locally measured 6px over in CI, from the SAME label
+  text rendering at a different actual width there). **The tolerance is deliberately small and
+  must stay that way**: a genuinely narrow/mobile pane overflows by 150px+ for a large bench
+  (verified: 186-190px for ca9 at 380px) — that must NOT trigger this, since the operator was
+  explicit that mobile's viewable width stays "arbitrary," relying on horizontal scroll rather than
+  extra shrinking. If you're about to raise `PANE_EDGE_TOLERANCE_PX`, first re-check the two
+  "genuinely overflows horizontally at 380px" tests (ca9/Include, ca9/Show) still pass — that's
+  exactly the regression this bound exists to prevent.
 - **`growRingsForIntra`/`adjustInterRingGaps` deliberately do NOT clamp an already-oversized
   STARTING radii array — only further growth** (reaffirmed dg, after a same-session attempt to add
   that clamp was tried and reverted). On a width-constrained pane (`cx < cy`, roughly <1000px for a
@@ -576,7 +590,49 @@ Prove the whole app shell and asset schema on one circuit with hand-authored sam
 - Blockers: ...
 -->
 
-### 2026-09-09 (dh) — PR #56: CI-only failure — ca9/Include's "zero overflow at desktop" check failed by 6px in GitHub Actions (never locally); Wmax's margin widened
+### 2026-09-09 (di) — PR #56: (dh)'s margin bump was PROVEN ineffective by CI itself (byte-identical 606-vs-600 before and after); the real fix checks measured pane-edge overflow inside Step 3
+- Phase: 4, same PR (#56, issue #50). Pushed (dh)'s `Wmax` margin bump (`-30` → `-40`), waited for
+  CI, and got the EXACT SAME failure with IDENTICAL numbers: `scrollWidth 606 vs clientWidth 600`.
+  A margin change that actually mattered would have shifted those numbers by SOME amount — getting
+  byte-identical output is decisive proof `Wmax`'s margin was never the operative constraint for
+  this specific overflow. Reverted the margin bump back to `-30` (see `majorityDims`'s own comment,
+  now updated to say so directly and point here).
+- **Why it had zero effect, actually understood this time**: `Wmax`/`effectiveMax` only bounds RING
+  RADIUS growth (Steps 1/2) — it has no direct relationship to whether an individual seat's LABEL
+  pokes past the pane's edge. That's measured entirely separately, at the very end of `layoutArc`,
+  by `seatHalfWidth`/`leftBleedShift` using each label's REAL measured width. Critically, the Step-3
+  shrink search (`resolveAt`'s `remaining` count) NEVER looked at that measurement at all — it only
+  counted `findRingCollisions` (label-vs-NEIGHBORING-icon) hits. A label overflowing into empty
+  space past the pane's edge, with no neighboring icon anywhere near it, was never flagged as
+  anything Step 3 needed to fix — so the scale Step 3 converged on was entirely UNRELATED to
+  whether the final result fit the pane width. Widening `Wmax`'s margin couldn't touch this because
+  it doesn't participate in that decision at all.
+- **(dh)'s stated reason for rejecting this exact fix doesn't hold up**: (dh) considered "make Step
+  3 also treat real pane-edge overflow as an unacceptable-collision type" and rejected it as risking
+  mobile-scroll regression, reasoning "no width-breakpoint variable exists to scope it to desktop
+  only." Re-examined: the operator's mobile statement ("the horizontal viewable area should be
+  arbitrary... because we want that side to side scroll behavior specifically for mobile") was
+  answering a question about STEPS 1/2's ring-radius growth ceiling (`Wmax` should not force rings
+  to shrink-fit on mobile) — a different mechanism from Step 3's shrink search. Rather than assume
+  this generalizes to Step 3 too, actually implemented it and tested against the exact regression
+  tests that would catch it (`ca9/Include` and `ca9/Show` "genuinely overflows at 380px").
+- **Fix implemented**: `resolveAt(s)` now also computes the real extent (same `seatHalfWidth`-based
+  points `leftBleedShift` needs anyway) and treats a SMALL residual overflow — under a new
+  `PANE_EDGE_TOLERANCE_PX` (40) — as another `remaining` collision type Step 3 tries to shrink away.
+  Deliberately bounded: mobile's real overflow for a large bench is routinely 150px+ (verified:
+  186-190px for ca9 at 380px), an order of magnitude past the tolerance, so this never engages
+  there — confirmed empirically, not assumed: `ca9/Include` and `ca9/Show` at 380px still show
+  genuine overflow (504/500 vs clientWidth 314) after this change, identical to before. At desktop
+  width, where the CI gap was only 6px, the tolerance lets Step 3 close it. `result.points` (the
+  extent `resolveAt` already computed at the winning scale) is now reused directly for
+  `leftBleedShift` at the end of `layoutArc`, instead of recomputing the same thing a second time.
+- Verified: all four suites pass locally; the (dg) band-gap sweep and 380px mobile-overflow
+  diagnostics both re-checked and hold unchanged. Pushed; CI re-run is what actually confirms this
+  (the failure was CI-environment-specific and can't be fully verified from a local run alone).
+- Next: once CI confirms green, finish the PR #56 description (fold in an explanation of how the
+  whole algorithm works, per the operator's ask) and squash-merge.
+
+### 2026-09-09 (dh) — PR #56: CI-only failure — ca9/Include's "zero overflow at desktop" check failed by 6px in GitHub Actions (never locally); Wmax's margin widened — SUPERSEDED by (di), see above (the margin bump was empirically proven to have zero effect)
 - Phase: 4, same PR (#56, issue #50), still `claude/issue-50-collision-avoidance`. Right after (dg),
   the operator asked to clean up the PR description and squash-merge — pulled CI status first
   (routine before any merge) and found `real-browser checks` failing on a check that passes
