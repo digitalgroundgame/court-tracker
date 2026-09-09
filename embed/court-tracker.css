@@ -347,6 +347,13 @@
 
 /* judge stage + icons */
 .ctt-judge-stage { position: relative; width: 100%; height: 220px; margin-top: 4px; }
+/* Majority view only (issue #50 follow-up): let the arc scroll horizontally instead of reshaping
+   itself to always fit. overflow-y can't stay "visible" once overflow-x isn't (the UA computes
+   the "visible" axis to "auto" too when the other axis is set) — "hidden" here is deliberate, not
+   the forced default, since layoutJudges() already sizes .ctt-judge-stage's height to fit the
+   Majority arc's own content (now including the senior band, properly Rmax-bounded) with no
+   vertical scroll intended. */
+.ctt-judge-stage.ctt-majority-scroll { overflow-x: auto; overflow-y: hidden; }
 .ctt-judge {
   position: absolute; top: 0; left: 0; width: 52px; text-align: center;
   transition: transform 480ms cubic-bezier(.4,.1,.2,1), opacity 300ms ease;
@@ -591,7 +598,22 @@
   border: 2px dashed var(--ctt-other); background: repeating-linear-gradient(45deg,#f0f2f5,#f0f2f5 4px,#e6e9ee 4px,#e6e9ee 8px);
   color: transparent;
 }
-.ctt-judge-label { font-size: 10px; line-height: 1.15; margin-top: 3px; color: var(--ctt-ink); max-width: 60px; margin-left: auto; margin-right: auto; }
+/* width:fit-content (not the plain-block default, which always fills the 52px parent) — a block
+   that fills its container still wraps normally for text that fits, but a single unbreakable
+   word WIDER than the container (e.g. a long surname) then overflows the fixed-width box
+   asymmetrically: text-align:center can't apply negative left offset within a box narrower than
+   its own content, so Chrome anchors the overflowing line's start at the box's left edge and lets
+   it spill only rightward — confirmed directly (issue #50 follow-up): a 56px-wide unbreakable
+   line inside the 52px box rendered flush-left (0px left overflow, ~4px right overflow) instead
+   of the ~2px/~2px it would need to be genuinely centered. That asymmetry both looks off-centre
+   and quietly breaks the collision math below, which measures label extent via a Range around
+   the rendered text and then assumes it's symmetric around the icon's x (labelHitsIcon's
+   `rect.left = aPos.x - w/2`) — a real mismatch, not just cosmetic. fit-content shrinks the box
+   to its own content (still capped/wrapped within the 52px available width for anything that
+   fits), and only grows PAST that width for genuinely unbreakable overflow — where margin:auto
+   then centers the wider box normally, so the overflow (and the Range measurement of it) is
+   symmetric again. */
+.ctt-judge-label { font-size: 10px; line-height: 1.15; margin-top: 3px; color: var(--ctt-ink); max-width: 60px; width: -webkit-fit-content; width: fit-content; margin-left: auto; margin-right: auto; }
 .ctt-senior .ctt-judge-label { color: var(--ctt-muted); }
 .ctt-chief-badge {
   position: absolute; top: -2px; right: 4px; z-index: 2; color: #e0a400; font-size: 14px;
@@ -618,7 +640,9 @@
 
 /* majority overlay */
 .ctt-majority-overlay { position: absolute; inset: 0; pointer-events: none; width: 100%; height: 100%; overflow: visible; }
-.ctt-majority-line { stroke: #444; stroke-width: 1.5; stroke-dasharray: 4 4; }
+/* Operator ask: half as prominent as it was (opacity 1 -> 0.5) — the dotted majority-line
+   divider was competing too much with the icons/labels around it. */
+.ctt-majority-line { stroke: #444; stroke-width: 1.5; stroke-dasharray: 4 4; opacity: 0.5; }
 .ctt-majority-count { fill: var(--ctt-ink); font-size: 13px; font-weight: 600; font-family: inherit; }
 /* Reads a step darker than the panel rules, but stays clearly subordinate to the #444
    majority line so the two dotted strokes don't compete. */

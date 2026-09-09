@@ -10,7 +10,7 @@
 tracker (Phase-4 tail items open, PLUS a brand-new third pane view — "Change", built session
 (aw), operator review round addressed session (ax)) and the appointments beeswarm
 (feature-complete first version, operator refinement rounds ongoing; see sessions ai→at, aw).
-**Last updated:** 2026-09-08/09 (cy)
+**Last updated:** 2026-09-09 (di)
 
 ## Resume briefing
 <!-- Replaced wholesale at the end of each session — this is not an appended log, it's a
@@ -25,11 +25,112 @@ below for the full incident and the corrected dates (ground truth: `git log --fo
 
 **Next task**: PR #56 (issue #50's ring/arc collision-avoidance algorithm) is open awaiting
 operator review — check `gh pr list`/`gh pr view 56` before assuming it's still open or starting
-any new work on issue #50. If it's merged, there's no obvious open follow-up on that issue.
+any new work on issue #50. If it's merged, there's no obvious open follow-up on that issue as of
+this writing.
 
-The repo is public again as of this session (2026-09-08/09, session (cy)) and GitHub Pages is
-live: https://digitalgroundgame.github.io/court-tracker/ — issue #49 is resolved/closed. Issue #36
-(git-history PII) also had substantial work land this session (see `CLAUDE.md` §7.6 for the
+**Current state, as of (di) — read this before touching `layoutArc`/`layoutScotusRing`/anything in
+the "issue #50" section, since this area was rewritten repeatedly in a short span
+(cz→da→db/dc→dd→de→df→dg→dh→di) before landing here. Trust THIS section, not any older one, and not
+the commit-by-commit history (several intermediate commits describe states that no longer exist —
+(dh) in particular describes a fix that was tried, pushed, and then PROVEN wrong by CI itself in
+the very next session; see (di)'s session-log entry for the full story if curious, but don't trust
+(dh)'s own "current state" framing).**
+- **Growth (Steps 1/2) is bounded by BOTH axes, not height alone** (df): `majorityDims` also
+  returns `Wmax = Math.max(60, cx - 30)`, `Rmax`'s width-axis counterpart — `Rmax` alone (pane
+  height only) let growth fully resolve every label/icon collision while still leaving the arc
+  wider than the pane, since that was never checked as "did this stay within the viewable area."
+  `layoutArc` computes `effectiveMax = Math.min(Rmax, Wmax)` and passes it to
+  `growRingsForIntra`/`adjustInterRingGaps` (both active-ring and the band's own scoped calls,
+  below). **`planRings`'s own ring-COUNT argument stays plain `Rmax`, never `effectiveMax`** —
+  passing the tighter one there collapsed a genuinely multi-ring bench to a single ring on narrow
+  viewports (confirmed as a real regression), since ring count is decided once, before any Step-3
+  scale search runs, and doesn't change with icon size. If you're about to pass anything into
+  `planRings`'s 3rd argument, it must be `Rmax`.
+- **`Wmax`'s margin does NOT need widening for CI-only overflow failures — that was tried (dh) and
+  proven to have ZERO effect (di), since `Wmax`/`effectiveMax` only bounds RING-RADIUS growth, not
+  whether an individual label actually pokes past the pane edge.** That's handled by the NEXT
+  bullet instead — read it before touching this again.
+- **Step 3's search also treats a SMALL measured pane-edge overflow as another unacceptable-
+  collision type** (di): `resolveAt(s)` computes the real extent via `seatHalfWidth` (the same
+  per-label measurement `leftBleedShift` needs anyway) and, if the natural span exceeds the pane
+  width by more than 1px but less than `PANE_EDGE_TOLERANCE_PX` (40), counts it toward `remaining`
+  — closing exactly the kind of few-px, font-rendering-driven gap that caused a real CI-only
+  failure (a court that fit with 0px slack locally measured 6px over in CI, from the SAME label
+  text rendering at a different actual width there). **The tolerance is deliberately small and
+  must stay that way**: a genuinely narrow/mobile pane overflows by 150px+ for a large bench
+  (verified: 186-190px for ca9 at 380px) — that must NOT trigger this, since the operator was
+  explicit that mobile's viewable width stays "arbitrary," relying on horizontal scroll rather than
+  extra shrinking. If you're about to raise `PANE_EDGE_TOLERANCE_PX`, first re-check the two
+  "genuinely overflows horizontally at 380px" tests (ca9/Include, ca9/Show) still pass — that's
+  exactly the regression this bound exists to prevent.
+- **`growRingsForIntra`/`adjustInterRingGaps` deliberately do NOT clamp an already-oversized
+  STARTING radii array — only further growth** (reaffirmed dg, after a same-session attempt to add
+  that clamp was tried and reverted). On a width-constrained pane (`cx < cy`, roughly <1000px for a
+  tall bench), `planRings`'s `Rmax`-only plan can leave the active rings' OWN radii already past
+  `effectiveMax` before any growth runs — this is intentional and correct: it's exactly the
+  residual case the horizontal-scroll fallback exists to cover (below). Do NOT add a "fit under
+  ceiling" clamp/compress here again — it was tried in (dg) and reverted because it silently forced
+  everything to always fit under `Wmax` no matter how narrow the pane got, which ate the
+  intentional mobile scroll-fallback behavior (broke 2 existing regression tests: ca9/Include and
+  ca9/Show stopped genuinely overflowing at 380px). The width constraint is enforced ELSEWHERE —
+  see `bandR`'s own formula, next.
+- **`bandR` always equals `outermostActiveR + ROW_GAP` — never independently re-clamped below
+  that** (fixed dg — the actual bug behind the operator's "senior ring... free to slide apart...
+  should be locked on the outer perimeter" report). The `effectiveMax` clamp on `bandR` (from
+  (de)/(df)) ONLY applies when `outermostActiveR` is itself already within `effectiveMax` — that's
+  the ordinary case the clamp was originally written for (the band's OWN crowding pushes its
+  natural start past the ceiling while the active rings are fine). When `outermostActiveR` is
+  ALREADY past `effectiveMax` (the width-constrained case above), clamping `bandR` to
+  `effectiveMax` too pulled it back BELOW `outermostActiveR` — the band rendering inside the bench
+  instead of outside it. Now: `let bandR = outermostActiveR + ROW_GAP; if (outermostActiveR <=
+  effectiveMax) bandR = Math.min(bandR, effectiveMax);` If you're about to touch this again: the
+  invariant that must never break is "`bandR` is never less than `outermostActiveR + ROW_GAP`,"
+  full stop — any clamp added here needs to be conditioned on `outermostActiveR` already being
+  in-bounds, not applied unconditionally.
+- **Steps 0-3 apply to the active rings**, unchanged in spirit from (cx): Step 0 (label overflow →
+  full initials), Steps 1/2 (`growRingsForIntra`/`adjustInterRingGaps`, uniform growth then
+  individual gap adjustment), Step 3 (`shrinkForCollisions` for Timeline/SCOTUS; `layoutArc`'s own
+  inline shrink search for the general arc, see below).
+- **The senior "show" band gets its own SCOPED radius growth (Steps 1/2), but NOT its own scale**:
+  RADIUS: the band grows its own radius to resolve its own icons' crowding, then — if it still
+  collides with the outermost ACTIVE ring — only the band moves further out (never the active
+  ring). Reuses `growRingsForIntra`/`adjustInterRingGaps` unmodified, just with band-scoped or
+  `[fixedActiveR, movableBandR]` inputs (a 2-entry array makes index 0 `adjustInterRingGaps`' own
+  `centerIdx` for k=2, structurally guaranteed not to move). Grounded directly in issue #50's own
+  text: "Constraint on steps 1 & 2: ...an expansion that would overflow that area is not a valid
+  application," and the Step-3 tie-break language ("don't shrink more than necessary...") is a
+  GENERAL principle per the operator, not Step-3-only — growing an uninvolved ring's radius is
+  "more than necessary" even when it stays within `Rmax`. SCALE (Step 3): if a shrink is needed at
+  all, ONE scale applies to the WHOLE bench (active + band together) — `layoutArc`'s `resolveAt(s)`
+  closure re-runs both groups' scoped radius steps at a shared candidate `s`, and the shrink search
+  picks a single winning `s` for everyone. This asymmetry is deliberate, not an oversight: an
+  uninvolved ring growing its RADIUS wastes space for nothing (bad), but two DIFFERENT icon sizes
+  in the same view if only the band shrinks is a different, real bug — confirmed live by the
+  operator mid-session ("the senior judge icons are getting shrunk when none of the others are.
+  this behavior is wrong") after an earlier, band-scoped-shrink draft actually shipped that. If
+  you're about to touch Step 3 for the band: it must never end up at a different scale than the
+  active rings, full stop.
+- **Majority view scrolls horizontally** (`.ctt-judge-stage.ctt-majority-scroll`,
+  `leftBleedShift()`, `seatHalfWidth()`) — unconditional whenever `S.majorityMode` is true, NOT
+  gated to a width breakpoint: it's geometry-driven (`overflow-x:auto`'s scrollbar only appears
+  when `scrollWidth > clientWidth`), which already gives the operator's actual ask — an "ideal
+  fit," no scrollbar, at the default/largest width, with the scrollbar appearing organically as
+  the viewport narrows and content genuinely stops fitting. Covers Include's own crowding (real,
+  if usually small — a few px on the single most extreme desktop court) AND the band's. `.ctt-
+  judge-stage` needs `overflow-y:hidden` set explicitly alongside `overflow-x:auto` (the UA
+  computes the "visible" axis to `auto` too otherwise) — safe specifically because the `bandR`/
+  `Rmax` fix above means nothing should ever need vertical room past the stage's own height again.
+  Timeline never gets the scroll class.
+- This is architecturally close to what `(da)`/`(db)`/`(dc)` built for the scroll piece (same
+  Chrome gotchas apply — `transform:translate()`-positioned children DO count toward an
+  `overflow:auto` ancestor's `scrollWidth`; analytic pre-`place()` computation beats a
+  DOM-measure-then-correct round trip) but the band-collision piece is a genuinely NEW design,
+  not a restoration of `(cz)`'s or `(dc)`'s — neither of those scoped radius growth per ring-group
+  while sharing one whole-bench scale.
+
+The repo is public again (since session (cy), 2026-09-08/09) and GitHub Pages is live:
+https://digitalgroundgame.github.io/court-tracker/ — issue #49 is resolved/closed. Issue #36
+(git-history PII) also had substantial work land in that session (see `CLAUDE.md` §7.6 for the
 corrected public/private timeline) — check its current state on GitHub before assuming anything
 further is needed there; some follow-up may still be pending and isn't necessarily tracked in this
 file's detail.
@@ -94,6 +195,52 @@ re-check `gh issue list` fresh, since this list goes stale fast.
   of a policy reversal (PR #46) during the 2026-09-07/08 workflow-churn stretch. Refreshed session
   (cv), 2026-09-08, cross-referenced against real PR numbers — worth a periodic check whenever a
   session touches the git-workflow section of `CLAUDE.md` again.
+- **Measuring a `.ctt-judge` icon's label geometry needs `measureLabelNatural()` (issue #50,
+  session (cx)), never a bare `label.getBoundingClientRect()`** — two real, confirmed bugs found
+  building the collision-avoidance algorithm, both now fixed by that one helper:
+  1. `.ctt-judge` carries `transition: transform 480ms ...`. Clearing `node.style.transform` to
+     read the label's UNSCALED size doesn't apply instantly — it *animates* — so a synchronous
+     read right after still reflects the OLD (scaled) box for that whole tick. Fix: toggle the
+     existing `.ctt-no-transition` class (the same one `handoff()` already uses for the identical
+     "read true geometry now, not mid-transition" need) around the read, with an `offsetWidth`
+     flush on each side.
+  2. At the time (session (cx)), `.ctt-judge-label` was a plain block div that took its PARENT's
+     full 52px width regardless of how short the text was — `getBoundingClientRect().width` on the
+     label itself was a near-constant ~52px for every judge, not a text-length signal at all. Fix:
+     a `document.createRange().selectNodeContents(label).getBoundingClientRect()` around the text
+     gives the tight glyph box instead (same technique issue #50's own bug-2 fix already
+     established in `tests/browser-checks.mjs`). `rect.height` stays reliable on its own — a block
+     genuinely grows its OWN height to fit wrapped content, so line-count detection needed no fix.
+     **Session (cz) changed `.ctt-judge-label` itself to `width: fit-content`** (see the next bullet)
+     — `rect.width` is now mostly meaningful too, but the Range-based measurement above is still
+     what the collision code actually uses (more precise, and unchanged by this), so this pattern
+     remains the right one to reach for.
+  Both were caught only by testing a REAL resize-after-mount scenario in an actual browser, not by
+  a fresh-mount-only check — worth remembering as a testing pattern for any future icon-geometry
+  work: mount at one width, then resize, don't just test fresh mounts at each width in isolation.
+- **A block-level element with `text-align:center` does NOT overflow symmetrically once its
+  content is wider than the box — Chrome anchors the overflowing line flush at the box's START
+  edge and lets it spill only toward the END (right, for LTR)** (session (cz), issue #50
+  follow-up — this is what the operator's "labels aren't centered, run off right" report actually
+  was, confirmed by direct measurement: a 56px line in a 52px `.ctt-judge-label` box rendered 0px
+  left overflow / ~4px right, not symmetric ~2px/~2px). `margin:auto` centering only works if the
+  box's own width can still shrink/grow to its content — a block that's forced to fill a fixed
+  container can't do that, so it can't overflow symmetrically either. Fix used here: `width:
+  fit-content` on the label. This is a general CSS trap worth recognizing anywhere else in either
+  widget a centered block might hold content wider than its container (long president names,
+  court names, etc.) — the fix pattern (fit-content + margin:auto, in place of a filled block) is
+  the one to reach for again rather than re-deriving it.
+- **A geometry-adjustment algorithm that's parameterized over "a list of rings" can absorb a new
+  ring-like element (a fixed-offset band, a special zone) just by appending it to that list**
+  (session (cz), issue #50 follow-up — the senior "show" band): `layoutArc`'s
+  `growRingsForIntra`/`adjustInterRingGaps`/`findRingCollisions`/`shrinkForCollisions` never
+  actually cared what a "ring" represented, only that seat descs carry a `ring` index into a
+  shared `radii` array — so folding the band in as one more entry at the end of that array (own
+  fixed angles, only its radius solved for) covered it with zero changes to any of those shared
+  functions. Worth remembering next time something that "isn't really a ring" (another band, a
+  special badge zone) needs the same collision-aware treatment: check whether it can be
+  represented as just another entry in the existing list before writing new adjustment logic for
+  it.
 
 ## Phase 0 — Scaffold & contracts  ✅ DONE (2026-07-10)
 - [x] Create repo skeleton per `CLAUDE.md` §Repo map; confirm `index.html` loads an empty shell.
@@ -443,6 +590,358 @@ Prove the whole app shell and asset schema on one circuit with hand-authored sam
 - Blockers: ...
 -->
 
+### 2026-09-09 (di) — PR #56: (dh)'s margin bump was PROVEN ineffective by CI itself (byte-identical 606-vs-600 before and after); the real fix checks measured pane-edge overflow inside Step 3
+- Phase: 4, same PR (#56, issue #50). Pushed (dh)'s `Wmax` margin bump (`-30` → `-40`), waited for
+  CI, and got the EXACT SAME failure with IDENTICAL numbers: `scrollWidth 606 vs clientWidth 600`.
+  A margin change that actually mattered would have shifted those numbers by SOME amount — getting
+  byte-identical output is decisive proof `Wmax`'s margin was never the operative constraint for
+  this specific overflow. Reverted the margin bump back to `-30` (see `majorityDims`'s own comment,
+  now updated to say so directly and point here).
+- **Why it had zero effect, actually understood this time**: `Wmax`/`effectiveMax` only bounds RING
+  RADIUS growth (Steps 1/2) — it has no direct relationship to whether an individual seat's LABEL
+  pokes past the pane's edge. That's measured entirely separately, at the very end of `layoutArc`,
+  by `seatHalfWidth`/`leftBleedShift` using each label's REAL measured width. Critically, the Step-3
+  shrink search (`resolveAt`'s `remaining` count) NEVER looked at that measurement at all — it only
+  counted `findRingCollisions` (label-vs-NEIGHBORING-icon) hits. A label overflowing into empty
+  space past the pane's edge, with no neighboring icon anywhere near it, was never flagged as
+  anything Step 3 needed to fix — so the scale Step 3 converged on was entirely UNRELATED to
+  whether the final result fit the pane width. Widening `Wmax`'s margin couldn't touch this because
+  it doesn't participate in that decision at all.
+- **(dh)'s stated reason for rejecting this exact fix doesn't hold up**: (dh) considered "make Step
+  3 also treat real pane-edge overflow as an unacceptable-collision type" and rejected it as risking
+  mobile-scroll regression, reasoning "no width-breakpoint variable exists to scope it to desktop
+  only." Re-examined: the operator's mobile statement ("the horizontal viewable area should be
+  arbitrary... because we want that side to side scroll behavior specifically for mobile") was
+  answering a question about STEPS 1/2's ring-radius growth ceiling (`Wmax` should not force rings
+  to shrink-fit on mobile) — a different mechanism from Step 3's shrink search. Rather than assume
+  this generalizes to Step 3 too, actually implemented it and tested against the exact regression
+  tests that would catch it (`ca9/Include` and `ca9/Show` "genuinely overflows at 380px").
+- **Fix implemented**: `resolveAt(s)` now also computes the real extent (same `seatHalfWidth`-based
+  points `leftBleedShift` needs anyway) and treats a SMALL residual overflow — under a new
+  `PANE_EDGE_TOLERANCE_PX` (40) — as another `remaining` collision type Step 3 tries to shrink away.
+  Deliberately bounded: mobile's real overflow for a large bench is routinely 150px+ (verified:
+  186-190px for ca9 at 380px), an order of magnitude past the tolerance, so this never engages
+  there — confirmed empirically, not assumed: `ca9/Include` and `ca9/Show` at 380px still show
+  genuine overflow (504/500 vs clientWidth 314) after this change, identical to before. At desktop
+  width, where the CI gap was only 6px, the tolerance lets Step 3 close it. `result.points` (the
+  extent `resolveAt` already computed at the winning scale) is now reused directly for
+  `leftBleedShift` at the end of `layoutArc`, instead of recomputing the same thing a second time.
+- Verified: all four suites pass locally; the (dg) band-gap sweep and 380px mobile-overflow
+  diagnostics both re-checked and hold unchanged. Pushed; CI re-run is what actually confirms this
+  (the failure was CI-environment-specific and can't be fully verified from a local run alone).
+- Next: once CI confirms green, finish the PR #56 description (fold in an explanation of how the
+  whole algorithm works, per the operator's ask) and squash-merge.
+
+### 2026-09-09 (dh) — PR #56: CI-only failure — ca9/Include's "zero overflow at desktop" check failed by 6px in GitHub Actions (never locally); Wmax's margin widened — SUPERSEDED by (di), see above (the margin bump was empirically proven to have zero effect)
+- Phase: 4, same PR (#56, issue #50), still `claude/issue-50-collision-avoidance`. Right after (dg),
+  the operator asked to clean up the PR description and squash-merge — pulled CI status first
+  (routine before any merge) and found `real-browser checks` failing on a check that passes
+  locally: `ca9/include at desktop width has no horizontal overflow (scrollWidth 606 vs
+  clientWidth 600)`, a 6px miss against the test's own `+1px` tolerance.
+- **Confirmed NOT caused by (dg)**: `gh run view` on the PRIOR commit (df, before this session's
+  band fix) showed the exact same failure, byte-identical numbers (606 vs 600). Pre-existing,
+  latent since (df) — this session's own (dg) work didn't introduce or worsen it.
+- **Root cause**: reproduced locally — scrollWidth/clientWidth come out EXACTLY equal (600/600),
+  zero slack either way. `Wmax`'s `-30` margin (the fixed heuristic reserving room for a label to
+  extend past its own icon at the arc's horizontal extremes) is a GUESS, not an exact per-label
+  measurement — real label width depends on the ACTUAL rendered glyphs (`measureLabelNatural`'s
+  `Range`-based `textWidth`, computed live per node), which varies with the font stack the
+  rendering environment actually has installed. CI's headless Chrome resolves the CSS font-family
+  fallback chain to different actual glyphs than the local dev machine's Chrome — same names, same
+  code, same test, different real-world width by a few px. This is fundamentally unavoidable with
+  any FIXED margin constant: no single number can be provably sufficient for arbitrary text in an
+  unknown font environment, only "sufficient in practice, tuned against what's actually been seen."
+- **Considered and rejected**: extending Step 3's own search to treat any measured pane-edge
+  overflow as another "unacceptable collision" type (reusing `seatHalfWidth`'s real per-label
+  measurement instead of `Wmax`'s fixed guess). Technically more principled, but risks a real
+  regression: it would make Step 3 shrink icons on ANY width whenever natural content exceeds the
+  pane, including MOBILE — which directly contradicts the operator's earlier explicit instruction
+  this same PR that mobile's viewable width should stay "arbitrary," with scroll (not extra
+  shrinking) as the intended fallback there. There's no width-breakpoint variable in this codebase
+  to safely scope such a check to "desktop only" (geometry-driven by design, no fixed breakpoints)
+  — implementing this properly would need real design discussion, not a quick CI fix. Reverted
+  before it ever left this session's working tree.
+- **Fix actually applied**: widened `Wmax`'s own margin from `-30` to `-40` (`Rmax`'s margin is
+  UNCHANGED — the failure is specifically a label-WIDTH phenomenon, and `Rmax` bounds the
+  HEIGHT axis, a much less font-sensitive dimension). This is honestly a heuristic bump, not a
+  structural fix — **if this exact class of CI-only failure recurs for a different court/name,
+  widen this margin further; do NOT loosen the test's own tolerance instead** — the test's
+  tolerance is what verifies the ACTUAL user-visible behavior (a real scrollbar would still show
+  in that font environment even if the test were made to ignore it).
+- Verified: all four suites pass locally (`npm test`, `test:dist`, `test:browser`,
+  `test:browser:dist`); the (dg) band-gap diagnostic sweep and the mobile-380px overflow diagnostic
+  both re-checked and still hold (gap stays a consistent positive value, never negative; mobile
+  still genuinely overflows, scroll fallback intact). Pushed and awaiting the actual CI re-run
+  before merging — this fix cannot be fully verified from a local run, since the failure is
+  specifically about CI's own font environment.
+- Next: once CI confirms green, finish cleaning up the PR #56 description (operator ask: fold in
+  an explanation of how the whole algorithm works, not just a changelog) and squash-merge.
+
+### 2026-09-09 (dg) — PR #56: the senior band was rendering INSIDE the outer active ring below ~1000px wide (not "locked to the perimeter"); bandR's own effectiveMax clamp was the cause
+- Phase: 4, same PR (#56, issue #50), still `claude/issue-50-collision-avoidance`. Operator report:
+  on ca9/Show below ~1000px width, "the senior ring appears to be treated as one, free to slide
+  apart from the other rings, when it should be locked on the outer perimeter." Also asked to
+  re-check the collision-measurement standard against commit 48f212a's "some overlap is
+  acceptable, only text-touching is the bug" precedent, and raised (as a possible, not confirmed,
+  issue) whether `COLLISION_BUFFER_PX`/the Step-3 trigger needed to fire more readily.
+- **Root cause, confirmed via a live-geometry diagnostic sweep** (`model._arcRender` read across a
+  width range): `planRings` deliberately plans ring COUNT/base radii off plain `Rmax` (not
+  `Wmax`/`effectiveMax` — see (df)'s regression note above, still correct). On a pane where
+  `cx < cy` (roughly <1000px wide for a tall multi-ring bench — `cy` is height-derived and stays
+  near-constant as width shrinks, so `Wmax` becomes the binding constraint before `Rmax` does),
+  the resulting active-ring radii can legitimately sit ABOVE `effectiveMax` even before any
+  collision-driven growth runs — `growRingsForIntra`/`adjustInterRingGaps` only ever cap FURTHER
+  growth, never an oversized STARTING radius (the same bug class fixed once already for `bandR`
+  itself in (de)/(df), just never generalized). Meanwhile `bandR = Math.min(effectiveMax,
+  outermostActiveR + ROW_GAP)` clamped independently — so once `outermostActiveR` legitimately
+  exceeded `effectiveMax`, `bandR` got pulled back BELOW it. Verified numerically: at one width the
+  gap (`bandR - outermostActiveR`) went from +48px (fine) to -18px, then to -134px as width
+  narrowed further — the band rendering measurably INSIDE the bench, exactly the reported symptom.
+- **First fix attempt (reverted, wrong approach)**: force-compressing active-ring radii to fit
+  under `effectiveMax` (a proportional "squeeze" helper) plus reserving `ROW_GAP` of headroom for
+  the band. This DID fix the negative gap, but broke something else: it made the algorithm always
+  geometrically fit everything under `Wmax` no matter how narrow the pane got, which quietly
+  eliminated the intentional mobile horizontal-scroll fallback (2 of the existing regression tests
+  failed: `ca9/Include` and `ca9/Show` no longer genuinely overflowed at 380px, which is NOT the
+  design — the operator was explicit earlier this PR that mobile's viewable width should stay
+  "arbitrary," with scroll as the fallback once Steps 1-3 hit their own floor). Reverted before
+  landing.
+- **Actual fix, much smaller**: leave `growRingsForIntra`/`adjustInterRingGaps` untouched (an
+  oversized starting active-ring radius is fine — it's exactly the case the scroll fallback exists
+  for). Fix only the DECOUPLING: `bandR` is now always `outermostActiveR + ROW_GAP` — full stop —
+  and the `effectiveMax` clamp only applies when `outermostActiveR` is ITSELF already within
+  bounds (the ordinary case this clamp was originally written for in (de): the band's OWN crowding
+  alone pushes its natural start past the ceiling while the active rings are fine). When the active
+  rings already exceed `effectiveMax` (the width-constrained case above), the band now stays
+  consistently `ROW_GAP` beyond them and relies on the same scroll fallback the active rings
+  already do, instead of snapping back inside. Verified via the same diagnostic sweep: gap is now
+  a consistent +50px (`ROW_GAP`) at every width tested, never negative, and mobile 380px still
+  genuinely overflows both Include and Show (confirmed both by diagnostic and by the two
+  previously-broken tests passing again).
+- **Collision-measurement standard**: checked commit 48f212a's own precedent (a DOM `Range` around
+  actual rendered text, not a padded box, only glyph-touching counts) — this already matches
+  `measureLabelNatural`'s existing Range-based `textWidth` and `labelHitsIcon`'s label-rect-vs-
+  icon-circle check exactly, no change needed. On the "should Step 3 trigger more" question: a
+  post-fix screenshot (ca9/Show, 950px) shows the band cleanly separated from the active rings with
+  no visible label-touching-icon overlap — the crowded appearance the operator noticed was very
+  likely this same bug (the band visually overlapping the bench), not an under-tuned
+  `COLLISION_BUFFER_PX`. Left `COLLISION_BUFFER_PX`/`OVERFLOW_WIDTH_FACTOR` unchanged; flagged back
+  to the operator to confirm once they can see the fixed version, rather than guessing at a retune.
+- **On the architectural question** (operator: "if this design spec isn't represented in the
+  structure of the code already, rewriting it to match is actually preferred," re: a literal
+  single-array-of-all-rings implementation of Steps 1/2): concluded a full rewrite is NOT needed —
+  the actual defect was this one narrow decoupling bug, not a structural mismatch. The existing
+  two-entry `[fixedActiveR, movableBandR]` trick already implements "centermost/reference ring
+  stays fixed, others adjust their distance from it" for the band's own relationship to the bench,
+  which is the concrete mechanism the spec text describes; a full unification was considered and
+  explicitly rejected earlier in this PR (see (de)'s note) because it grows active rings that have
+  no collision of their own whenever the band alone is crowded. Reported this reasoning back to the
+  operator rather than unilaterally rewriting; open to revisiting if they still want it after seeing
+  the fix.
+- All four suites (`npm test`, `test:dist`, `test:browser`, `test:browser:dist`) pass. `dist/`
+  rebuilt and committed alongside.
+- Next: awaiting operator review of this fix (and the architecture question above) before any
+  further issue #50 work.
+
+### 2026-09-08 (df) — PR #56: real gap — growth was never width-aware, only height (Rmax); added Wmax, with a real regression found and fixed along the way
+- Phase: 4, same PR (#56, issue #50), still `claude/issue-50-collision-avoidance`. Operator report
+  right after (de): ca9 still shows a horizontal scrollbar at MAX/default width, asking whether
+  icon-shrinking was supposed to trigger to make it fit, and whether "the display area needs to be
+  tightened up very slightly." Both exactly right. Confirmed by grep: `Rmax` (used to bound
+  `growRingsForIntra`/`adjustInterRingGaps` everywhere) is derived purely from pane HEIGHT
+  (`cy - 30`) — nothing anywhere in this algorithm's history has ever checked whether growth
+  pushed seats past the pane's own WIDTH. So Steps 1/2 could fully resolve every label/icon
+  collision while still leaving the arc wider than the pane — and since that never registered as
+  "steps 1/2 failed," Step 3 never triggered for it either. This is a real gap against issue #50's
+  own "must stay within the... actual user-viewable area" text, present since the very first
+  version of this algorithm — not something (de) introduced, just something ca9 (the dataset's
+  largest bench) was finally big enough to expose even at desktop width.
+- **Fix**: `majorityDims` now also returns `Wmax = Math.max(60, cx - 30)` (same `-30` margin
+  convention as `Rmax`, since `cx === w/2` and a ring's radius must stay under `cx` to keep
+  `cx ± radius` inside `[0, w]`). `layoutArc` computes `effectiveMax = Math.min(Rmax, Wmax)` and
+  uses it everywhere growth is bounded (both active-ring and the band's own scoped growth from
+  (de), plus the `bandR` starting-value clamp) — genuinely capping growth by whichever axis is
+  tighter, not height alone.
+- **Real regression found and fixed in the SAME session, before it ever landed**: initially also
+  passed `effectiveMax` into `planRings`' own ring-COUNT decision — on mobile (narrow `Wmax`) this
+  collapsed a genuinely multi-ring bench (ca9's 51 combined judges under Include) down to A
+  SINGLE ring outright, and no amount of Step-3 icon-shrinking could ever undo that, since ring
+  COUNT is decided once, before any scale search runs, and doesn't change with icon size.
+  Confirmed by screenshot: the arc effectively stopped rendering anything readable. **Fixed by
+  keeping `planRings`'s own ceiling argument as plain `Rmax`** (ring count is fundamentally about
+  how many rings fit VERTICALLY, unrelated to width) — `effectiveMax` only bounds the GROWTH
+  steps that add radius on top of whatever multi-ring plan `planRings` already chose, where
+  Step-3 shrinking can genuinely help (smaller icons need less spacing on the SAME ring count).
+  **If you're about to pass anything into `planRings`'s 3rd argument: it must be `Rmax`, never
+  `effectiveMax`/`Wmax` — this is exactly the mistake that caused the regression.**
+- Net behavior, verified directly: desktop — ca9 across all three Seniors modes now has ZERO
+  horizontal overflow (`scrollWidth === clientWidth`), matching the "ideal fit at default/largest
+  width" the operator asked for, achieved via real icon-shrinking (0.75-0.85 scale) rather than
+  scroll. Mobile — multi-ring layout preserved (back to 3-4 rings, not collapsed), genuine
+  shrinking still applies, and residual scroll is still available/used for whatever a narrow
+  viewport genuinely can't fit even at the shrink floor — exactly the "arbitrary via scroll on
+  mobile, tight fit on desktop" split the operator described a few turns earlier, now emerging
+  naturally from ONE mechanism (grow/shrink bounded by both axes, scroll as the final fallback)
+  rather than needing a mobile-specific carve-out.
+- Verification: two new permanent tests — ca9 (not just an ordinary court) has zero horizontal
+  overflow at desktop width across all three Seniors modes (the exact case originally reported),
+  and a regression guard asserting ca9/Include at 380px still plans ≥3 rings (catches the
+  ring-count-collapse bug specifically, so it can't silently come back). Full jsdom suite
+  (`embed/` + `--dist`) and real-Chrome CDP checks (`embed/` + `dist/`) all pass, including every
+  earlier issue #50 assertion. Manually re-screenshotted ca9 at both mobile (multi-ring, readable)
+  and desktop (Include/Show both fit with no scrollbar) to confirm before finalizing. `dist/`
+  rebuilt and committed alongside `embed/`.
+- Next: PR #56 still open, awaiting operator review.
+- Blockers: none.
+
+### 2026-09-08 (de) — PR #56: rebuilt the senior-band handling from first principles, grounded in issue #50's actual text — scoped radius growth, shared whole-bench scale, horizontal scroll
+- Phase: 4, same PR (#56, issue #50), still `claude/issue-50-collision-avoidance`. Picked back up
+  after (dd)'s reset to (cz)+points-1-2 immediately re-exposed the original `bandR`-exceeds-`Rmax`
+  bug (never fixed in (cz)/(cx), only ever fixed in the later, since-reverted (dc)) — the operator
+  asked "did you read issue #50?" and it turned out to matter a lot: the issue's own text already
+  specifies "Constraint on steps 1 & 2: both must stay within the size of the actual user-viewable
+  area... an expansion that would overflow that area is not a valid application," AND that Step
+  3's tie-break language ("don't shrink more than necessary just because a larger reduction also
+  worked") is a GENERAL principle, not Step-3-only — confirmed by the operator directly. That
+  reframed the whole senior-band question: growing every ring in one shared array (cz's original
+  approach) satisfies the viewable-area bound but still grows rings that have no collision of
+  their own whenever the band alone is crowded, which is MORE expansion than the situation needs —
+  a real violation of the general principle, even though it's a spec-compliant application of
+  Step 1's literal "expand all rings together" text. Working through several fork points with the
+  operator (a full transcript is more useful than a paraphrase — see the conversation, not
+  reconstructed detail here) landed on the actual design implemented:
+  - **Steps 1/2 (radius growth) are scoped separately per ring-group**: the senior "show" band
+    gets its OWN growth (resolving its own icons' intra-band crowding) and its OWN inter-ring push
+    against the outermost ACTIVE ring (only the band moves; the active ring is never the one with
+    the problem) — reusing `growRingsForIntra`/`adjustInterRingGaps` completely unmodified, just
+    with band-only or `[fixedActiveR, movableBandR]` scoped inputs (a 2-entry array makes index 0
+    `adjustInterRingGaps`' own `centerIdx` for k=2, so it's structurally guaranteed to never move).
+    "Include" mode needed nothing here — `innerArcSeats()` already folds included seniors into the
+    ordinary active seat list, so it was always covered by the plain active-ring pipeline.
+  - **Step 3 (icon shrink) is NOT scoped the same way — a real, separate bug found mid-session**:
+    an initial band-scoped shrink (mirroring the radius scoping) produced senior icons shrinking
+    to a DIFFERENT size than active icons when only the band needed it — operator caught this
+    directly ("the senior judge icons are getting shrunk when none of the others are. this
+    behavior is wrong") before it shipped. Fixed by unifying: one `resolveAt(scale)` closure now
+    re-runs BOTH the active AND band scoped radius steps at a single candidate scale, and Step 3's
+    search picks ONE scale used for the whole bench — never an active-only or band-only one. The
+    asymmetry (scope radius per-group, but scale whole-bench) is deliberate: growing an
+    uninvolved ring's RADIUS wastes space for no reason (the thing the operator's original
+    complaint was about), but if shrinking is genuinely needed at all, two different icon sizes in
+    the same view is a different, new kind of wrong (visual inconsistency) that scoping doesn't
+    avoid, it just creates.
+  - **The `bandR`-starting-value bug** (same root cause as the old (dc) fix, rediscovered):
+    `growRingsForIntra`/`adjustInterRingGaps` only ever CAP further growth at `Rmax` — neither
+    clamps an already-oversized STARTING value, and the band's natural start
+    (`outermostActiveR + ROW_GAP`) can already exceed `Rmax` before any growth loop runs on a
+    crowded bench. Fixed with an explicit `Math.min(Rmax, ...)` on the starting radius, not just
+    the growth ceiling.
+  - **Horizontal scroll**: reinstated (`.ctt-judge-stage.ctt-majority-scroll`, `leftBleedShift()`,
+    `seatHalfWidth()` — same mechanism `(da)` originally built, same Chrome-transform-counts-
+    toward-scrollWidth and overflow-x/y-coupling gotchas, both reconfirmed still true), covering
+    BOTH Include's own crowding and the band's — unconditional in Majority mode (no fixed
+    breakpoint), so it's purely geometry-driven: an ordinary court shows no scrollbar at all at
+    desktop width (verified, new test), and the scrollbar only appears once content genuinely
+    doesn't fit as the viewport narrows — exactly the operator's ask ("ideal fit" at the default
+    width, "arbitrary" horizontal room on mobile via scroll).
+- Verification: three new permanent test sections in `tests/browser-checks.mjs` — (1) `bandR`
+  stays within `Rmax` and no senior icon renders above the stage's own top edge (ca9, 22 seniors,
+  the original repro), PLUS a same-scale assertion reading each icon's live `transform` directly
+  (not internal state) to guard the "two different sizes" bug from ever regressing silently; (2)
+  horizontal scroll reaches both edges for Include AND Show (band) at 380px; (3) an ordinary court
+  has zero horizontal overflow at desktop width. Full jsdom suite (`embed/` + `--dist`) and
+  real-Chrome CDP checks (`embed/` + `dist/`) all pass. Manually re-screenshotted ca9/Show at
+  desktop: toggle row now fully clear, active and senior icons visibly the same (shrunk) size
+  together, not mismatched. `dist/` rebuilt and committed alongside `embed/`.
+- Next: PR #56 still open, awaiting operator review. This PR's `layoutArc` has now been rewritten
+  three times in one day (cz→da→db/dc→dd→de) — genuinely worth a full, careful read of the CURRENT
+  diff against `main` rather than trying to reason about it from the commit-by-commit history.
+- Blockers: none.
+
+### 2026-09-08 (dd) — PR #56: operator asked to stop iterating and reset to (cz), keeping only points 1-2, dropping point 3 and everything built after it
+- Phase: 4, same PR (#56, issue #50), still `claude/issue-50-collision-avoidance`. Context: after
+  (cz) landed (label-centering fix, majority-line opacity, senior-band-into-collision-pipeline),
+  three more same-day commits followed it — (da) rolled back the ENTIRE Steps 1-3 system by
+  mistake (over-correcting a narrower ask), (db) caught and fixed that, (dc) then found and fixed a
+  real bug (`bandR` could exceed `Rmax`) in the corrected version. The operator's own read on all
+  of that: *"i'm not convinced re-tweaking it repeatedly is a good idea"* — asked to go back to
+  `730133f` ((cz)) directly and take out only its narrowly-scoped point 3, keeping points 1-2,
+  rather than keep patching forward.
+- **Mechanics** (worth recording since this is a different git shape than usual): `git reset --hard`
+  to the named commit was tried first and DENIED by the permission layer — pivoted to three
+  `git revert --no-edit` calls (dc, then db, then da, in that order — newest-first, since they're a
+  strictly linear chain with nothing else interleaved) instead. Non-destructive, no force-push
+  needed. Confirmed the result matched `730133f` exactly with `git diff 730133f HEAD` (empty).
+  Then, for the point-3-only removal: captured `git diff fc3985d 730133f -- embed/court-tracker.js
+  tests/browser-checks.mjs` (the two files (cz)'s point 3 touched — confirmed CSS was untouched by
+  point 3, points 1-2 are 100% of the CSS diff) into a patch file, `git apply --check -R` to confirm
+  it reversed cleanly, then applied for real, then confirmed the RESULT matched `fc3985d` (the
+  original (cx) commit, before (cz) existed) exactly for those two files (`git diff fc3985d --
+  embed/court-tracker.js tests/browser-checks.mjs`, empty). This "diff-two-commits, isolate the one
+  hunk that matters, apply its reverse" technique is the right tool any time a future ask is "keep
+  most of commit X, but undo just this one specific piece of it" — cleaner and more verifiable than
+  hand-editing back to a remembered state.
+- **Net result — see the Resume briefing above for what this actually leaves in the tree.** Kept:
+  (cz) points 1-2 (label centering, majority-line opacity). Reverted: (cz) point 3 (band folded into
+  the collision-avoidance pipeline) — back to its original (cx) fixed-offset form. Gone entirely:
+  the (da)/(db)/(dc) horizontal-scroll feature and the `Rmax` bug it surfaced — none of that ever
+  existed in this state; it's not "fixed then reverted," it's simply not there.
+- Verification: `npm test` (jsdom, `embed/`) and `npm run test:browser` (real Chrome CDP, `embed/`)
+  both pass — this is functionally the same test suite (cz) itself passed, since the code is
+  byte-identical to (cz) minus point 3's own diff. `dist/` rebuilt (`court-tracker.min.js` changed;
+  `.css` didn't, confirmed identical to `730133f`'s own dist CSS).
+- Next: PR #56 still open. The commits `cffd9bf`/`7d111dc`/`ed19958` (da/db/dc) remain in this
+  branch's `git log`, reverted rather than removed — don't be confused by seeing them there, they
+  are NOT part of the current tree state (three revert commits on top undo them completely).
+- Blockers: none.
+
+### 2026-09-08 (cx) — Issue #50: judge-icon ring/arc collision-avoidance algorithm
+- Phase: 4. The last piece of issue #50 — the operator's own multi-step ring/arc
+  collision-avoidance spec (both prerequisite pieces, the two mobile-380px bugs and the global
+  no-photo-initials generalization, were already merged — see the (cv)/(cw) entries below).
+  Surveyed real data BEFORE writing any algorithm code: a real bench (ca9, 29 active judges) at
+  desktop width already had 16 real label-vs-neighbor-icon overlaps under the EXISTING
+  `planRings()`/`S_MIN` icon-spacing system, which only ever guaranteed icon-CENTER spacing, never
+  accounted for LABEL extent — this confirmed the operator's concern was real, pervasive (not a
+  narrow mobile edge case), and worth building for.
+- Implemented, following the spec's own step structure: **Step 0** (a label that wraps to 2 lines,
+  or substantially overflows its icon's width on one line, switches to the full-distinct-initials
+  fallback issue #50's earlier `initials()` generalization already provides) runs in BOTH Timeline
+  and Majority views, always re-derived from `display_name` fresh (never sticky) so it re-evaluates
+  correctly across repeated layout calls. **Steps 1/2** (uniform ring-radius growth for intra-ring
+  collisions, then non-uniform inter-ring gap adjustment anchored at the centermost ring) apply to
+  the general N-seat arc (`layoutArc`, every court except SCOTUS). **Step 3** (icon-shrink to a
+  2/3-of-base floor, re-running 0/1/2 at each size, keeping the best result) applies to both
+  `layoutArc` and Summary > SCOTUS's own hand-tuned ring formula (`layoutScotusRing`) — Steps 1/2
+  deliberately don't touch SCOTUS's ring, to avoid fighting its existing icon-to-icon non-overlap
+  clamps. Nothing here is gated behind a viewport-width media query — confirmed working identically
+  at 380/480/desktop widths, per the operator's mid-session clarification that the algorithm should
+  apply at both mobile and non-mobile from the start.
+- Several specifics were genuinely left open by the spec (buffer-tolerance size, the "substantially
+  overflows" width factor, the 2/3-floor rounding convention, which ring is "centermost" for an
+  even ring count, and how to treat the hover-driven "highlighted icon" exception given this is a
+  static layout-time algorithm) — made reasonable documented choices for each rather than blocking;
+  full reasoning lives in the code comments directly above `COLLISION_BUFFER_PX` in
+  `embed/court-tracker.js`, not duplicated here.
+- **Two real, confirmed measurement bugs found and fixed while verifying against real courts in a
+  real browser** (a fresh-mount-only test plan never would have caught either — see the
+  Conventions entry above for the technical detail): (1) `.ctt-judge`'s own CSS transition made a
+  same-tick "clear the transform, measure, restore" trick read stale (still-scaled) geometry,
+  which on a resize-after-mount left SCOTUS's entire ring wrongly stuck showing bare initials at
+  widths where every surname genuinely fit fine; (2) `.ctt-judge-label`'s box width is a
+  near-constant ~52px regardless of text length (a plain block takes its parent's full width), so
+  measuring the label's own rect instead of its actual text content made the "substantially
+  overflows" check fire on icon SCALE alone, unrelated to the judge's actual name length. Both
+  fixed by one new shared helper, `measureLabelNatural()`.
+- Verification: `tests/browser-checks.mjs` gained a permanent section — Step 0 on the real
+  longest-name judge in the dataset (paed's Nitza Ileana Quiñones Alejandro, confirmed swapped to
+  "NIQA"), a bounded-residual-overlap check on a large real bench (paed, desktop — worst overlap
+  stays under a generous ceiling, not required to hit exactly zero per the spec's own "buffer
+  tolerance" and Step-3 best-effort framing), and a dedicated resize-after-mount regression test
+  locking in bug (1) above. Full jsdom suite (`embed/` and `--dist`) and real-Chrome CDP checks
+  (`embed/` and `dist/`) all pass — no regressions in any pre-existing geometry assertion.
+- Next: no obvious follow-up task on issue #50 itself — see Resume briefing. Re-check
+  `gh issue list` fresh next session.
 ### 2026-09-08/09 (cy) — Issue #49 resolved: repo public again, GitHub Pages live
 - Phase: infra, not a Phase-4 task. Issue #49's original diagnosis (an org-level Pages-creation
   policy) turned out to be based on a stale premise — the repo had reverted to private at some
@@ -464,6 +963,55 @@ Prove the whole app shell and asset schema on one circuit with hand-authored sam
   from closed PR #1 was correctly never resurrected, per that issue's own explicit note.
 - Next: no open follow-up on issue #49 itself. PR #56 (issue #50's collision-avoidance algorithm)
   is still open awaiting review — that's the next item.
+- Blockers: none.
+
+### 2026-09-08 (cz) — PR #56 review-round fixes: label centering, majority-line opacity, senior-band collision coverage
+- Phase: 4, same PR (#56, issue #50) as session (cx) — resumed a session the operator had stopped
+  mid-work (an uncommitted `.ctt-majority-line` opacity change was already sitting in the working
+  tree; kept it, it's exactly what's described below). Three fixes, all still on
+  `claude/issue-50-collision-avoidance`, not a new branch.
+- **Label centering** (root-caused, not just patched around): the operator reported labels
+  visibly off-centre, overflowing right — measured directly (real Chrome, ca8/ca9 Majority arcs)
+  and confirmed it's a real CSS behavior, not a measurement artifact: `.ctt-judge-label` was a
+  plain block that always fills its 52px parent, so a single unbreakable word wider than that
+  (e.g. a long surname, or the bespoke "Circ. Justice <surname>" label) can't get a negative
+  left-offset from `text-align:center` inside a box narrower than its own content — Chrome anchors
+  the line flush at the box's left edge and lets it overflow ONLY rightward (confirmed: a 56px
+  line in the 52px box rendered 0px left / ~4px right, not the ~2px/~2px true centering needs).
+  This wasn't just cosmetic: `measureLabelNatural()`'s Range-based width feeds `labelHitsIcon()`'s
+  collision math, which assumes the rendered label is symmetric around the icon's x — a real,
+  if modest (~2px), mismatch, consistent with the operator's suspicion that it was nudging the
+  algorithm into abbreviations/spacing it didn't actually need. Fix: `width: fit-content` (+
+  `-webkit-` fallback) on `.ctt-judge-label`, so it shrink-wraps for anything that fits and only
+  grows past the container for genuine unbreakable overflow — where `margin:auto` then centers
+  the wider box normally, restoring true symmetric overflow. Verified directly: the paed
+  worst-overlap regression check's own measured value dropped from ~12px (the test's prior
+  ceiling) to 4.8px after this fix, with no ceiling change needed.
+- **Majority-line opacity**: `.ctt-majority-line`'s opacity 1 -> 0.5 (operator ask: half as
+  prominent, already a round number, no further rounding needed) — one shared class, so this one
+  change covers every Majority view (general arcs + Summary > SCOTUS's ring) already, no
+  additional call sites.
+- **Senior "show" band now goes through the same collision-avoidance pipeline as the active
+  rings** (issue #50 follow-up — the operator flagged the algorithm needed extending to the
+  senior show/include cases): audited both. "Include" needed no change — `innerArcSeats()`
+  already folds included seniors into the ordinary seat list, so they were always part of the
+  same pipeline as everyone else. "Show"'s grayed outer band was the real gap: it sat at a fixed
+  `outermost-active-ring + ROW_GAP` offset with NO collision check at all (band-vs-band or
+  band-vs-outermost-ring could clash freely) and no `Rmax` ceiling either. `layoutArc()` now
+  treats the band as one more ring — one past the last active ring — in the exact same
+  `growRingsForIntra`/`adjustInterRingGaps`/`shrinkForCollisions` calls (band members keep their
+  fixed centred-spacing ANGLE; only the shared band radius is solved for). Note this shifts which
+  ring counts as "centermost" for Step 2's anchor when a band is present (it's now picked over
+  the full ring set, band included) — a deliberate, spec-consistent read, documented in the code
+  comment above `layoutArc`.
+- Verification: `tests/browser-checks.mjs` gained a new permanent section using ca9 (22 seniors —
+  the largest real senior cohort in the dataset, and the band's own worst case) — asserts bounded
+  residual overlap (same "generous ceiling, not zero" framing the existing paed check uses) and
+  that every senior-band icon still lands inside the stage's own viewable area post-fix. Full
+  jsdom suite (`embed/` + `--dist`) and real-Chrome CDP checks (`embed/` + `dist/`) all pass, incl.
+  every pre-existing issue #50 assertion; `dist/` rebuilt and committed alongside `embed/`.
+- Next: PR #56 still awaiting operator review/merge — nothing else outstanding on issue #50 that
+  this session is aware of. Re-check `gh issue list`/`gh pr list` fresh next session regardless.
 - Blockers: none.
 
 ### 2026-09-08 (cw) — Issue #50: no-photo icon fallback generalized to full distinct-name-initials

@@ -585,6 +585,192 @@ try {
     await checkBug2(w);
   }
   await send("Emulation.clearDeviceMetricsOverride");
+
+  console.log("issue #50: judge-icon collision avoidance");
+  await ev(`document.querySelector('.ctt-pane-close')?.click()`); await sleep(300);
+  {
+    // Step 0: a name that would render as two wrapped lines under its icon (Nitza Ileana
+    // Quiñones Alejandro, paed — the longest display_name in the current dataset) switches to
+    // its full distinct-name-initials instead, on ANY width — nothing here is mobile-gated.
+    await ev(`document.querySelector('.ctt-selector-item[data-court-id="ca3"]')?.click()`); await sleep(500);
+    await ev(`document.querySelector('.ctt-drill')?.click()`); await sleep(1800);
+    await ev(`document.querySelector('.ctt-selector-item[data-court-id="paed"]')?.click()`); await sleep(600);
+    await ev(`[...document.querySelectorAll(".ctt-toggle")].find(b => b.textContent === "Majority")?.click()`); await sleep(700);
+    const step0 = await ev(`(() => {
+      const node = [...document.querySelectorAll('.ctt-judge')].find(n => /Quiñones/.test(n._judge?.full_name || ''));
+      if (!node) return JSON.stringify({ found: false });
+      const label = node.querySelector('.ctt-judge-label');
+      return JSON.stringify({ found: true, text: label.textContent,
+        lines: Math.round(label.getBoundingClientRect().height / 12) });
+    })()`);
+    const s0 = JSON.parse(step0);
+    assert(s0.found, "the longest real display_name in the dataset (paed) is on the bench to check");
+    assert(s0.text === "NIQA", `Step 0 swapped the would-wrap label to full distinct-name-initials (got "${s0.text}")`);
+
+    console.log("  no label overlaps a neighboring icon by more than a small buffer, on a large real bench (paed, desktop)");
+    const overlapReport = await ev(`(() => {
+      const icons = [...document.querySelectorAll('.ctt-judge-stage .ctt-judge')]
+        .filter(n => !n.classList.contains('ctt-vacant') && !n.classList.contains('ctt-justice'));
+      let worst = 0;
+      for (const a of icons) {
+        const lr = a.querySelector('.ctt-judge-label').getBoundingClientRect();
+        for (const b of icons) {
+          if (a === b) continue;
+          const br = b.querySelector('.ctt-avatar').getBoundingClientRect();
+          const ox = Math.min(lr.right, br.right) - Math.max(lr.left, br.left);
+          const oy = Math.min(lr.bottom, br.bottom) - Math.max(lr.top, br.top);
+          if (ox > 0 && oy > 0) worst = Math.max(worst, Math.min(ox, oy));
+        }
+      }
+      return worst;
+    })()`);
+    // A generous ceiling, not a tight one: this asserts the algorithm keeps residual overlap
+    // SMALL (no egregious text-buried-in-a-neighboring-icon case), not that it hits zero — the
+    // spec's own Step 3 stops at a size floor and accepts the best result found, so a few px of
+    // buffer-tolerated overlap on a genuinely crowded real bench is expected, not a regression.
+    assert(overlapReport < 12, `worst remaining label/icon overlap stays small (${overlapReport}px)`);
+  }
+
+  console.log("issue #50 follow-up: the senior 'show' band gets its own scoped RADIUS growth (never inflates active-ring radii), capped at Rmax, sharing one whole-bench SCALE if a shrink is ever needed");
+  {
+    // ca9 (22 seniors, the dataset's largest band) is where the Rmax-overshoot bug was originally
+    // caught: active-ring growth (needed regardless, to resolve real crowding) plus a fixed
+    // `+ROW_GAP` band offset could together exceed Rmax with no cap at all.
+    await ev(`document.querySelector('.ctt-selector-back')?.click()`); await sleep(400);
+    await ev(`document.querySelector('.ctt-selector-item[data-court-id="ca9"]')?.click()`); await sleep(600);
+    await ev(`[...document.querySelectorAll(".ctt-toggle")].find(b => b.textContent === "Majority")?.click()`); await sleep(700);
+    await ev(`document.querySelector('.ctt-toggle[data-senior="show"]')?.click()`); await sleep(700);
+    const bandReport = await ev(`(() => {
+      const stage = document.querySelector('.ctt-judge-stage');
+      const model = stage._model, ar = model._arcRender;
+      const stageR = stage.getBoundingClientRect();
+      const seniors = [...stage.querySelectorAll('.ctt-judge.ctt-senior')].filter((n) => getComputedStyle(n).opacity !== '0');
+      const actives = [...stage.querySelectorAll('.ctt-judge:not(.ctt-senior):not(.ctt-vacant):not(.ctt-justice)')];
+      let minTop = Infinity;
+      for (const n of seniors) minTop = Math.min(minTop, n.getBoundingClientRect().top);
+      // Read each icon's OWN scale straight off its live transform, rather than trusting
+      // internal state, so this is a check on what's actually rendered.
+      const scaleOf = (n) => { const m = /scale\\(([\\d.]+)\\)/.exec(n.style.transform); return m ? +m[1] : 1; };
+      const seniorScales = [...new Set(seniors.map(scaleOf).map((s) => s.toFixed(2)))];
+      const activeScales = [...new Set(actives.map(scaleOf).map((s) => s.toFixed(2)))];
+      return JSON.stringify({
+        bandR: ar.bandR, Rmax: Math.max(60, ar.cy - 30), stageTop: stageR.top, minTop,
+        seniorCount: seniors.length, seniorScales, activeScales,
+      });
+    })()`);
+    const br = JSON.parse(bandReport);
+    assert(br.seniorCount >= 15, `ca9's senior band is really on the bench for this check (got ${br.seniorCount})`);
+    assert(br.bandR <= br.Rmax + 1, `bandR stays within Rmax (bandR ${br.bandR.toFixed(1)} vs Rmax ${br.Rmax.toFixed(1)})`);
+    assert(br.minTop >= br.stageTop - 2, `no senior icon renders above the stage's own top edge (icon top ${br.minTop.toFixed(1)} vs stage top ${br.stageTop.toFixed(1)})`);
+    // Not "every icon is exactly 1x" (a genuinely crowded bench may need Step 3 for everyone) —
+    // specifically that senior icons and active icons are never at DIFFERENT scales from each
+    // other, which would mean the band shrank alone while the rest of the bench didn't (or vice
+    // versa) — a real, confirmed bug this asserts against regressing.
+    assert(br.seniorScales.length === 1 && br.activeScales.length === 1 && br.seniorScales[0] === br.activeScales[0],
+      `senior and active icons share ONE scale, never two different ones (senior ${JSON.stringify(br.seniorScales)}, active ${JSON.stringify(br.activeScales)})`);
+  }
+
+  console.log("Majority view scrolls horizontally to reach seats that would otherwise bleed off either edge — covers both Include's own crowding and the senior band's");
+  {
+    await send("Emulation.setDeviceMetricsOverride", { width: 380, height: 900, deviceScaleFactor: 1, mobile: true });
+    await sleep(400);
+    console.log("  Include mode (already selected on ca9): both edges reachable by scroll");
+    await ev(`document.querySelector('.ctt-toggle[data-senior="include"]')?.click()`); await sleep(700);
+
+    // Regression guard: adding a width constraint (Wmax, below) to fix the desktop scrollbar bug
+    // initially broke THIS — passing the tighter width-aware ceiling into planRings' own
+    // ring-COUNT decision could collapse a genuinely multi-ring bench (51 combined judges here)
+    // down to a single ring on a narrow viewport, since ring count doesn't change with icon scale
+    // and nothing in the Step-3 shrink search can undo a ring-count decision made before it runs.
+    // Confirmed as a real, severe regression (screenshot: the arc effectively stopped rendering
+    // anything readable) before `planRings` was changed back to using plain `Rmax` for ring count.
+    const ringCount = await ev(`document.querySelector('.ctt-judge-stage')._model._arcRender.radii.length`);
+    assert(ringCount >= 3, `ca9/Include at 380px still plans multiple rings, not collapsed to one by the width constraint (got ${ringCount})`);
+
+    const checkBothEdges = async (label) => {
+      const before = JSON.parse(await ev(`(() => {
+        const stage = document.querySelector('.ctt-judge-stage');
+        return JSON.stringify({ scrollWidth: stage.scrollWidth, clientWidth: stage.clientWidth, hasScrollClass: stage.classList.contains('ctt-majority-scroll') });
+      })()`));
+      assert(before.hasScrollClass, `${label}: the stage carries ctt-majority-scroll in Majority mode`);
+      assert(before.scrollWidth > before.clientWidth + 20,
+        `${label}: genuinely overflows horizontally at 380px, so this is a real test (scrollWidth ${before.scrollWidth} vs clientWidth ${before.clientWidth})`);
+      const left = JSON.parse(await ev(`(() => {
+        const stage = document.querySelector('.ctt-judge-stage');
+        stage.scrollLeft = 0;
+        const stageL = stage.getBoundingClientRect().left;
+        const icons = [...stage.querySelectorAll('.ctt-judge')].filter((n) => !n.classList.contains('ctt-vacant') && getComputedStyle(n).opacity !== '0');
+        let minLeft = Infinity;
+        for (const n of icons) minLeft = Math.min(minLeft, n.querySelector('.ctt-judge-label').getBoundingClientRect().left);
+        return JSON.stringify({ stageL, minLeft });
+      })()`));
+      assert(left.minLeft >= left.stageL - 2, `${label}: scrolled fully left, no label sits left of the stage's own edge (label left ${left.minLeft.toFixed(1)} vs stage left ${left.stageL.toFixed(1)})`);
+      const right = JSON.parse(await ev(`(() => {
+        const stage = document.querySelector('.ctt-judge-stage');
+        stage.scrollLeft = stage.scrollWidth - stage.clientWidth;
+        const stageR = stage.getBoundingClientRect().right;
+        const icons = [...stage.querySelectorAll('.ctt-judge')].filter((n) => !n.classList.contains('ctt-vacant') && getComputedStyle(n).opacity !== '0');
+        let maxRight = -Infinity;
+        for (const n of icons) maxRight = Math.max(maxRight, n.querySelector('.ctt-judge-label').getBoundingClientRect().right);
+        return JSON.stringify({ stageR, maxRight });
+      })()`));
+      assert(right.maxRight <= right.stageR + 2, `${label}: scrolled fully right, no label sits right of the stage's own edge (label right ${right.maxRight.toFixed(1)} vs stage right ${right.stageR.toFixed(1)})`);
+    };
+    await checkBothEdges("Include");
+
+    console.log("  Show mode: the senior band (deliberately not collision-checked against active rings) is still reachable both directions");
+    await ev(`document.querySelector('.ctt-toggle[data-senior="show"]')?.click()`); await sleep(700);
+    await checkBothEdges("Show");
+
+    console.log("  Timeline mode never gets the scroll class (this is Majority-only)");
+    await ev(`[...document.querySelectorAll(".ctt-toggle")].find(b => b.textContent === "Timeline")?.click()`); await sleep(500);
+    const timelineHasClass = await ev(`document.querySelector('.ctt-judge-stage').classList.contains('ctt-majority-scroll')`);
+    assert(!timelineHasClass, "Timeline's stage does not carry ctt-majority-scroll");
+    await send("Emulation.clearDeviceMetricsOverride");
+  }
+
+  console.log("Majority view shows NO scrollbar at the default/largest width for an ordinary court (geometry-driven, not a fixed breakpoint — an 'ideal fit' at desktop)");
+  {
+    await ev(`document.querySelector('.ctt-selector-back')?.click()`); await sleep(400);
+    await ev(`document.querySelector('.ctt-selector-item[data-court-id="ca8"]')?.click()`); await sleep(600);
+    await ev(`[...document.querySelectorAll(".ctt-toggle")].find(b => b.textContent === "Majority")?.click()`); await sleep(700);
+    const fit = await ev(`(() => {
+      const stage = document.querySelector('.ctt-judge-stage');
+      return JSON.stringify({ scrollWidth: stage.scrollWidth, clientWidth: stage.clientWidth });
+    })()`);
+    const f = JSON.parse(fit);
+    assert(f.scrollWidth <= f.clientWidth + 1, `an ordinary court (ca8) at desktop width has no horizontal overflow at all (scrollWidth ${f.scrollWidth} vs clientWidth ${f.clientWidth})`);
+
+    // The extreme case, not just an ordinary one: ca9 (the dataset's largest bench) at desktop
+    // width used to still show a scrollbar even after Rmax-only growth successfully resolved
+    // every label/icon collision — because nothing about "the arc is wider than the pane" ever
+    // counted as a reason to invoke Step 3 (issue #50's OWN text: growth "must stay within the
+    // size of the actual user-viewable area," which is not height alone). Checked across all
+    // three Seniors modes, since Include and Show reach this width differently.
+    console.log("  ...and the SAME holds for ca9 (the dataset's largest bench) at desktop width, across all three Seniors modes — the case originally reported");
+    await ev(`document.querySelector('.ctt-selector-item[data-court-id="ca9"]')?.click()`); await sleep(600);
+    await ev(`[...document.querySelectorAll(".ctt-toggle")].find(b => b.textContent === "Majority")?.click()`); await sleep(700);
+    for (const mode of ["hide", "include", "show"]) {
+      await ev(`document.querySelector('.ctt-toggle[data-senior="${mode}"]')?.click()`); await sleep(500);
+      const r = JSON.parse(await ev(`(() => {
+        const stage = document.querySelector('.ctt-judge-stage');
+        return JSON.stringify({ scrollWidth: stage.scrollWidth, clientWidth: stage.clientWidth });
+      })()`));
+      assert(r.scrollWidth <= r.clientWidth + 1, `ca9/${mode} at desktop width has no horizontal overflow (scrollWidth ${r.scrollWidth} vs clientWidth ${r.clientWidth})`);
+    }
+  }
+
+  console.log("  a resize after initial mount doesn't leave Summary > SCOTUS's ring wrongly stuck on initials (regression: stale-transform double-scaling bug)");
+  await ev(`document.querySelector('.ctt-selector-back')?.click()`); await sleep(400);
+  await ev(`document.querySelector('.ctt-selector-item[data-court-id="summary"]')?.click()`); await sleep(600);
+  await send("Emulation.setDeviceMetricsOverride", { width: 380, height: 900, deviceScaleFactor: 1, mobile: true });
+  await sleep(500);
+  const scotusAfterResize = await ev(`JSON.stringify([...document.querySelectorAll('.ctt-judge-stage .ctt-judge:not(.ctt-vacant)')]
+    .map(n => n.querySelector('.ctt-judge-label').textContent))`);
+  const labels = JSON.parse(scotusAfterResize);
+  assert(labels.includes("Gorsuch") && labels.includes("Kagan"),
+    `a resize to 380px doesn't force SCOTUS's short surnames to initials when they fit fine (got ${JSON.stringify(labels)})`);
+  await send("Emulation.clearDeviceMetricsOverride");
 } catch (e) { console.log("*** ", e.message); failures++; }
 finally { try { ws && ws.close(); } catch {} chrome.kill(); }
 

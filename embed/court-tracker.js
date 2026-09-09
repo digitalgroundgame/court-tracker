@@ -2329,7 +2329,27 @@ function majorityDims(w, H = 320) {
   // nothing. The 68px below cy hold the baseline icons' bottom halves (+22), their name
   // labels (to ~cy+40), and the count text (baseline cy+54, see drawMajorityOverlay).
   const cx = w / 2, cy = H - 68;
-  return { H, cx, cy, Rmax: Math.max(60, cy - 30), R0: Math.min(w * 0.26, 132) };
+  // `Wmax` is `Rmax`'s width-axis counterpart — issue #50's "Constraint on steps 1 & 2: both
+  // must stay within the size of the actual user-viewable area" applies to BOTH axes, not just
+  // height, but `Rmax` alone only ever bounded height (nothing here ever checked whether a
+  // ring's radius pushed seats past the pane's own left/right edges). Since `cx === w/2`, a
+  // ring's radius must not exceed `cx` itself to keep `cx ± radius` inside `[0, w]`; the -30
+  // margin (same fudge `Rmax` already reserves for a label past its own icon) leaves a little
+  // room for a seat's label to extend past its icon at the arc's own horizontal extremes,
+  // instead of shaving it exactly to the pixel. Confirmed as a real, live bug (operator report):
+  // without this, growth (Steps 1/2) could resolve every label/icon collision while still
+  // leaving the arc wider than the pane, since nothing about that condition ever counted as a
+  // reason to invoke Step 3 — the scrollbar this width gap needs `.ctt-judge-stage.ctt-majority-
+  // scroll` for should now be rare, not something an ordinary/even a large real bench hits at
+  // its own default width.
+  // NOTE: this margin only bounds RING-RADIUS growth (Steps 1/2) — it is NOT what determines
+  // whether a label actually pokes past the pane's edge. That's measured separately and exactly
+  // by `seatHalfWidth`/`leftBleedShift` at the end of `layoutArc`. Widening this constant was
+  // tried once (session dh) to chase a CI-only overflow and had ZERO effect (proved by CI
+  // reproducing byte-identical numbers before and after) — see `layoutArc`'s `resolveAt` for the
+  // fix that actually worked (checking REAL measured pane-edge overflow inside the Step-3 search,
+  // not this fixed heuristic). Don't widen this again for that class of bug.
+  return { H, cx, cy, Rmax: Math.max(60, cy - 30), Wmax: Math.max(60, cx - 30), R0: Math.min(w * 0.26, 132) };
 }
 
 // Distribute N icons across the given ring radii so intra-ring neighbour spacing is as
@@ -2423,14 +2443,22 @@ function layoutJudges() {
     }
   }
 
+  // Majority view only (issue #50 follow-up): the stage scrolls horizontally instead of the arc
+  // reshaping itself to always fit — see leftBleedShift's own comment above layoutArc. Timeline
+  // never needs this (its grid already wraps to width), so the class — and with it
+  // overflow-x:auto — stays off there.
+  stage.classList.toggle("ctt-majority-scroll", S.majorityMode);
+
   if (!S.majorityMode) {
+    resolveLabelOverflow(stage, 1);   // issue #50 Step 0 — Timeline's grid, not just arcs
+    stage.scrollLeft = 0;
     layoutTimeline(model, w, H);
     drawMajorityOverlay(stage, null);
   } else if (stage.classList.contains("ctt-scotus-stage")) {
-    layoutScotusRing(model, w, H);
+    layoutScotusRing(model, w, H, stage);
     drawMajorityOverlay(stage, model);
   } else {
-    layoutArc(model, w, H);
+    layoutArc(model, w, H, stage);
     drawMajorityOverlay(stage, model);
   }
 }
@@ -2510,43 +2538,434 @@ function innerArcSeats(model) {
   return seats;
 }
 
-function layoutArc(model, w, H) {
-  const { cx, cy, Rmax, R0 } = majorityDims(w, H);
+// ---- issue #50: judge-icon collision avoidance ---------------------------------
+// The operator's own multi-step spec lives in the issue body, not duplicated here. Several
+// specifics were left as open implementation choices for this PR to make and document (the
+// issue's own framing — choices to record, not gates to block on):
+//  - COLLISION_BUFFER_PX: how far a label's own box may sit inside a neighbor's icon circle
+//    before it counts as a real collision worth resolving (a few px only — anti-aliasing/
+//    rounding noise, not a genuine "text touches the circle" case).
+//  - OVERFLOW_WIDTH_FACTOR: how much wider than "icon diameter including the highlight ring" a
+//    still-single-line label has to render before Step 0 calls it "substantially" overflowing.
+//  - SHRINK_ROUND_PX: the "nearest round number" Step 3's 2/3-floor rounds to.
+//  - "highlighted icon" (the yellow same-president ring, `.ctt-hl`) is a hover-driven, transient
+//    state — this is a static, layout-time algorithm (recomputed on every render, not on every
+//    hover), so it does not special-case it; COLLISION_BUFFER_PX stays small enough that the
+//    ring's own 3px box-shadow is never realistically what tips a real collision into "tolerated."
+//  - an EVEN ring count has no single "centermost" ring for Step 2's anchor; this implementation
+//    anchors at the inner one of the two middle rings (index floor((k-1)/2)).
+// Applies to Majority-mode's general N-seat arc (layoutArc, below) and — Step 0 only — to
+// Timeline's grid (layoutJudges' own call site) and Summary > SCOTUS's fixed ring
+// (layoutScotusRing): nowhere here is gated behind a viewport width, so it runs identically at
+// mobile and desktop. SCOTUS's ring already solves icon-to-icon overlap via its own hand-tuned
+// radius formula (see that function's comment); Steps 1/2 (general ring-spacing adjustment)
+// don't apply there, to avoid fighting that formula's existing clamps, but Step 3 (icon shrink)
+// still does, since SCOTUS's OWN scale is exactly the kind of lever Step 3 already generalizes.
+const COLLISION_BUFFER_PX = 3;
+const OVERFLOW_WIDTH_FACTOR = 1.15;
+const SHRINK_ROUND_PX = 5;
+// `layoutArc`'s Step-3 search treats a SMALL measured pane-edge overflow (under this) as another
+// unacceptable-collision type worth nudging the scale down for — closing exactly the kind of few-
+// px, font-rendering-driven gap that showed up as a real CI-only failure (session dh: a court that
+// fit with 0px slack locally measured a few px over in CI, from the SAME label text rendering at a
+// different real width there). Bounded deliberately: a genuinely narrow/mobile pane routinely
+// overflows by 150px+ for a large bench, and that must NOT trigger extra shrinking — the operator
+// was explicit that mobile's viewable width stays "arbitrary," relying on horizontal scroll rather
+// than being shrunk to fit. This tolerance is what keeps the check scoped to "just barely misses"
+// without touching that design.
+const PANE_EDGE_TOLERANCE_PX = 40;
+const LABEL_GAP = 3;             // matches .ctt-judge-label's own margin-top
+const AVATAR_R = 22;             // .ctt-avatar's 44px diameter, radius, at scale 1
+
+/** Icon diameter INCLUDING the yellow same-president highlight ring — issue #50's own definition
+ *  of "icon width" for Step 0 — at a given icon scale. */
+function iconDiameterWithRing(scale) { return (2 * AVATAR_R + 6) * scale; }
+
+/** A node's `.ctt-judge-label` rect at its NATURAL (unscaled) size — neutralizing whatever
+ *  transform:scale(...) a PREVIOUS layout pass left on the node first. Without this, re-measuring
+ *  on a re-layout (e.g. a resize event re-running layoutArc/layoutScotusRing on already-placed
+ *  nodes) reads a STALE, already-scaled box and then scales it AGAIN below — confirmed as a real
+ *  bug: SCOTUS's whole ring got stuck showing initials after a resize, at widths where a correct
+ *  unscaled measurement never would have flagged an overflow at all. `place()` unconditionally
+ *  overwrites the node's transform once final positions are chosen, so it's always safe to
+ *  neutralize it here first.
+ *  `.ctt-judge` also carries `transition: transform 480ms ...` — a bare `style.transform` toggle
+ *  ANIMATES rather than applying instantly, so a synchronous read right after clearing it would
+ *  still reflect the OLD (scaled) box for this entire tick. `ctt-no-transition` (the same class
+ *  `handoff()` already uses for the analogous "read true geometry, not a mid-transition one"
+ *  need) suspends the transition for the read; `offsetWidth` reads force each style change to
+ *  actually flush before the next one. */
+function measureLabelNatural(node) {
+  const label = node.querySelector(".ctt-judge-label");
+  node.classList.add("ctt-no-transition");
+  const prevTransform = node.style.transform;
+  node.style.transform = "";
+  void node.offsetWidth;
+  const r = label.getBoundingClientRect();
+  // `.ctt-judge-label` is a plain block: it takes its PARENT's full 52px width regardless of how
+  // short its text is (text-align:center just centers the glyphs within that box), so the box's
+  // own rect.width is a near-constant ~52px for every judge — useless as an overflow OR collision
+  // signal (confirmed as a real bug: it flagged "Gorsuch" as "too wide" purely because SCOTUS's
+  // icons were scaled up, nothing to do with the name). A Range around the label's own text gives
+  // the tight box around the actually-rendered glyphs instead (same technique issue #50's own
+  // bug-2 fix already established in tests/browser-checks.mjs). Height is unaffected by this —
+  // a block genuinely grows ITS OWN height to fit wrapped content, so rect.height stays a
+  // reliable one-line-vs-two-line signal.
+  // jsdom's Range has no getBoundingClientRect (headless smoke tests) — 0 there is fine, same
+  // as every other geometry read in this file: it just means "nothing measurable, skip."
+  let textWidth = 0;
+  if (typeof Range !== "undefined" && Range.prototype.getBoundingClientRect) {
+    const range = document.createRange();
+    range.selectNodeContents(label);
+    textWidth = range.getBoundingClientRect().width;
+  }
+  node.style.transform = prevTransform;
+  void node.offsetWidth;
+  node.classList.remove("ctt-no-transition");
+  return { label, rect: r, textWidth };
+}
+
+/** Step 0: a label that renders as two lines, or that (on one line) substantially overflows its
+ *  OWN icon's width, switches from `display_name` to the full-distinct-initials fallback (the
+ *  same computation the no-photo avatar already uses) instead. Always re-derives from
+ *  `display_name` first (never sticky), so a later call — after Step 3 changes the icon scale, or
+ *  a plain resize — re-evaluates fresh rather than staying stuck on whichever form an earlier
+ *  pass chose. Skips vacancies (their "Vacant" label never overflows) and the Circuit Justice
+ *  (her label is a bespoke "Circ. Justice <surname>" form set elsewhere, not derived from
+ *  `display_name` — swapping her to bare initials would erase the one thing that label exists to
+ *  say). Returns true if anything changed. */
+/** Per-node half of Step 0 — factored out so the senior "show" band's own scoped Steps 1-3
+ *  (below) can re-evaluate JUST its own judges at a candidate band scale, without re-touching
+ *  every active-ring node's label the way calling `resolveLabelOverflow(stage, scale)` would. */
+function resolveLabelOverflowNode(node, scale) {
+  const judge = node._judge;
+  if (!judge) return false;
+  node.querySelector(".ctt-judge-label").textContent = judge.display_name || "";
+  const { label, rect: r, textWidth } = measureLabelNatural(node);
+  if (!r.width && !r.height) return false;   // headless (jsdom): nothing measurable, leave as-is
+  const maxWidth = iconDiameterWithRing(scale) * OVERFLOW_WIDTH_FACTOR;
+  const lineH = (parseFloat(getComputedStyle(label).fontSize) || 10) * 1.15;
+  const twoLine = r.height > lineH * 1.4;
+  const tooWide = !twoLine && textWidth * scale > maxWidth;
+  if (twoLine || tooWide) { label.textContent = initials(judge); return true; }
+  return false;
+}
+function resolveLabelOverflow(stage, scale) {
+  let changed = false;
+  stage.querySelectorAll(".ctt-judge:not(.ctt-vacant):not(.ctt-justice)").forEach((node) => {
+    if (resolveLabelOverflowNode(node, scale)) changed = true;
+  });
+  return changed;
+}
+
+function seatPoint(cx, cy, r, ang) { return { x: cx + r * Math.cos(ang), y: cy - r * Math.sin(ang) }; }
+
+/** Does seat A's label (its own rendered box, sitting LABEL_GAP below its icon, centred on it)
+ *  reach unacceptably far into seat B's icon circle, at the given scale? `buffer` px of overlap
+ *  is tolerated before this counts as a real collision. */
+function labelHitsIcon(aPos, aLabelW, aLabelH, scale, bPos, buffer) {
+  const w = aLabelW * scale, h = aLabelH * scale;
+  const top = aPos.y + AVATAR_R * scale + LABEL_GAP * scale;
+  const rect = { left: aPos.x - w / 2, right: aPos.x + w / 2, top, bottom: top + h };
+  const closestX = Math.max(rect.left, Math.min(bPos.x, rect.right));
+  const closestY = Math.max(rect.top, Math.min(bPos.y, rect.bottom));
+  const dx = bPos.x - closestX, dy = bPos.y - closestY;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  return (AVATAR_R * scale - dist) > buffer;
+}
+
+/** Scans every seat pair whose rings are the same (intra) or adjacent (inter) for a real
+ *  label/icon collision at the given radii+scale. Rings more than 1 apart are never checked —
+ *  too far apart geometrically for a label (localized right under its own icon) to ever reach. */
+function findRingCollisions(seatDescs, radii, cx, cy, scale, buffer) {
+  let intra = false, inter = false;
+  for (const a of seatDescs) {
+    const aPos = seatPoint(cx, cy, radii[a.ring], a.ang);
+    for (const b of seatDescs) {
+      if (a === b) continue;
+      const ringDiff = Math.abs(a.ring - b.ring);
+      if (ringDiff > 1) continue;
+      const bPos = seatPoint(cx, cy, radii[b.ring], b.ang);
+      if (labelHitsIcon(aPos, a.labelW, a.labelH, scale, bPos, buffer)) {
+        if (ringDiff === 0) intra = true; else inter = true;
+      }
+    }
+  }
+  return { intra, inter };
+}
+
+/** Step 1: grow every ring's radius together by the same amount until no intra-ring collision
+ *  remains, or growing further would push the outermost ring past Rmax (the viewable area). */
+function growRingsForIntra(seatDescs, radii0, cx, cy, scale, Rmax, buffer) {
+  let radii = radii0;
+  for (let i = 0; i < 60; i++) {
+    const { intra } = findRingCollisions(seatDescs, radii, cx, cy, scale, buffer);
+    if (!intra) return { radii, resolved: true };
+    const grown = radii.map((r) => r + 4);
+    if (grown[grown.length - 1] > Rmax) return { radii, resolved: false };
+    radii = grown;
+  }
+  return { radii, resolved: false };
+}
+
+/** Step 2: adjust the DISTANCE between adjacent rings (not a uniform shift) to clear inter-ring
+ *  collisions — the centermost ring stays fixed; rings outward of it push further out (capped at
+ *  Rmax), rings inward of it pull further in (capped at not crossing the next ring in). */
+function adjustInterRingGaps(seatDescs, radii0, cx, cy, scale, Rmax, buffer) {
+  let radii = [...radii0];
+  const k = radii.length;
+  if (k < 2) return { radii, resolved: true };
+  const centerIdx = Math.floor((k - 1) / 2);
+  for (let i = 0; i < 60; i++) {
+    const { inter } = findRingCollisions(seatDescs, radii, cx, cy, scale, buffer);
+    if (!inter) return { radii, resolved: true };
+    let changed = false;
+    for (let ri = 0; ri < k; ri++) {
+      if (ri === centerIdx) continue;
+      if (ri > centerIdx) {
+        const next = radii[ri] + 4;
+        if (next <= Rmax) { radii[ri] = next; changed = true; }
+      } else {
+        const floor = ri > 0 ? radii[ri - 1] + 8 : 20;
+        const next = radii[ri] - 4;
+        if (next > floor) { radii[ri] = next; changed = true; }
+      }
+    }
+    if (!changed) return { radii, resolved: false };
+  }
+  return { radii, resolved: false };
+}
+
+/** Step 3 (last resort — only reached when steps 1/2 can't clear every collision within the
+ *  viewable area): shrink the icon scale in small increments, re-trying steps 1/2 (and Step 0,
+ *  whose own overflow threshold shrinks with the icon) at each, down to a floor of the nearest
+ *  SHRINK_ROUND_PX to 2/3 of the base icon size. Tracks the best (fewest remaining unacceptable
+ *  collision types) result seen across every increment tried; stops at the first one with none
+ *  remaining, so it never shrinks further than it has to. */
+function shrinkForCollisions(stage, buildSeatDescs, radii0, cx, cy, Rmax, buffer, baseScale) {
+  const baseDiameter = 2 * AVATAR_R * baseScale;
+  const floorDiameter = Math.round((baseDiameter * 2 / 3) / SHRINK_ROUND_PX) * SHRINK_ROUND_PX;
+  const floorScale = Math.max(0.3, floorDiameter / (2 * AVATAR_R));
+  let best = null;
+  for (let scale = baseScale; scale >= floorScale - 1e-6; scale -= 0.05) {
+    resolveLabelOverflow(stage, scale);
+    const seatDescs = buildSeatDescs();
+    const { radii: r1 } = growRingsForIntra(seatDescs, radii0, cx, cy, scale, Rmax, buffer);
+    const { radii: r2 } = adjustInterRingGaps(seatDescs, r1, cx, cy, scale, Rmax, buffer);
+    const { intra, inter } = findRingCollisions(seatDescs, r2, cx, cy, scale, buffer);
+    const remaining = (intra ? 1 : 0) + (inter ? 1 : 0);
+    if (!best || remaining < best.remaining) best = { scale, radii: r2, remaining };
+    if (remaining === 0) break;
+  }
+  return best;
+}
+
+/** Half-width to reserve around a seat's x position for horizontal-scroll purposes, AT THE
+ *  GIVEN SCALE: its label's actual rendered text (Range-measured at natural, unscaled size —
+ *  same technique Step 0 uses — then scaled) if that's wider than the icon itself (incl. the
+ *  highlight ring's few px), otherwise the icon. */
+function seatHalfWidth(node, scale) {
+  const { textWidth } = measureLabelNatural(node);
+  return Math.max((AVATAR_R + 3) * scale, (textWidth * scale) / 2);
+}
+/** How far the leftmost of `points` (each `{x, halfW}`) sits past x=0. Majority view scrolls
+ *  horizontally (`.ctt-judge-stage.ctt-majority-scroll`, wired in `layoutJudges`) rather than
+ *  trying to keep every seat within the nominal viewport width geometrically: content rendered
+ *  PAST the stage's right edge already contributes to its scrollable region on its own (a
+ *  `transform:translate()`-positioned child DOES count toward an `overflow:auto` ancestor's
+ *  `scrollWidth` in Chrome), but a seat at a NEGATIVE x never could — `scrollLeft` can't go
+ *  negative. Shifting every placement by this amount (added into `cx`) fixes that; the caller
+ *  sets `stage.scrollLeft` to the same value once everything's placed, which reproduces exactly
+ *  the pre-shift default view and only changes what's reachable by scrolling. */
+function leftBleedShift(points) {
+  if (!points.length) return 0;
+  const minX = Math.min(...points.map((p) => p.x - p.halfW));
+  return Math.max(0, -minX);
+}
+
+function layoutArc(model, w, H, stage) {
+  const { cx, cy, Rmax, Wmax, R0 } = majorityDims(w, H);
+  // Growth (Steps 1/2, both active-ring and band) is bounded by whichever of the two axes is
+  // tighter — see majorityDims' own comment on Wmax for why height-only was never enough.
+  // `planRings`' own RING-COUNT decision deliberately keeps using plain `Rmax`, not this: it's
+  // fundamentally about how many concentric rings fit VERTICALLY, and on a narrow viewport `Wmax`
+  // can be tight enough to collapse it to a single ring outright — confirmed as a real, severe
+  // regression (mobile ca9/Include effectively stopped rendering, ~50 icons crushed onto one
+  // ring with no per-scale way to recover, since ring count doesn't change with icon size).
+  // `effectiveMax` only constrains the GROWTH steps below, which merely add radius on TOP of
+  // whatever multi-ring plan `planRings` already chose — Step 3 shrinking can genuinely help
+  // THAT (smaller icons need less spacing on the same ring count), unlike a ring count that's
+  // already collapsed before any scale search even begins.
+  const effectiveMax = Math.min(Rmax, Wmax);
   const seats = innerArcSeats(model);            // {judge} | {vacancy}, party-grouped L→R
   const N = seats.length || 1;
   const hasSeniorsBand = S.seniorMode === "show" && model.seniors.length > 0;
-  const { radii, counts } = planRings(N, R0, Rmax, hasSeniorsBand);
-  const slots = orderedSlots(radii, counts);     // fill order = protractor/angle order (#16)
+  const { radii: baseRadii, counts } = planRings(N, R0, Rmax, hasSeniorsBand);
+  const slots = orderedSlots(baseRadii, counts);  // fill order = protractor/angle order (#16)
 
-  let vi = 0;
+  let vi0 = 0;
+  const seatNodes = seats.map((seat) =>
+    seat.vacancy ? model._vacancyNodes[vi0++] : model._nodeByJudge.get(seat.judge));
+
+  const outer = hasSeniorsBand ? model.seniors : [];
+  const sn = outer.length || 1;
+  const bandAngle = (i) => Math.PI - ((i + 0.5) / sn) * Math.PI;
+
+  // issue #50, RADIUS (Steps 1/2): the senior "show" band gets its own scoped growth/gap-
+  // adjustment, never the active rings'. Issue #50's own text — "Constraint on steps 1 & 2: both
+  // must stay within the size of the actual user-viewable area... an expansion that would
+  // overflow that area is not a valid application" — plus the Step-3 tie-break ("don't shrink
+  // more than necessary just because a larger reduction also worked") states a general
+  // principle, not a Step-3-only rule: never apply more expansion than the situation actually
+  // needs. Growing every ring in ONE shared array uniformly (as this used to, session (cz))
+  // satisfies the viewable-area bound but still grows rings that have no collision of their own
+  // whenever the band alone is crowded — more expansion than THEY need, even though it stays in
+  // bounds. So RADIUS growth is scoped: the band grows its own radius to resolve its own icons'
+  // crowding, and if it still collides with the outermost ACTIVE ring, only the band moves
+  // further out (the active ring is never the one with the problem). Reuses
+  // growRingsForIntra/adjustInterRingGaps UNCHANGED — a single-entry radii array scopes step 1 to
+  // whichever ring set is passed in, and a two-entry [fixedR, movableR] array (index 0 is
+  // adjustInterRingGaps' own centerIdx for k=2, so it never moves) scopes step 2 the same way.
+  //
+  // SCALE (Step 3) is different, and deliberately NOT scoped the same way: shrinking is a
+  // whole-bench, last-resort decision — if the band needs to shrink but the active rings don't,
+  // the result is two different icon sizes in the same view, which is its own kind of wrong
+  // (visually inconsistent), not something the "don't do more than necessary" principle argues
+  // for. So `resolveAt(s)` below re-runs BOTH the active rings' AND the band's own scoped
+  // radius steps at one shared candidate scale, and the Step-3 search picks a single scale used
+  // for everyone — never an active-only or band-only scale.
+  const resolveAt = (s) => {
+    resolveLabelOverflow(stage, s);   // Step 0, every node (active + band) at this global scale
+    const activeDescs = seatNodes.map((node, i) => {
+      const slot = slots[i] || slots[slots.length - 1];
+      const { rect: r, textWidth } = measureLabelNatural(node);
+      return { ring: slot.ri, ang: slot.ang, labelW: textWidth, labelH: r.height };
+    });
+    const { radii: a1 } = growRingsForIntra(activeDescs, baseRadii, cx, cy, s, effectiveMax, COLLISION_BUFFER_PX);
+    const { radii: activeRadii } = adjustInterRingGaps(activeDescs, a1, cx, cy, s, effectiveMax, COLLISION_BUFFER_PX);
+    const activeCollide = findRingCollisions(activeDescs, activeRadii, cx, cy, s, COLLISION_BUFFER_PX);
+
+    const outermostRi = activeRadii.length - 1;
+    const outermostActiveR = activeRadii[outermostRi];
+    // The band always sits exactly ROW_GAP beyond the actual outermost ACTIVE ring — "locked to
+    // the outer perimeter" per issue #50's steps 1/2 framework — never independently re-clamped to
+    // effectiveMax when that would put it BELOW outermostActiveR. `growRingsForIntra`/
+    // `adjustInterRingGaps` only ever cap further growth at the ceiling passed in; they never
+    // shrink an already-larger starting radius, so on a width-constrained pane (roughly <1000px
+    // for a tall bench) `planRings`' own Rmax-only plan can legitimately leave outermostActiveR
+    // ITSELF past effectiveMax before this ever runs — a case the horizontal-scroll fallback is
+    // exactly meant to cover (residual overflow the shrink floor can't undo). Clamping bandR to
+    // effectiveMax unconditionally in that case pulled it back to less than outermostActiveR —
+    // confirmed as a real bug (ca9/Show, <1000px wide): the band rendered INSIDE the outer active
+    // ring instead of outside it ("sliding apart" from the perimeter). The effectiveMax clamp only
+    // applies when the active rings are themselves already within bounds — the ordinary case this
+    // clamp was written for (ca9/Show/desktop, session (dc): the band's own crowding alone pushed
+    // its natural start past the ceiling while the active rings were fine).
+    let bandR = outermostActiveR + ROW_GAP;
+    if (outermostActiveR <= effectiveMax) bandR = Math.min(bandR, effectiveMax);
+    let bandCollide = { intra: false, inter: false };
+    if (hasSeniorsBand) {
+      const bandR0 = bandR;
+      const bandDescs = outer.map((j, i) => {
+        const { rect: r, textWidth } = measureLabelNatural(model._nodeByJudge.get(j));
+        return { ring: 0, ang: bandAngle(i), labelW: textWidth, labelH: r.height };
+      });
+      const { radii: b1 } = growRingsForIntra(bandDescs, [bandR0], cx, cy, s, effectiveMax, COLLISION_BUFFER_PX);
+      const outermostDescs = seatNodes
+        .map((node, i) => ({ node, ri: (slots[i] || slots[slots.length - 1]).ri, ang: (slots[i] || slots[slots.length - 1]).ang }))
+        .filter((p) => p.ri === outermostRi)
+        .map(({ node, ang }) => {
+          const { rect: r, textWidth } = measureLabelNatural(node);
+          return { ring: 0, ang, labelW: textWidth, labelH: r.height };
+        });
+      const combined = [...outermostDescs, ...bandDescs.map((d) => ({ ...d, ring: 1 }))];
+      const { radii: b2 } = adjustInterRingGaps(combined, [outermostActiveR, b1[0]], cx, cy, s, effectiveMax, COLLISION_BUFFER_PX);
+      bandR = b2[1];
+      bandCollide = {
+        intra: findRingCollisions(bandDescs, b1, cx, cy, s, COLLISION_BUFFER_PX).intra,
+        inter: findRingCollisions(combined, b2, cx, cy, s, COLLISION_BUFFER_PX).inter,
+      };
+    }
+    // Real horizontal-extent check, using each label's OWN measured width (`seatHalfWidth`) — not
+    // `effectiveMax`'s fixed margin, which only bounds RING-RADIUS growth and has no direct tie to
+    // what a specific label actually measures. A particular judge's surname can legitimately need
+    // more or less room than that generic margin assumes (confirmed live: the SAME court/mode fit
+    // with zero px slack locally but genuinely overflowed by a few px in CI, purely from label-
+    // width metrics differing by font-rendering environment — widening the margin heuristic had
+    // ZERO effect on this, since it was never what determined the final measured overflow).
+    // Counting a SMALL residual overflow (within `PANE_EDGE_TOLERANCE_PX`) as another
+    // "unacceptable collision" type lets Step 3 nudge the scale down to close it, same as any
+    // other collision. Deliberately bounded to SMALL overflow only — a genuinely narrow/mobile
+    // pane where content is fundamentally too wide (routinely 150px+ over in practice) must NOT
+    // trigger this: the operator was explicit that mobile's viewable width stays "arbitrary,"
+    // relying on the horizontal-scroll fallback rather than extra shrinking. The tolerance is what
+    // keeps this scoped to "just barely misses, nudge it shut" without touching that design.
+    const finalSlots = slots.map((sl) => ({ ...sl, r: activeRadii[sl.ri] }));
+    const points = seatNodes.map((node, i) => {
+      const sl = finalSlots[i] || finalSlots[finalSlots.length - 1];
+      return { x: cx + sl.r * Math.cos(sl.ang), halfW: seatHalfWidth(node, s) };
+    });
+    outer.forEach((j, i) => points.push({ x: cx + bandR * Math.cos(bandAngle(i)), halfW: seatHalfWidth(model._nodeByJudge.get(j), s) }));
+    if (model._justiceNode) points.push({ x: cx, halfW: seatHalfWidth(model._justiceNode, s) });
+    const span = Math.max(...points.map((p) => p.x + p.halfW)) - Math.min(...points.map((p) => p.x - p.halfW));
+    const overflowPx = span - w;
+    const overflowsPane = overflowPx > 1 && overflowPx <= PANE_EDGE_TOLERANCE_PX;
+
+    const remaining = (activeCollide.intra ? 1 : 0) + (activeCollide.inter ? 1 : 0) +
+      (bandCollide.intra ? 1 : 0) + (bandCollide.inter ? 1 : 0) + (overflowsPane ? 1 : 0);
+    return { radii: activeRadii, bandR, remaining, points };
+  };
+
+  let scale = 1;
+  let result = resolveAt(1);
+  if (result.remaining > 0) {
+    // Step 3, whole-bench: same floor/tie-break convention as shrinkForCollisions, re-running
+    // BOTH the active AND band scoped steps 0-2 at each candidate size, picking ONE scale used
+    // for everyone (see the comment above resolveAt for why this isn't scoped like Steps 1/2).
+    const floorDiameter = Math.round((2 * AVATAR_R * 2 / 3) / SHRINK_ROUND_PX) * SHRINK_ROUND_PX;
+    const floorScale = Math.max(0.3, floorDiameter / (2 * AVATAR_R));
+    let best = null;
+    for (let s = 1; s >= floorScale - 1e-6; s -= 0.05) {
+      const r = resolveAt(s);
+      if (!best || r.remaining < best.remaining) best = { scale: s, ...r };
+      if (r.remaining === 0) break;
+    }
+    if (best) { scale = best.scale; result = best; }
+  }
+  const radii = result.radii, bandR = result.bandR;
+  const finalSlots = slots.map((s) => ({ ...s, r: radii[s.ri] }));
+
+  // ---- Majority-view horizontal scroll (see leftBleedShift's own comment): `result.points` is
+  // the SAME extent `resolveAt` already computed for the winning scale above (active rings + band
+  // + Circuit Justice, all at the SAME scale) — reused here rather than recomputed.
+  const shiftX = leftBleedShift(result.points);
+  const cx2 = cx + shiftX;
+
   seats.forEach((seat, i) => {
-    const node = seat.vacancy ? model._vacancyNodes[vi++] : model._nodeByJudge.get(seat.judge);
-    const s = slots[i] || slots[slots.length - 1];
-    place(node, cx + s.r * Math.cos(s.ang), cy - s.r * Math.sin(s.ang), true);
+    const node = seatNodes[i];
+    const s = finalSlots[i] || finalSlots[finalSlots.length - 1];
+    place(node, cx2 + s.r * Math.cos(s.ang), cy - s.r * Math.sin(s.ang), true, scale);
     node.classList.add("ctt-in-arc");
   });
 
-  // seniors: grayed outer band, one ROW_GAP beyond the outermost active ring. Absent entirely
-  // when seniorMode is "hide" or "include" (folded into the inner arc instead) — Seniors use
-  // simple centred spacing — they need not snap to 180°/0° (#19b).
-  const bandR = radii[radii.length - 1] + ROW_GAP;
-  const outer = hasSeniorsBand ? model.seniors : [];
-  const sn = outer.length || 1;
+  // seniors: grayed outer band. Absent entirely when seniorMode is "hide" or "include" (folded
+  // into the inner arc instead) — simple centred spacing — they need not snap to 180°/0° (#19b).
   outer.forEach((j, i) => {
     const node = model._nodeByJudge.get(j);
-    const ang = Math.PI - ((i + 0.5) / sn) * Math.PI;
-    place(node, cx + bandR * Math.cos(ang), cy - bandR * Math.sin(ang), true);
+    const ang = bandAngle(i);
+    place(node, cx2 + bandR * Math.cos(ang), cy - bandR * Math.sin(ang), true, scale);
     node.classList.add("ctt-in-arc");
   });
   // "Hide": conceal entirely — a senior isn't in `filled` (inner arc) and isn't in `outer`
   // (band) either, so its node would otherwise keep whatever position/opacity a PRIOR layout
   // (e.g. Timeline mode) left it in.
   if (S.seniorMode === "hide") {
-    model.seniors.forEach((j) => place(model._nodeByJudge.get(j), cx, cy, false));
+    model.seniors.forEach((j) => place(model._nodeByJudge.get(j), cx2, cy, false));
   }
 
-  if (model._justiceNode) place(model._justiceNode, cx, cy - R0 * 0.3, true);
-  model._arcRender = { cx, cy, radii, bandR, hasSeniorsBand };  // for the overlay
+  if (model._justiceNode) place(model._justiceNode, cx2, cy - R0 * 0.3, true, scale);
+  model._arcRender = { cx: cx2, cy, radii, bandR, hasSeniorsBand };  // for the overlay
+  stage.scrollLeft = shiftX;
 }
 
 // Summary > SCOTUS's fixed double-ring layout (operator ask, 2026-09-03): unlike layoutArc's
@@ -2556,7 +2975,31 @@ function layoutArc(model, w, H) {
 const SCOTUS_ICON_SCALE_MAX = 2;      // icons target 2x normal size ("since it is SCOTUS")
 const SCOTUS_INNER_COUNT = 3, SCOTUS_OUTER_COUNT = 6;
 const SCOTUS_RAISE_DEG = 20;          // inner ring's first/last seats lift off 180°/0° by this much
-function layoutScotusRing(model, w, H) {
+/** R0/R1 (+ the slot list) for a given icon scale — factored out of layoutScotusRing so issue
+ *  #50's Step 3 can re-derive the whole non-overlap-guaranteed geometry at a smaller scale, not
+ *  just re-scale the original radii (which would NOT preserve the minSafeR0/minSafeR1 floors
+ *  this formula exists to guarantee). */
+function scotusRingGeometry(scale, w, m) {
+  const halfIcon = ICON * scale;
+  const capR = Math.max(40, m - halfIcon - 4);
+  const minSafeR1 = 1.7 * (2 * halfIcon);
+  const desiredR0 = Math.min(w * 0.22, capR * 0.6);
+  const desiredR1 = desiredR0 + ROW_GAP * scale + 10;
+  const R1 = Math.min(capR, Math.max(desiredR1, minSafeR1));
+  const minSafeR0 = 0.915 * (2 * halfIcon);
+  const R0 = Math.max(minSafeR0, Math.min(desiredR0, R1 * 0.5, R1 - 8));
+  const raise = (SCOTUS_RAISE_DEG * Math.PI) / 180;
+  const innerAngles = [Math.PI - raise, Math.PI / 2, raise];
+  const outerAngles = ringSlotAngles(SCOTUS_OUTER_COUNT, false);
+  const slots = [
+    ...innerAngles.map((ang) => ({ r: R0, ang, ri: 0 })),
+    ...outerAngles.map((ang) => ({ r: R1, ang, ri: 1 })),
+  ];
+  slots.sort((a, b) => (b.ang - a.ang) || (a.ri - b.ri));
+  return { radii: [R0, R1], slots };
+}
+
+function layoutScotusRing(model, w, H, stage) {
   const { cx, cy } = majorityDims(w, H);   // cx/cy only — Rmax/R0 there assume 1x icons, not 2x
   const m = Math.min(cx, cy);
   // Icons TARGET 2x but shrink toward (never below) 1x only as far as the stage actually
@@ -2569,43 +3012,63 @@ function layoutScotusRing(model, w, H) {
   // modes: 6 seats at 36° apart need radius R ≥ ~1.7×diameter to keep a small gap between
   // neighbours (chord = 2R·sin18° ≥ 1.05×diameter); the stage caps R at m − halfIcon − 4; two
   // linear equations in `scale`, solved directly below rather than iterated.
-  const scale = Math.min(SCOTUS_ICON_SCALE_MAX, Math.max(1, (m - 4) / (88.35 + 26)));
-  const halfIcon = ICON * scale;
-  const capR = Math.max(40, m - halfIcon - 4);
-  const minSafeR1 = 1.7 * (2 * halfIcon);   // the non-overlap floor derived above, at this scale
-  // Desired (generous) outer radius when there's room to spare — unchanged from the original
-  // desktop-tuned formula; the minSafeR1/capR clamps only bite once the stage gets tight.
-  const desiredR0 = Math.min(w * 0.22, capR * 0.6);
-  const desiredR1 = desiredR0 + ROW_GAP * scale + 10;
-  const R1 = Math.min(capR, Math.max(desiredR1, minSafeR1));
-  // Inner ring at HALF the outer radius (operator ask, 2026-09-04: "space the rings ~10-15%
-  // further apart" — 0.5 is both a clean round ratio and lands the gap ~13-15% wider than the
-  // old 0.56 ratio produced). At 20° raised endpoints the inner ring's tightest gap is 70°
-  // (was 75° at the old 15°), so its own non-overlap floor is slightly higher — enforced below
-  // rather than assumed, same as the outer ring's minSafeR1.
-  const minSafeR0 = 0.915 * (2 * halfIcon);
-  const R0 = Math.max(minSafeR0, Math.min(desiredR0, R1 * 0.5, R1 - 8));
-  const radii = [R0, R1];
-
-  const raise = (SCOTUS_RAISE_DEG * Math.PI) / 180;
-  const innerAngles = [Math.PI - raise, Math.PI / 2, raise];         // 165°, 90°, 15°
-  const outerAngles = ringSlotAngles(SCOTUS_OUTER_COUNT, false);      // standard evenly-spaced, endpoints included
-  const slots = [
-    ...innerAngles.map((ang) => ({ r: R0, ang, ri: 0 })),
-    ...outerAngles.map((ang) => ({ r: R1, ang, ri: 1 })),
-  ];
-  slots.sort((a, b) => (b.ang - a.ang) || (a.ri - b.ri));   // same protractor/tie rule as orderedSlots()
-
+  const baseScale = Math.min(SCOTUS_ICON_SCALE_MAX, Math.max(1, (m - 4) / (88.35 + 26)));
+  let scale = baseScale;
+  let { radii, slots } = scotusRingGeometry(scale, w, m);
   const seats = innerArcSeats(model);   // R | vacancies | D, oldest→newest within party (#16's algorithm)
-  let vi = 0;
-  seats.forEach((seat, i) => {
-    const node = seat.vacancy ? model._vacancyNodes[vi++] : model._nodeByJudge.get(seat.judge);
+  let vi0 = 0;
+  const seatNodes = seats.map((seat) =>
+    seat.vacancy ? model._vacancyNodes[vi0++] : model._nodeByJudge.get(seat.judge));
+
+  // issue #50 Step 0, then — if this ring-formula's OWN icon-to-icon non-overlap guarantee
+  // still leaves a LABEL colliding with a neighbor — Step 3's icon-shrink loop. Steps 1/2 (ring-
+  // spacing adjustment) don't apply here; see this function's own header comment for why.
+  resolveLabelOverflow(stage, scale);
+  const buildSeatDescs = () => seatNodes.map((node, i) => {
     const s = slots[i] || slots[slots.length - 1];
-    place(node, cx + s.r * Math.cos(s.ang), cy - s.r * Math.sin(s.ang), true, scale);
+    const { rect: r, textWidth } = measureLabelNatural(node);
+    return { ring: s.ri, ang: s.ang, labelW: textWidth, labelH: r.height };
+  });
+  let { intra, inter } = findRingCollisions(buildSeatDescs(), radii, cx, cy, scale, COLLISION_BUFFER_PX);
+  if (intra || inter) {
+    const baseDiameter = 2 * AVATAR_R * baseScale;
+    const floorDiameter = Math.round((baseDiameter * 2 / 3) / SHRINK_ROUND_PX) * SHRINK_ROUND_PX;
+    const floorScale = Math.max(0.3, floorDiameter / (2 * AVATAR_R));
+    let best = null;
+    for (let s = baseScale; s >= floorScale - 1e-6; s -= 0.05) {
+      const geo = scotusRingGeometry(s, w, m);
+      resolveLabelOverflow(stage, s);
+      const descs = seatNodes.map((node, i) => {
+        const slot = geo.slots[i] || geo.slots[geo.slots.length - 1];
+        const { rect: r, textWidth } = measureLabelNatural(node);
+        return { ring: slot.ri, ang: slot.ang, labelW: textWidth, labelH: r.height };
+      });
+      const c = findRingCollisions(descs, geo.radii, cx, cy, s, COLLISION_BUFFER_PX);
+      const remaining = (c.intra ? 1 : 0) + (c.inter ? 1 : 0);
+      if (!best || remaining < best.remaining) best = { scale: s, radii: geo.radii, slots: geo.slots, remaining };
+      if (remaining === 0) break;
+    }
+    if (best) { scale = best.scale; radii = best.radii; slots = best.slots; }
+  }
+
+  // Majority-view horizontal scroll (see leftBleedShift's own comment above layoutArc): measured
+  // against the FINAL radii/scale chosen above.
+  const extent = seatNodes.map((node, i) => {
+    const s = slots[i] || slots[slots.length - 1];
+    return { x: cx + s.r * Math.cos(s.ang), halfW: seatHalfWidth(node, scale) };
+  });
+  const shiftX = leftBleedShift(extent);
+  const cx2 = cx + shiftX;
+
+  seats.forEach((seat, i) => {
+    const node = seatNodes[i];
+    const s = slots[i] || slots[slots.length - 1];
+    place(node, cx2 + s.r * Math.cos(s.ang), cy - s.r * Math.sin(s.ang), true, scale);
     node.classList.add("ctt-in-arc");
   });
   // SCOTUS never has a Circuit Justice or seniors band (28 U.S.C. §371) — nothing else to place.
-  model._arcRender = { cx, cy, radii, bandR: 0, hasSeniorsBand: false };
+  model._arcRender = { cx: cx2, cy, radii, bandR: 0, hasSeniorsBand: false };
+  stage.scrollLeft = shiftX;
 }
 
 function drawMajorityOverlay(stage, model) {
@@ -4014,4 +4477,9 @@ export const _dev = {
   defaultDistrictMapState, DISTRICT_ZOOM_STORAGE_KEY, DISTRICT_SQ_SCALE_HOVER, districtNationalTotals,
   scoreJudgeMatch, searchAndSort, presidentShorthand, courtLabelFor, navigateToSearchResult,
   runSearch, ensureSearchIndex,
+  // issue #50: judge-icon collision avoidance (+ senior-band scoping, + horizontal scroll)
+  resolveLabelOverflow, resolveLabelOverflowNode, findRingCollisions, growRingsForIntra,
+  adjustInterRingGaps, shrinkForCollisions, iconDiameterWithRing, layoutArc, scotusRingGeometry,
+  measureLabelNatural, seatHalfWidth, leftBleedShift,
+  COLLISION_BUFFER_PX, OVERFLOW_WIDTH_FACTOR, SHRINK_ROUND_PX, AVATAR_R,
 };
