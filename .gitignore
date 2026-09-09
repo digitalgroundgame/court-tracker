@@ -46,3 +46,6 @@ temp_alt_ca1_ca3.txt
 # so its content is fully superseded, not just "probably." Left in place rather than deleted,
 # mirroring temp_alt_ca1_ca3.txt's precedent above: it's the operator's file, not this repo's.
 temp_district_layout_data.txt
+
+# Local scratch notes, not part of the repo.
+.worklog.local.md
