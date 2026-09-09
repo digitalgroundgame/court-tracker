@@ -586,17 +586,12 @@ try {
   }
   await send("Emulation.clearDeviceMetricsOverride");
 
-  console.log("issue #50: judge-icon collision avoidance (Step 0 only — Steps 1/2/3 rolled back, see below)");
+  console.log("issue #50: judge-icon collision avoidance");
   await ev(`document.querySelector('.ctt-pane-close')?.click()`); await sleep(300);
   {
     // Step 0: a name that would render as two wrapped lines under its icon (Nitza Ileana
     // Quiñones Alejandro, paed — the longest display_name in the current dataset) switches to
     // its full distinct-name-initials instead, on ANY width — nothing here is mobile-gated.
-    // This is the one piece of issue #50's original spec that's still live: Steps 1/2/3 (ring
-    // growth, inter-ring gap adjustment, icon shrink) were rolled back 2026-09-08/09 after a
-    // screenshot survey showed them pushing rings that were never crowded outward, worst under
-    // Seniors:Include and — surprisingly — under Seniors:Show too. Replaced by horizontal
-    // scroll in Majority view, tested separately below.
     await ev(`document.querySelector('.ctt-selector-item[data-court-id="ca3"]')?.click()`); await sleep(500);
     await ev(`document.querySelector('.ctt-drill')?.click()`); await sleep(1800);
     await ev(`document.querySelector('.ctt-selector-item[data-court-id="paed"]')?.click()`); await sleep(600);
@@ -611,65 +606,65 @@ try {
     const s0 = JSON.parse(step0);
     assert(s0.found, "the longest real display_name in the dataset (paed) is on the bench to check");
     assert(s0.text === "NIQA", `Step 0 swapped the would-wrap label to full distinct-name-initials (got "${s0.text}")`);
+
+    console.log("  no label overlaps a neighboring icon by more than a small buffer, on a large real bench (paed, desktop)");
+    const overlapReport = await ev(`(() => {
+      const icons = [...document.querySelectorAll('.ctt-judge-stage .ctt-judge')]
+        .filter(n => !n.classList.contains('ctt-vacant') && !n.classList.contains('ctt-justice'));
+      let worst = 0;
+      for (const a of icons) {
+        const lr = a.querySelector('.ctt-judge-label').getBoundingClientRect();
+        for (const b of icons) {
+          if (a === b) continue;
+          const br = b.querySelector('.ctt-avatar').getBoundingClientRect();
+          const ox = Math.min(lr.right, br.right) - Math.max(lr.left, br.left);
+          const oy = Math.min(lr.bottom, br.bottom) - Math.max(lr.top, br.top);
+          if (ox > 0 && oy > 0) worst = Math.max(worst, Math.min(ox, oy));
+        }
+      }
+      return worst;
+    })()`);
+    // A generous ceiling, not a tight one: this asserts the algorithm keeps residual overlap
+    // SMALL (no egregious text-buried-in-a-neighboring-icon case), not that it hits zero — the
+    // spec's own Step 3 stops at a size floor and accepts the best result found, so a few px of
+    // buffer-tolerated overlap on a genuinely crowded real bench is expected, not a regression.
+    assert(overlapReport < 12, `worst remaining label/icon overlap stays small (${overlapReport}px)`);
   }
 
-  console.log("Majority view scrolls horizontally to reach seats that would otherwise bleed off either edge (replaces the rolled-back ring-growth system)");
+  console.log("  issue #50 follow-up: the 'show seniors' grayed outer band is covered by the SAME collision-avoidance pipeline, not just Step 0");
   {
-    // ca9/Include at a narrow width is a reliable way to force real overflow on both sides: 29
-    // active + 22 senior = 51 seats folded into the same rings, on a 380px-wide stage.
+    // ca9 (9th Circuit) carries the largest real senior cohort in the dataset (22) — the band's
+    // own worst case, and previously UNCHECKED entirely: it sat at a fixed offset with no
+    // collision detection (band-vs-band or band-vs-outermost-active-ring) and no Rmax ceiling.
     await ev(`document.querySelector('.ctt-selector-back')?.click()`); await sleep(400);
     await ev(`document.querySelector('.ctt-selector-item[data-court-id="ca9"]')?.click()`); await sleep(600);
     await ev(`[...document.querySelectorAll(".ctt-toggle")].find(b => b.textContent === "Majority")?.click()`); await sleep(700);
-    await ev(`document.querySelector('.ctt-toggle[data-senior="include"]')?.click()`); await sleep(700);
-    await send("Emulation.setDeviceMetricsOverride", { width: 380, height: 900, deviceScaleFactor: 1, mobile: true });
-    await sleep(500);
-    const modeReport = await ev(`JSON.stringify({
-      hasScrollClass: document.querySelector('.ctt-judge-stage').classList.contains('ctt-majority-scroll'),
-      scrollWidth: document.querySelector('.ctt-judge-stage').scrollWidth,
-      clientWidth: document.querySelector('.ctt-judge-stage').clientWidth,
-    })`);
-    const mr = JSON.parse(modeReport);
-    assert(mr.hasScrollClass, "the stage carries ctt-majority-scroll in Majority mode");
-    assert(mr.scrollWidth > mr.clientWidth + 20,
-      `ca9/Include at 380px genuinely overflows horizontally, so this is a real test of scrolling (scrollWidth ${mr.scrollWidth} vs clientWidth ${mr.clientWidth})`);
-
-    console.log("  scrolled to the LEFT, the leftmost icon+label is fully on-screen (not permanently bled off — the bug this replaces)");
-    const leftReport = await ev(`(() => {
-      const stage = document.querySelector('.ctt-judge-stage');
-      stage.scrollLeft = 0;
-      const stageL = stage.getBoundingClientRect().left;
-      const icons = [...stage.querySelectorAll('.ctt-judge')].filter((n) => !n.classList.contains('ctt-vacant') && getComputedStyle(n).opacity !== '0');
-      let minLeft = Infinity;
-      for (const n of icons) {
-        const r = n.querySelector('.ctt-judge-label').getBoundingClientRect();
-        minLeft = Math.min(minLeft, r.left);
+    await ev(`document.querySelector('.ctt-toggle[data-senior="show"]')?.click()`); await sleep(700);
+    const bandReport = await ev(`(() => {
+      const icons = [...document.querySelectorAll('.ctt-judge-stage .ctt-judge')]
+        .filter(n => !n.classList.contains('ctt-vacant') && !n.classList.contains('ctt-justice'));
+      let worst = 0;
+      for (const a of icons) {
+        const lr = a.querySelector('.ctt-judge-label').getBoundingClientRect();
+        for (const b of icons) {
+          if (a === b) continue;
+          const br = b.querySelector('.ctt-avatar').getBoundingClientRect();
+          const ox = Math.min(lr.right, br.right) - Math.max(lr.left, br.left);
+          const oy = Math.min(lr.bottom, br.bottom) - Math.max(lr.top, br.top);
+          if (ox > 0 && oy > 0) worst = Math.max(worst, Math.min(ox, oy));
+        }
       }
-      return JSON.stringify({ stageL, minLeft });
+      const seniors = icons.filter((n) => n.classList.contains("ctt-senior"));
+      const stageR = document.querySelector(".ctt-judge-stage").getBoundingClientRect();
+      const seniorsFitStage = seniors.every((n) => n.querySelector(".ctt-avatar").getBoundingClientRect().bottom <= stageR.bottom + 1);
+      return JSON.stringify({ seniorCount: seniors.length, worst, seniorsFitStage });
     })()`);
-    const lr = JSON.parse(leftReport);
-    assert(lr.minLeft >= lr.stageL - 2, `scrolled fully left, no label sits left of the stage's own edge (label left ${lr.minLeft.toFixed(1)} vs stage left ${lr.stageL.toFixed(1)})`);
-
-    console.log("  scrolled to the RIGHT, the rightmost icon+label is fully on-screen too");
-    const rightReport = await ev(`(() => {
-      const stage = document.querySelector('.ctt-judge-stage');
-      stage.scrollLeft = stage.scrollWidth - stage.clientWidth;
-      const stageR = stage.getBoundingClientRect().right;
-      const icons = [...stage.querySelectorAll('.ctt-judge')].filter((n) => !n.classList.contains('ctt-vacant') && getComputedStyle(n).opacity !== '0');
-      let maxRight = -Infinity;
-      for (const n of icons) {
-        const r = n.querySelector('.ctt-judge-label').getBoundingClientRect();
-        maxRight = Math.max(maxRight, r.right);
-      }
-      return JSON.stringify({ stageR, maxRight });
-    })()`);
-    const rr = JSON.parse(rightReport);
-    assert(rr.maxRight <= rr.stageR + 2, `scrolled fully right, no label sits right of the stage's own edge (label right ${rr.maxRight.toFixed(1)} vs stage right ${rr.stageR.toFixed(1)})`);
-
-    console.log("  Timeline mode never gets the scroll class (this is Majority-only)");
-    await ev(`[...document.querySelectorAll(".ctt-toggle")].find(b => b.textContent === "Timeline")?.click()`); await sleep(500);
-    const timelineHasClass = await ev(`document.querySelector('.ctt-judge-stage').classList.contains('ctt-majority-scroll')`);
-    assert(!timelineHasClass, "Timeline's stage does not carry ctt-majority-scroll");
-    await send("Emulation.clearDeviceMetricsOverride");
+    const br = JSON.parse(bandReport);
+    assert(br.seniorCount >= 15, `ca9's senior band is really on the bench for this check (got ${br.seniorCount})`);
+    // Same generous-not-tight ceiling as the paed check above — the point is bounded residual
+    // overlap on a genuinely crowded band, not a zero-overlap guarantee.
+    assert(br.worst < 15, `worst remaining label/icon overlap in the senior band stays bounded (${br.worst}px)`);
+    assert(br.seniorsFitStage, "every senior-band icon still lands inside the stage's own viewable area (band radius respects Rmax)");
   }
 
   console.log("  a resize after initial mount doesn't leave Summary > SCOTUS's ring wrongly stuck on initials (regression: stale-transform double-scaling bug)");
