@@ -211,9 +211,11 @@ public-API policy, and `docs/DATA_SOURCES.md` for full collection methodology + 
    against the documented placeholder/stub, and continue with unblocked work.
 6. **Branch → PR → merge, never commit straight to `main`** (updated 2026-09-06, session (cp);
    supersedes the old "commit and push to main" rule from session (br)). This repo is linked to
-   `origin` = `github.com/digitalgroundgame/court-tracker` (public since 2026-09-06, for GitHub
-   Pages + a branch ruleset — was private through session (co)) and now runs on GitHub Issues
-   + PRs, not a bare push log. This section is the authoritative version of that policy — pinned
+   `origin` = `github.com/digitalgroundgame/court-tracker` (public — was private through session
+   (co), made public 2026-09-06 for GitHub Pages + a branch ruleset, reverted to private at some
+   point before 2026-09-08 for reasons not tracked here, made public again 2026-09-08/09 session
+   (cy) once issue #36's git-history scrub was complete) and now runs on GitHub Issues + PRs, not
+   a bare push log. This section is the authoritative version of that policy — pinned
    issue #21 on GitHub is a human-facing pointer to it, not a second copy; if the two ever disagree,
    this file wins:
    - **Session start**: in addition to `CLAUDE.md` + `PROGRESS.md`, check `gh issue list` and
