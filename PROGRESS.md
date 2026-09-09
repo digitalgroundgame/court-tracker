@@ -10,7 +10,7 @@
 tracker (Phase-4 tail items open, PLUS a brand-new third pane view — "Change", built session
 (aw), operator review round addressed session (ax)) and the appointments beeswarm
 (feature-complete first version, operator refinement rounds ongoing; see sessions ai→at, aw).
-**Last updated:** 2026-09-09 (di)
+**Last updated:** 2026-09-09 (dj)
 
 ## Resume briefing
 <!-- Replaced wholesale at the end of each session — this is not an appended log, it's a
@@ -23,18 +23,19 @@ logged date. Session log entries `(bt)`-`(ce)` drifted up to +7 days ahead of th
 git-commit dates from exactly this mistake; see `CLAUDE.md` §7 and the `(cp)` 2026-09-08 entry
 below for the full incident and the corrected dates (ground truth: `git log --format=%ad`).
 
-**Next task**: PR #56 (issue #50's ring/arc collision-avoidance algorithm) is open awaiting
-operator review — check `gh pr list`/`gh pr view 56` before assuming it's still open or starting
-any new work on issue #50. If it's merged, there's no obvious open follow-up on that issue as of
-this writing.
+**PR #56 (issue #50's ring/arc collision-avoidance algorithm) is MERGED** (squashed onto `main` as
+commit `a0d189c`, 2026-09-09) — operator reviewed the final fixes and explicitly approved the
+squash-merge. **Next task**: check `gh issue list`/`gh pr list` fresh at session start — there's no
+obvious open follow-up on issue #50 as of this writing, but confirm rather than assume.
 
-**Current state, as of (di) — read this before touching `layoutArc`/`layoutScotusRing`/anything in
-the "issue #50" section, since this area was rewritten repeatedly in a short span
-(cz→da→db/dc→dd→de→df→dg→dh→di) before landing here. Trust THIS section, not any older one, and not
-the commit-by-commit history (several intermediate commits describe states that no longer exist —
-(dh) in particular describes a fix that was tried, pushed, and then PROVEN wrong by CI itself in
-the very next session; see (di)'s session-log entry for the full story if curious, but don't trust
-(dh)'s own "current state" framing).**
+**Reference: `layoutArc`/`layoutScotusRing`/the "issue #50" algorithm, as merged (PR #56, commit
+`a0d189c`, 2026-09-09).** This area was rewritten repeatedly in a short span
+(cz→da→db/dc→dd→de→df→dg→dh→di) before landing in the state below, which is what's actually on
+`main` now — trust THIS section, not any older one, and not the commit-by-commit history on the
+now-merged branch (several intermediate commits describe states that no longer exist — (dh) in
+particular describes a fix that was tried, pushed, and then PROVEN wrong by CI itself in the very
+next session; see (di)'s session-log entry for the full story if curious). Kept here as a reference
+for whoever next touches this code, not as a "next task."
 - **Growth (Steps 1/2) is bounded by BOTH axes, not height alone** (df): `majorityDims` also
   returns `Wmax = Math.max(60, cx - 30)`, `Rmax`'s width-axis counterpart — `Rmax` alone (pane
   height only) let growth fully resolve every label/icon collision while still leaving the arc
@@ -589,6 +590,28 @@ Prove the whole app shell and asset schema on one circuit with hand-authored sam
 - Next: ...
 - Blockers: ...
 -->
+
+### 2026-09-09 (dj) — PR #56 MERGED: rewrote the PR description into a clean algorithm explanation (operator ask), squash-merged onto main
+- Phase: 4. Once (di)'s CI run came back green, the operator's original ask ("clean up the written
+  description of PR #56 and update it with an explanation of how your version of the algorithm
+  works, then we can squash it") was ready to finish. Rewrote the PR body from an accumulated,
+  session-by-session changelog into a single coherent "How the algorithm works" narrative (Step
+  0 → Steps 1/2 → the senior band's `[fixedActiveR, movableBandR]` reuse trick for
+  `adjustInterRingGaps` (explained conversationally to the operator earlier this session, then
+  folded into the PR text) → Step 3's whole-bench shrink → the pane-width-fit mechanism → the
+  horizontal-scroll fallback), plus a condensed "real bugs found along the way" section instead of
+  a blow-by-blow. Confirmed CI still green and the PR still cleanly mergeable right before merging.
+- **Merged with `--squash`** (operator had already explicitly authorized "we can squash it") —
+  landed on `main` as a single commit, `a0d189c`, title `(cx) — Issue #50: judge-icon ring/arc
+  collision-avoidance algorithm` (kept the PR's original title per convention: title = squash
+  commit message = what's browsable on `main`).
+- **This entry itself is a small separate follow-up PR** (not bundled into #56, since #56 was
+  already merged by the time this ledger update was written) — updates the stale "Next task" pointer
+  (previously said "PR #56 open awaiting review") and re-labels the detailed `layoutArc` reference
+  block above from "current state, read before touching" (implying open work) to "reference, as
+  merged" (implying it's done, kept for whoever touches this code next).
+- Next: no obvious open follow-up on issue #50 — re-check `gh issue list`/`gh pr list` fresh at the
+  next session start rather than assuming.
 
 ### 2026-09-09 (di) — PR #56: (dh)'s margin bump was PROVEN ineffective by CI itself (byte-identical 606-vs-600 before and after); the real fix checks measured pane-edge overflow inside Step 3
 - Phase: 4, same PR (#56, issue #50). Pushed (dh)'s `Wmax` margin bump (`-30` → `-40`), waited for
