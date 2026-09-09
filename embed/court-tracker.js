@@ -2830,15 +2830,22 @@ function layoutArc(model, w, H, stage) {
 
     const outermostRi = activeRadii.length - 1;
     const outermostActiveR = activeRadii[outermostRi];
-    // Both growRingsForIntra and adjustInterRingGaps only ever CAP further growth at the ceiling
-    // passed in — neither clamps an already-oversized STARTING radius, since every other caller
-    // always starts from a value already known to be in bounds. The band's natural starting
-    // point, `outermostActiveR + ROW_GAP`, is not: on a crowded bench the active rings alone can
-    // already sit close to the ceiling, so adding one more ROW_GAP overshoots it before any
-    // growth loop even runs — confirmed as a real bug (ca9/Show/desktop): with no collision
-    // among the 22 band icons at that starting radius, growRingsForIntra returned it unchanged,
-    // still past bounds. Clamping the starting point (not just the growth ceiling) fixes it.
-    let bandR = Math.min(effectiveMax, outermostActiveR + ROW_GAP);
+    // The band always sits exactly ROW_GAP beyond the actual outermost ACTIVE ring — "locked to
+    // the outer perimeter" per issue #50's steps 1/2 framework — never independently re-clamped to
+    // effectiveMax when that would put it BELOW outermostActiveR. `growRingsForIntra`/
+    // `adjustInterRingGaps` only ever cap further growth at the ceiling passed in; they never
+    // shrink an already-larger starting radius, so on a width-constrained pane (roughly <1000px
+    // for a tall bench) `planRings`' own Rmax-only plan can legitimately leave outermostActiveR
+    // ITSELF past effectiveMax before this ever runs — a case the horizontal-scroll fallback is
+    // exactly meant to cover (residual overflow the shrink floor can't undo). Clamping bandR to
+    // effectiveMax unconditionally in that case pulled it back to less than outermostActiveR —
+    // confirmed as a real bug (ca9/Show, <1000px wide): the band rendered INSIDE the outer active
+    // ring instead of outside it ("sliding apart" from the perimeter). The effectiveMax clamp only
+    // applies when the active rings are themselves already within bounds — the ordinary case this
+    // clamp was written for (ca9/Show/desktop, session (dc): the band's own crowding alone pushed
+    // its natural start past the ceiling while the active rings were fine).
+    let bandR = outermostActiveR + ROW_GAP;
+    if (outermostActiveR <= effectiveMax) bandR = Math.min(bandR, effectiveMax);
     let bandCollide = { intra: false, inter: false };
     if (hasSeniorsBand) {
       const bandR0 = bandR;

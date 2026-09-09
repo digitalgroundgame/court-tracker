@@ -10,7 +10,7 @@
 tracker (Phase-4 tail items open, PLUS a brand-new third pane view — "Change", built session
 (aw), operator review round addressed session (ax)) and the appointments beeswarm
 (feature-complete first version, operator refinement rounds ongoing; see sessions ai→at, aw).
-**Last updated:** 2026-09-08 (df)
+**Last updated:** 2026-09-09 (dg)
 
 ## Resume briefing
 <!-- Replaced wholesale at the end of each session — this is not an appended log, it's a
@@ -28,22 +28,45 @@ operator review — check `gh pr list`/`gh pr view 56` before assuming it's stil
 any new work on issue #50. If it's merged, there's no obvious open follow-up on that issue as of
 this writing.
 
-**Current state, as of (df) — read this before touching `layoutArc`/`layoutScotusRing`/anything in
-the "issue #50" section, since this area was rewritten FOUR times in one day (cz→da→db/dc→dd→de→df)
-before landing here. Trust THIS section, not any older one, and not the commit-by-commit history
-(several intermediate commits describe states that no longer exist).**
-- **Growth (Steps 1/2) is bounded by BOTH axes, not height alone** (df, the latest addition):
-  `majorityDims` now also returns `Wmax = Math.max(60, cx - 30)`, `Rmax`'s width-axis
-  counterpart — `Rmax` alone (pane height only) let growth fully resolve every label/icon
-  collision while still leaving the arc wider than the pane, since that was never checked as "did
-  this stay within the viewable area." `layoutArc` computes `effectiveMax = Math.min(Rmax, Wmax)`
-  and passes it to `growRingsForIntra`/`adjustInterRingGaps` (both active-ring and the band's own
-  scoped calls, below) and the `bandR` starting-value clamp. **`planRings`'s own ring-COUNT
-  argument stays plain `Rmax`, never `effectiveMax`** — passing the tighter one there collapsed a
-  genuinely multi-ring bench to a single ring on narrow viewports (confirmed as a real regression,
-  screenshot showed the arc effectively stop rendering anything readable), since ring count is
-  decided once, before any Step-3 scale search runs, and doesn't change with icon size. If you're
-  about to pass anything into `planRings`'s 3rd argument, it must be `Rmax`.
+**Current state, as of (dg) — read this before touching `layoutArc`/`layoutScotusRing`/anything in
+the "issue #50" section, since this area was rewritten repeatedly in a short span
+(cz→da→db/dc→dd→de→df→dg) before landing here. Trust THIS section, not any older one, and not the
+commit-by-commit history (several intermediate commits describe states that no longer exist).**
+- **Growth (Steps 1/2) is bounded by BOTH axes, not height alone** (df): `majorityDims` also
+  returns `Wmax = Math.max(60, cx - 30)`, `Rmax`'s width-axis counterpart — `Rmax` alone (pane
+  height only) let growth fully resolve every label/icon collision while still leaving the arc
+  wider than the pane, since that was never checked as "did this stay within the viewable area."
+  `layoutArc` computes `effectiveMax = Math.min(Rmax, Wmax)` and passes it to
+  `growRingsForIntra`/`adjustInterRingGaps` (both active-ring and the band's own scoped calls,
+  below). **`planRings`'s own ring-COUNT argument stays plain `Rmax`, never `effectiveMax`** —
+  passing the tighter one there collapsed a genuinely multi-ring bench to a single ring on narrow
+  viewports (confirmed as a real regression), since ring count is decided once, before any Step-3
+  scale search runs, and doesn't change with icon size. If you're about to pass anything into
+  `planRings`'s 3rd argument, it must be `Rmax`.
+- **`growRingsForIntra`/`adjustInterRingGaps` deliberately do NOT clamp an already-oversized
+  STARTING radii array — only further growth** (reaffirmed dg, after a same-session attempt to add
+  that clamp was tried and reverted). On a width-constrained pane (`cx < cy`, roughly <1000px for a
+  tall bench), `planRings`'s `Rmax`-only plan can leave the active rings' OWN radii already past
+  `effectiveMax` before any growth runs — this is intentional and correct: it's exactly the
+  residual case the horizontal-scroll fallback exists to cover (below). Do NOT add a "fit under
+  ceiling" clamp/compress here again — it was tried in (dg) and reverted because it silently forced
+  everything to always fit under `Wmax` no matter how narrow the pane got, which ate the
+  intentional mobile scroll-fallback behavior (broke 2 existing regression tests: ca9/Include and
+  ca9/Show stopped genuinely overflowing at 380px). The width constraint is enforced ELSEWHERE —
+  see `bandR`'s own formula, next.
+- **`bandR` always equals `outermostActiveR + ROW_GAP` — never independently re-clamped below
+  that** (fixed dg — the actual bug behind the operator's "senior ring... free to slide apart...
+  should be locked on the outer perimeter" report). The `effectiveMax` clamp on `bandR` (from
+  (de)/(df)) ONLY applies when `outermostActiveR` is itself already within `effectiveMax` — that's
+  the ordinary case the clamp was originally written for (the band's OWN crowding pushes its
+  natural start past the ceiling while the active rings are fine). When `outermostActiveR` is
+  ALREADY past `effectiveMax` (the width-constrained case above), clamping `bandR` to
+  `effectiveMax` too pulled it back BELOW `outermostActiveR` — the band rendering inside the bench
+  instead of outside it. Now: `let bandR = outermostActiveR + ROW_GAP; if (outermostActiveR <=
+  effectiveMax) bandR = Math.min(bandR, effectiveMax);` If you're about to touch this again: the
+  invariant that must never break is "`bandR` is never less than `outermostActiveR + ROW_GAP`,"
+  full stop — any clamp added here needs to be conditioned on `outermostActiveR` already being
+  in-bounds, not applied unconditionally.
 - **Steps 0-3 apply to the active rings**, unchanged in spirit from (cx): Step 0 (label overflow →
   full initials), Steps 1/2 (`growRingsForIntra`/`adjustInterRingGaps`, uniform growth then
   individual gap adjustment), Step 3 (`shrinkForCollisions` for Timeline/SCOTUS; `layoutArc`'s own
@@ -67,13 +90,6 @@ before landing here. Trust THIS section, not any older one, and not the commit-b
   this behavior is wrong") after an earlier, band-scoped-shrink draft actually shipped that. If
   you're about to touch Step 3 for the band: it must never end up at a different scale than the
   active rings, full stop.
-- **`bandR` is hard-capped at `effectiveMax`** (`Math.min(effectiveMax, outermostActiveR +
-  ROW_GAP)` as the STARTING value, not just the growth ceiling — `growRingsForIntra`/
-  `adjustInterRingGaps` only ever cap further growth, never an already-oversized input, which is
-  exactly how this bug resurfaced once in (dd) and had to be fixed again in (de)/(df)). Without
-  this, a crowded bench's active rings can sit close enough to the ceiling that `+ROW_GAP` alone
-  overshoots it before any growth loop runs — the band then renders past the stage's own top edge
-  (top-half dome: "too large a radius" always spills ABOVE the stage, into the Seniors toggle row).
 - **Majority view scrolls horizontally** (`.ctt-judge-stage.ctt-majority-scroll`,
   `leftBleedShift()`, `seatHalfWidth()`) — unconditional whenever `S.majorityMode` is true, NOT
   gated to a width breakpoint: it's geometry-driven (`overflow-x:auto`'s scrollbar only appears
@@ -553,6 +569,72 @@ Prove the whole app shell and asset schema on one circuit with hand-authored sam
 - Next: ...
 - Blockers: ...
 -->
+
+### 2026-09-09 (dg) — PR #56: the senior band was rendering INSIDE the outer active ring below ~1000px wide (not "locked to the perimeter"); bandR's own effectiveMax clamp was the cause
+- Phase: 4, same PR (#56, issue #50), still `claude/issue-50-collision-avoidance`. Operator report:
+  on ca9/Show below ~1000px width, "the senior ring appears to be treated as one, free to slide
+  apart from the other rings, when it should be locked on the outer perimeter." Also asked to
+  re-check the collision-measurement standard against commit 48f212a's "some overlap is
+  acceptable, only text-touching is the bug" precedent, and raised (as a possible, not confirmed,
+  issue) whether `COLLISION_BUFFER_PX`/the Step-3 trigger needed to fire more readily.
+- **Root cause, confirmed via a live-geometry diagnostic sweep** (`model._arcRender` read across a
+  width range): `planRings` deliberately plans ring COUNT/base radii off plain `Rmax` (not
+  `Wmax`/`effectiveMax` — see (df)'s regression note above, still correct). On a pane where
+  `cx < cy` (roughly <1000px wide for a tall multi-ring bench — `cy` is height-derived and stays
+  near-constant as width shrinks, so `Wmax` becomes the binding constraint before `Rmax` does),
+  the resulting active-ring radii can legitimately sit ABOVE `effectiveMax` even before any
+  collision-driven growth runs — `growRingsForIntra`/`adjustInterRingGaps` only ever cap FURTHER
+  growth, never an oversized STARTING radius (the same bug class fixed once already for `bandR`
+  itself in (de)/(df), just never generalized). Meanwhile `bandR = Math.min(effectiveMax,
+  outermostActiveR + ROW_GAP)` clamped independently — so once `outermostActiveR` legitimately
+  exceeded `effectiveMax`, `bandR` got pulled back BELOW it. Verified numerically: at one width the
+  gap (`bandR - outermostActiveR`) went from +48px (fine) to -18px, then to -134px as width
+  narrowed further — the band rendering measurably INSIDE the bench, exactly the reported symptom.
+- **First fix attempt (reverted, wrong approach)**: force-compressing active-ring radii to fit
+  under `effectiveMax` (a proportional "squeeze" helper) plus reserving `ROW_GAP` of headroom for
+  the band. This DID fix the negative gap, but broke something else: it made the algorithm always
+  geometrically fit everything under `Wmax` no matter how narrow the pane got, which quietly
+  eliminated the intentional mobile horizontal-scroll fallback (2 of the existing regression tests
+  failed: `ca9/Include` and `ca9/Show` no longer genuinely overflowed at 380px, which is NOT the
+  design — the operator was explicit earlier this PR that mobile's viewable width should stay
+  "arbitrary," with scroll as the fallback once Steps 1-3 hit their own floor). Reverted before
+  landing.
+- **Actual fix, much smaller**: leave `growRingsForIntra`/`adjustInterRingGaps` untouched (an
+  oversized starting active-ring radius is fine — it's exactly the case the scroll fallback exists
+  for). Fix only the DECOUPLING: `bandR` is now always `outermostActiveR + ROW_GAP` — full stop —
+  and the `effectiveMax` clamp only applies when `outermostActiveR` is ITSELF already within
+  bounds (the ordinary case this clamp was originally written for in (de): the band's OWN crowding
+  alone pushes its natural start past the ceiling while the active rings are fine). When the active
+  rings already exceed `effectiveMax` (the width-constrained case above), the band now stays
+  consistently `ROW_GAP` beyond them and relies on the same scroll fallback the active rings
+  already do, instead of snapping back inside. Verified via the same diagnostic sweep: gap is now
+  a consistent +50px (`ROW_GAP`) at every width tested, never negative, and mobile 380px still
+  genuinely overflows both Include and Show (confirmed both by diagnostic and by the two
+  previously-broken tests passing again).
+- **Collision-measurement standard**: checked commit 48f212a's own precedent (a DOM `Range` around
+  actual rendered text, not a padded box, only glyph-touching counts) — this already matches
+  `measureLabelNatural`'s existing Range-based `textWidth` and `labelHitsIcon`'s label-rect-vs-
+  icon-circle check exactly, no change needed. On the "should Step 3 trigger more" question: a
+  post-fix screenshot (ca9/Show, 950px) shows the band cleanly separated from the active rings with
+  no visible label-touching-icon overlap — the crowded appearance the operator noticed was very
+  likely this same bug (the band visually overlapping the bench), not an under-tuned
+  `COLLISION_BUFFER_PX`. Left `COLLISION_BUFFER_PX`/`OVERFLOW_WIDTH_FACTOR` unchanged; flagged back
+  to the operator to confirm once they can see the fixed version, rather than guessing at a retune.
+- **On the architectural question** (operator: "if this design spec isn't represented in the
+  structure of the code already, rewriting it to match is actually preferred," re: a literal
+  single-array-of-all-rings implementation of Steps 1/2): concluded a full rewrite is NOT needed —
+  the actual defect was this one narrow decoupling bug, not a structural mismatch. The existing
+  two-entry `[fixedActiveR, movableBandR]` trick already implements "centermost/reference ring
+  stays fixed, others adjust their distance from it" for the band's own relationship to the bench,
+  which is the concrete mechanism the spec text describes; a full unification was considered and
+  explicitly rejected earlier in this PR (see (de)'s note) because it grows active rings that have
+  no collision of their own whenever the band alone is crowded. Reported this reasoning back to the
+  operator rather than unilaterally rewriting; open to revisiting if they still want it after seeing
+  the fix.
+- All four suites (`npm test`, `test:dist`, `test:browser`, `test:browser:dist`) pass. `dist/`
+  rebuilt and committed alongside.
+- Next: awaiting operator review of this fix (and the architecture question above) before any
+  further issue #50 work.
 
 ### 2026-09-08 (df) — PR #56: real gap — growth was never width-aware, only height (Rmax); added Wmax, with a real regression found and fixed along the way
 - Phase: 4, same PR (#56, issue #50), still `claude/issue-50-collision-avoidance`. Operator report
