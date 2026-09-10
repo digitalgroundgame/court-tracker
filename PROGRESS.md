@@ -7,288 +7,53 @@
 > is met. `[x]` done · `[~]` in progress · `[ ]` not started · `[!]` blocked (note why).
 
 **CURRENT PHASE:** Phase 4 — Polish, mobile, resilience — now spanning TWO widgets: the
-tracker (Phase-4 tail items open, PLUS a brand-new third pane view — "Change", built session
-(aw), operator review round addressed session (ax)) and the appointments beeswarm
-(feature-complete first version, operator refinement rounds ongoing; see sessions ai→at, aw).
-**Last updated:** 2026-09-10 (dm)
+tracker (Phase-4 tail items open, PLUS a brand-new third pane view — "Change", slated for
+removal, see below) and the appointments beeswarm (feature-complete first version, operator
+refinement rounds ongoing; see sessions ai→at, aw).
+**Last updated:** 2026-09-10 (dn)
 
 ## Resume briefing
 <!-- Replaced wholesale at the end of each session — this is not an appended log, it's a
 briefing for the next session only. Session narrative belongs in ## Session log below;
 this section should say only what's needed to pick the work back up cleanly. -->
 
-**Verify today's real date before writing anything below** (via the `currentDate` system
-reminder, or `date +%Y-%m-%d` if unavailable) — never estimate or increment from the last
-logged date. Session log entries `(bt)`-`(ce)` drifted up to +7 days ahead of their actual
-git-commit dates from exactly this mistake; see `CLAUDE.md` §7 and the `(cp)` 2026-09-08 entry
-below for the full incident and the corrected dates (ground truth: `git log --format=%ad`).
+**New backlog filed 2026-09-10: issues #65–#71**, from an operator laundry list of bugs/features
+(full verbatim text also sits in `prompt_09_10_2026.txt` at the repo root — untracked, not part of
+the repo, kept locally only). Operator-approved priority order:
+1. **#65** — archive convention + CLAUDE.md amendment (prerequisite for #67 and #70)
+2. **#68** — SCOTUS FedSoc-mark global-state leak (real bug)
+3. **#69** — SCOTUS FedSoc key reposition (small CSS, same area as #68)
+4. **#66** — Summary > Appellate Courts button should close the pane, not show a placeholder
+5. **#67** — remove the Change view (archive per #65)
+6. **#70** — remove the Set-upon-map district overlay, add zoom in/out to Summary > District
+   Courts instead (archive the removed part per #65)
+7. **#71** — dark mode palette + switch + a palette-authoring/preview tool (largest and most
+   novel — sequenced last so it isn't built twice against soon-to-be-deleted UI from #67/#70)
 
-**PR #56 (issue #50's ring/arc collision-avoidance algorithm) is MERGED** (squashed onto `main` as
-commit `a0d189c`, 2026-09-09). **PR #61 (issue #60, the band-gap-floor fix) and PR #63 (issue #62,
-the vertical-clipping fix) are BOTH MERGED** (squashed onto `main` as `84b37ec` and `b797ea7`,
-2026-09-10 — operator reviewed both together and gave explicit go-ahead to merge; #63 needed a
-rebase off the newly-squashed #61 commit before it would merge cleanly, since it had been branched
-off #61's own branch while #61 was still open). **Next task**: check `gh issue list`/`gh pr list`
-fresh — no obvious open follow-up on issues #50/#60/#62 as of this writing, but confirm rather than
-assume.
+**In progress right now: #65.** Branch `claude/archive-convention`. Added `archive/README.md`
+(the archive layout/convention — empty otherwise, no feature archived yet) and a new CLAUDE.md §7
+item 7, "Large removals default to archive, not delete," plus an `archive/` row in the repo map.
+**This PR touches CLAUDE.md itself — per CLAUDE.md's own hard-stop rule, it needs explicit
+operator sign-off before merging, even though the change itself is routine.** Flagged prominently
+in the PR description; do not merge without that go-ahead landing first.
 
-**Issue #60's original fix, superseded in structure (not in outcome) by #62 — read #62's own
-section below for the CURRENT mechanism.** #60's own diagnosis stands: `bandR` used to clamp down
-to `effectiveMax` whenever `outermostActiveR` was itself within budget, and that clamp compressed
-the band-to-bench gap to a few px (visible icon overlap, confirmed at 412px/428px — common real
-device widths — across nearly every circuit with a senior band) instead of falling back to scroll.
-#60's fix stopped clamping `bandR` down and folded "the band's target exceeds `effectiveMax`" into
-a flat `remaining` count the Step-3 search minimized — that flat-count approach is what #62 later
-found and replaced (see below); the underlying gap-floor invariant #60 established is unchanged.
-Regression tests for #60 remain in `tests/browser-checks.mjs`, including a REAL circular hitbox
-check (actual `.ctt-avatar` center-to-center distance vs. sum of real radii — not a bounding-box
-approximation), per an operator question about whether the algorithm's collision math correctly
-treats icons as circles (it does, for the existing label-vs-icon check; there's still no icon-vs-
-icon check by original design, so this fix's overlap guarantee rests on `ROW_GAP` (50px) vs. icon
-diameter (44px) leaving a real but modest 6px geometric margin — confirmed empirically to hold).
+**Next task once #65 is merged**: #68 (SCOTUS FedSoc global-leak bug). Root cause is in
+`renderSummaryScotus` (embed/court-tracker.js, search for `_affilMarkTouched`): a single global
+`S.affilMark`/`S._affilMarkTouched` pair is shared between the ordinary per-court `None|FedSoc|ACS`
+switch and SCOTUS's own one-time FedSoc default, so visiting SCOTUS first permanently overwrites
+the ordinary switch's state. The issue's own body has the fix sketch (a separate
+`S._affilMarkUserChoice` slot, restored whenever a non-SCOTUS pane renders).
 
-**Issue #62, reference (merged as PR #63, commit `b797ea7`, 2026-09-10)**: `resolveAt(s)`'s old `remaining` was a FLAT SUM of
-every failure type (real label/icon collisions, small pane-edge overflow, `bandR` exceeding
-`effectiveMax`) — with no sense of which type is more severe, and the Step-3 search's tie-break
-(strictly-less-than only; a tie never replaces an earlier, larger-scale candidate) could settle on
-a scale whose `bandR` badly overshot `Rmax` (the pane's HEIGHT budget — no scroll fallback exists
-for this axis, unlike `Wmax`) merely because a later, better scale only TIED the flat count instead
-of strictly improving it. Confirmed by temporarily instrumenting `resolveAt` to trace every
-candidate scale live: at ca9/Show/637px, the search settled on a scale with `bandR` 32.5px past
-`Rmax` when a scale within the SAME search range would have had only a 0.5px miss, never adopted
-because of the tie. **Fixed**: `resolveAt` now returns a 3-tier priority tuple instead of one flat
-number — `rmaxViolation` (measured directly against `Rmax`, NEVER `effectiveMax`, which conflates
-it with `Wmax`) first, `collisionCount` (real label/icon collisions) second, `paneViolation`
-(`overflowsPane`) third — compared lexicographically via the `betterCandidate` comparator, with
-"prefer the larger scale" still the final tiebreak on a full tie. `bandExceedsBudget` is gone
-entirely, replaced by `rmaxViolation`. **Two things to remember if you touch this again**:
-(1) `bandR` is always computed even when no band is rendered (Hide/Include mode) — `rmaxViolation`
-gates its `bandR` term behind `hasSeniorsBand`, or you reintroduce a real, already-found-once
-regression (cacd/Hide at desktop shrank to 0.80 with room to spare, from a purely phantom
-violation); (2) this was verified with a full before/after sweep of all 109 non-SCOTUS courts × 4
-widths × 3 modes against the pre-fix build — if you change this area again, that script
-(`before_after_sweep.mjs`, not committed — recreate it from this description if needed: navigate
-every court via `data/courts.csv`, drill into districts via `.ctt-drill`, sleep ≥700ms after both a
-width resize AND a senior-mode toggle before reading `model._arcRender`, since `.ctt-judge`'s 480ms
-CSS transition produces spurious diffs otherwise) is the fastest way to re-confirm no regression.
+**Housekeeping noticed, not yet acted on**: issues #50, #60, #62 all have MERGED PRs (#56, #61,
+#63 respectively) but were never closed on GitHub — worth closing, just hadn't gotten to it this
+session; not itself a "merge authority" decision, just tidiness.
 
-**Reference: `layoutArc`/`layoutScotusRing`/the "issue #50" algorithm, as merged (PR #56 commit
-`a0d189c` 2026-09-09; PR #61/#60 commit `84b37ec` and PR #63/#62 commit `b797ea7`, both 2026-09-10 —
-the two paragraphs directly above describe what those two changed; this section describes only
-PR #56's own original landing and is otherwise superseded by them where they overlap).** This area
-was rewritten repeatedly in a short span
-(cz→da→db/dc→dd→de→df→dg→dh→di) before landing in the state below, which is what's actually on
-`main` now — trust THIS section, not any older one, and not the commit-by-commit history on the
-now-merged branch (several intermediate commits describe states that no longer exist — (dh) in
-particular describes a fix that was tried, pushed, and then PROVEN wrong by CI itself in the very
-next session; see (di)'s session-log entry for the full story if curious). Kept here as a reference
-for whoever next touches this code, not as a "next task."
-- **Growth (Steps 1/2) is bounded by BOTH axes, not height alone** (df): `majorityDims` also
-  returns `Wmax = Math.max(60, cx - 30)`, `Rmax`'s width-axis counterpart — `Rmax` alone (pane
-  height only) let growth fully resolve every label/icon collision while still leaving the arc
-  wider than the pane, since that was never checked as "did this stay within the viewable area."
-  `layoutArc` computes `effectiveMax = Math.min(Rmax, Wmax)` and passes it to
-  `growRingsForIntra`/`adjustInterRingGaps` (both active-ring and the band's own scoped calls,
-  below). **`planRings`'s own ring-COUNT argument stays plain `Rmax`, never `effectiveMax`** —
-  passing the tighter one there collapsed a genuinely multi-ring bench to a single ring on narrow
-  viewports (confirmed as a real regression), since ring count is decided once, before any Step-3
-  scale search runs, and doesn't change with icon size. If you're about to pass anything into
-  `planRings`'s 3rd argument, it must be `Rmax`.
-- **`Wmax`'s margin does NOT need widening for CI-only overflow failures — that was tried (dh) and
-  proven to have ZERO effect (di), since `Wmax`/`effectiveMax` only bounds RING-RADIUS growth, not
-  whether an individual label actually pokes past the pane edge.** That's handled by the NEXT
-  bullet instead — read it before touching this again.
-- **Step 3's search also treats a SMALL measured pane-edge overflow as another unacceptable-
-  collision type** (di): `resolveAt(s)` computes the real extent via `seatHalfWidth` (the same
-  per-label measurement `leftBleedShift` needs anyway) and, if the natural span exceeds the pane
-  width by more than 1px but less than `PANE_EDGE_TOLERANCE_PX` (40), counts it toward `remaining`
-  — closing exactly the kind of few-px, font-rendering-driven gap that caused a real CI-only
-  failure (a court that fit with 0px slack locally measured 6px over in CI, from the SAME label
-  text rendering at a different actual width there). **The tolerance is deliberately small and
-  must stay that way**: a genuinely narrow/mobile pane overflows by 150px+ for a large bench
-  (verified: 186-190px for ca9 at 380px) — that must NOT trigger this, since the operator was
-  explicit that mobile's viewable width stays "arbitrary," relying on horizontal scroll rather than
-  extra shrinking. If you're about to raise `PANE_EDGE_TOLERANCE_PX`, first re-check the two
-  "genuinely overflows horizontally at 380px" tests (ca9/Include, ca9/Show) still pass — that's
-  exactly the regression this bound exists to prevent.
-- **`growRingsForIntra`/`adjustInterRingGaps` deliberately do NOT clamp an already-oversized
-  STARTING radii array — only further growth** (reaffirmed dg, after a same-session attempt to add
-  that clamp was tried and reverted). On a width-constrained pane (`cx < cy`, roughly <1000px for a
-  tall bench), `planRings`'s `Rmax`-only plan can leave the active rings' OWN radii already past
-  `effectiveMax` before any growth runs — this is intentional and correct: it's exactly the
-  residual case the horizontal-scroll fallback exists to cover (below). Do NOT add a "fit under
-  ceiling" clamp/compress here again — it was tried in (dg) and reverted because it silently forced
-  everything to always fit under `Wmax` no matter how narrow the pane got, which ate the
-  intentional mobile scroll-fallback behavior (broke 2 existing regression tests: ca9/Include and
-  ca9/Show stopped genuinely overflowing at 380px). The width constraint is enforced ELSEWHERE —
-  see `bandR`'s own formula, next.
-- **`bandR` always equals `outermostActiveR + ROW_GAP` — never independently re-clamped below
-  that** (fixed dg — the actual bug behind the operator's "senior ring... free to slide apart...
-  should be locked on the outer perimeter" report). The `effectiveMax` clamp on `bandR` (from
-  (de)/(df)) ONLY applies when `outermostActiveR` is itself already within `effectiveMax` — that's
-  the ordinary case the clamp was originally written for (the band's OWN crowding pushes its
-  natural start past the ceiling while the active rings are fine). When `outermostActiveR` is
-  ALREADY past `effectiveMax` (the width-constrained case above), clamping `bandR` to
-  `effectiveMax` too pulled it back BELOW `outermostActiveR` — the band rendering inside the bench
-  instead of outside it. Now: `let bandR = outermostActiveR + ROW_GAP; if (outermostActiveR <=
-  effectiveMax) bandR = Math.min(bandR, effectiveMax);` If you're about to touch this again: the
-  invariant that must never break is "`bandR` is never less than `outermostActiveR + ROW_GAP`,"
-  full stop — any clamp added here needs to be conditioned on `outermostActiveR` already being
-  in-bounds, not applied unconditionally.
-- **Steps 0-3 apply to the active rings**, unchanged in spirit from (cx): Step 0 (label overflow →
-  full initials), Steps 1/2 (`growRingsForIntra`/`adjustInterRingGaps`, uniform growth then
-  individual gap adjustment), Step 3 (`shrinkForCollisions` for Timeline/SCOTUS; `layoutArc`'s own
-  inline shrink search for the general arc, see below).
-- **The senior "show" band gets its own SCOPED radius growth (Steps 1/2), but NOT its own scale**:
-  RADIUS: the band grows its own radius to resolve its own icons' crowding, then — if it still
-  collides with the outermost ACTIVE ring — only the band moves further out (never the active
-  ring). Reuses `growRingsForIntra`/`adjustInterRingGaps` unmodified, just with band-scoped or
-  `[fixedActiveR, movableBandR]` inputs (a 2-entry array makes index 0 `adjustInterRingGaps`' own
-  `centerIdx` for k=2, structurally guaranteed not to move). Grounded directly in issue #50's own
-  text: "Constraint on steps 1 & 2: ...an expansion that would overflow that area is not a valid
-  application," and the Step-3 tie-break language ("don't shrink more than necessary...") is a
-  GENERAL principle per the operator, not Step-3-only — growing an uninvolved ring's radius is
-  "more than necessary" even when it stays within `Rmax`. SCALE (Step 3): if a shrink is needed at
-  all, ONE scale applies to the WHOLE bench (active + band together) — `layoutArc`'s `resolveAt(s)`
-  closure re-runs both groups' scoped radius steps at a shared candidate `s`, and the shrink search
-  picks a single winning `s` for everyone. This asymmetry is deliberate, not an oversight: an
-  uninvolved ring growing its RADIUS wastes space for nothing (bad), but two DIFFERENT icon sizes
-  in the same view if only the band shrinks is a different, real bug — confirmed live by the
-  operator mid-session ("the senior judge icons are getting shrunk when none of the others are.
-  this behavior is wrong") after an earlier, band-scoped-shrink draft actually shipped that. If
-  you're about to touch Step 3 for the band: it must never end up at a different scale than the
-  active rings, full stop.
-- **Majority view scrolls horizontally** (`.ctt-judge-stage.ctt-majority-scroll`,
-  `leftBleedShift()`, `seatHalfWidth()`) — unconditional whenever `S.majorityMode` is true, NOT
-  gated to a width breakpoint: it's geometry-driven (`overflow-x:auto`'s scrollbar only appears
-  when `scrollWidth > clientWidth`), which already gives the operator's actual ask — an "ideal
-  fit," no scrollbar, at the default/largest width, with the scrollbar appearing organically as
-  the viewport narrows and content genuinely stops fitting. Covers Include's own crowding (real,
-  if usually small — a few px on the single most extreme desktop court) AND the band's. `.ctt-
-  judge-stage` needs `overflow-y:hidden` set explicitly alongside `overflow-x:auto` (the UA
-  computes the "visible" axis to `auto` too otherwise) — safe specifically because the `bandR`/
-  `Rmax` fix above means nothing should ever need vertical room past the stage's own height again.
-  Timeline never gets the scroll class.
-- This is architecturally close to what `(da)`/`(db)`/`(dc)` built for the scroll piece (same
-  Chrome gotchas apply — `transform:translate()`-positioned children DO count toward an
-  `overflow:auto` ancestor's `scrollWidth`; analytic pre-`place()` computation beats a
-  DOM-measure-then-correct round trip) but the band-collision piece is a genuinely NEW design,
-  not a restoration of `(cz)`'s or `(dc)`'s — neither of those scoped radius growth per ring-group
-  while sharing one whole-bench scale.
-
-The repo is public again (since session (cy), 2026-09-08/09) and GitHub Pages is live:
-https://digitalgroundgame.github.io/court-tracker/ — issue #49 is resolved/closed. Issue #36
-(git-history PII) also had substantial work land in that session (see `CLAUDE.md` §7.6 for the
-corrected public/private timeline) — check its current state on GitHub before assuming anything
-further is needed there; some follow-up may still be pending and isn't necessarily tracked in this
-file's detail.
-
-**Check `gh issue list`/`gh pr list` at session start regardless** — a newer issue or a PR review
-comment can still supersede this.
-
-**Standing/parked issues, not scheduled unless picked up explicitly**: none as of this writing —
-re-check `gh issue list` fresh, since this list goes stale fast.
-
-**Conventions now live and verified working** (don't relitigate without a reason):
-- Branch → PR → **squash**-merge (`allow_merge_commit: false` server-enforced); the
-  `PROGRESS.md` ledger entry rides in the *same* branch/PR as the code, not a separate branch.
-  Always `gh pr edit --title` explicitly before merging — `gh pr merge --squash` uses the PR's
-  *stored* title for the squash commit, not your local commit message (bit us once on PR #43).
-- CI flakiness in `real-browser checks` (Chrome CDP-port wait, then a fixed post-`Runtime.enable`
-  sleep) was a **systemic cold/shared-runner timeout** class of bug, not random flakiness — fixed
-  twice by replacing fixed timeouts with real polling. If a CDP-based check flakes again, suspect
-  this pattern before assuming transient noise.
-- This file's logging convention: the old ever-growing top blockquote buffer is retired. Session
-  end now writes a condensed entry directly into `## Session log` below (dated, verified against
-  real "today") and replaces this Resume briefing section wholesale — it does not accumulate.
-- **Global listeners on `window`/`document` (issue #6, session (ct))**: both widgets now store
-  every such handler on their module-singleton state (`S._resizeHandler`/`S._mousedownHandler` in
-  court-tracker.js; `A._resizeHandler`/`A._keydownHandler` in appointments-chart.js) instead of
-  wiring an inline anonymous closure — a `teardownGlobals()` helper in each file removes them
-  (called at the top of `buildShell()` on every mount, and from the exported `destroy(root)`).
-  Any *new* window/document-level listener either widget adds should follow this same
-  store-on-state-then-teardown shape, not a fresh inline `addEventListener`, or it'll leak on
-  repeated mount()/destroy() the same way the old ones did. `tests/smoke.mjs` now wraps
-  `add`/`removeEventListener` on `window`/`document` (before any module import) to count live
-  listeners per type — reuse `listenerCount(target, type)` there for any future teardown test
-  rather than re-deriving it.
-- **A breaking schema change already named in `docs/SCHEMA_CHANGELOG.md`'s Proposed section can
-  land as a straight MAJOR bump, no separate announce/overlap MINOR first** (session (cu),
-  2026-09-08, issue #28): `DATA_CONTRACT.md` §5's deprecation path exists to protect *existing*
-  external consumers, and there are none yet (schema_version was cut 2026-09-06; Pragmatic Papers
-  integration, issue #13, is still ahead) — the Proposed section itself was already the
-  "announce" step. Issue #28's own text treated the three 1.0 warts as one ready-to-land
-  migration, which is what happened. Revisit this once a real external consumer exists.
-- **Dropping a published duplicate field the widget's OWN renderer still wants: synthesize it
-  client-side at load time, once, rather than special-casing every render call site** (session
-  (cu), issue #28 — `circuit_justices.json` stopped publishing `full_name`; `loadJustices()` in
-  `embed/court-tracker.js` now sets `j.full_name = j.justice_name` right after fetch, so
-  `makeIcon`/`initials`/`showDetail` etc. all keep working unchanged). Same shape for any future
-  "this field left the contract but the reference renderer still wants it" situation.
-- **Measuring "does text overlap a fixed UI element" needs the text's own rect, not its container's
-  padded box** (session (cv), issue #50 bug 2): a button's full `getBoundingClientRect()` includes
-  padding the operator's own "some overlap is acceptable, only text-touching is the bug" standard
-  explicitly tolerates. `document.createRange().selectNodeContents(el).getBoundingClientRect()`
-  gives the tight box around the actually-rendered glyphs instead — use that pattern for any
-  future "does the text touch X" regression check, not the element's own outer rect.
-- **A CSS fix "derived from fixed constants" (box positions/sizes) can still be wrong once text
-  wrapping is involved** (session (cv), issue #50 bug 2): a pure box-center calculation
-  (`.ctt-pane-close`'s position/size vs. the tri-selector's margin) gave the right direction but
-  undershot, because a wrapped 2-line tab centers its text within its own taller box — shifting
-  the box's top by N px doesn't move centered text down by N px. When text wrapping is in play,
-  verify the actual fix empirically in a real browser (measuring the text's own rect, per the
-  point above) rather than trusting arithmetic on box constants alone.
-- **Issue #21 (pinned GitHub issue, standing git workflow) needs periodic refreshing** — it's a
-  human-facing pointer to `CLAUDE.md` §7.6, not auto-synced, and had gone stale within 48 hours
-  of a policy reversal (PR #46) during the 2026-09-07/08 workflow-churn stretch. Refreshed session
-  (cv), 2026-09-08, cross-referenced against real PR numbers — worth a periodic check whenever a
-  session touches the git-workflow section of `CLAUDE.md` again.
-- **Measuring a `.ctt-judge` icon's label geometry needs `measureLabelNatural()` (issue #50,
-  session (cx)), never a bare `label.getBoundingClientRect()`** — two real, confirmed bugs found
-  building the collision-avoidance algorithm, both now fixed by that one helper:
-  1. `.ctt-judge` carries `transition: transform 480ms ...`. Clearing `node.style.transform` to
-     read the label's UNSCALED size doesn't apply instantly — it *animates* — so a synchronous
-     read right after still reflects the OLD (scaled) box for that whole tick. Fix: toggle the
-     existing `.ctt-no-transition` class (the same one `handoff()` already uses for the identical
-     "read true geometry now, not mid-transition" need) around the read, with an `offsetWidth`
-     flush on each side.
-  2. At the time (session (cx)), `.ctt-judge-label` was a plain block div that took its PARENT's
-     full 52px width regardless of how short the text was — `getBoundingClientRect().width` on the
-     label itself was a near-constant ~52px for every judge, not a text-length signal at all. Fix:
-     a `document.createRange().selectNodeContents(label).getBoundingClientRect()` around the text
-     gives the tight glyph box instead (same technique issue #50's own bug-2 fix already
-     established in `tests/browser-checks.mjs`). `rect.height` stays reliable on its own — a block
-     genuinely grows its OWN height to fit wrapped content, so line-count detection needed no fix.
-     **Session (cz) changed `.ctt-judge-label` itself to `width: fit-content`** (see the next bullet)
-     — `rect.width` is now mostly meaningful too, but the Range-based measurement above is still
-     what the collision code actually uses (more precise, and unchanged by this), so this pattern
-     remains the right one to reach for.
-  Both were caught only by testing a REAL resize-after-mount scenario in an actual browser, not by
-  a fresh-mount-only check — worth remembering as a testing pattern for any future icon-geometry
-  work: mount at one width, then resize, don't just test fresh mounts at each width in isolation.
-- **A block-level element with `text-align:center` does NOT overflow symmetrically once its
-  content is wider than the box — Chrome anchors the overflowing line flush at the box's START
-  edge and lets it spill only toward the END (right, for LTR)** (session (cz), issue #50
-  follow-up — this is what the operator's "labels aren't centered, run off right" report actually
-  was, confirmed by direct measurement: a 56px line in a 52px `.ctt-judge-label` box rendered 0px
-  left overflow / ~4px right, not symmetric ~2px/~2px). `margin:auto` centering only works if the
-  box's own width can still shrink/grow to its content — a block that's forced to fill a fixed
-  container can't do that, so it can't overflow symmetrically either. Fix used here: `width:
-  fit-content` on the label. This is a general CSS trap worth recognizing anywhere else in either
-  widget a centered block might hold content wider than its container (long president names,
-  court names, etc.) — the fix pattern (fit-content + margin:auto, in place of a filled block) is
-  the one to reach for again rather than re-deriving it.
-- **A geometry-adjustment algorithm that's parameterized over "a list of rings" can absorb a new
-  ring-like element (a fixed-offset band, a special zone) just by appending it to that list**
-  (session (cz), issue #50 follow-up — the senior "show" band): `layoutArc`'s
-  `growRingsForIntra`/`adjustInterRingGaps`/`findRingCollisions`/`shrinkForCollisions` never
-  actually cared what a "ring" represented, only that seat descs carry a `ring` index into a
-  shared `radii` array — so folding the band in as one more entry at the end of that array (own
-  fixed angles, only its radius solved for) covered it with zero changes to any of those shared
-  functions. Worth remembering next time something that "isn't really a ring" (another band, a
-  special badge zone) needs the same collision-aware treatment: check whether it can be
-  represented as just another entry in the existing list before writing new adjustment logic for
-  it.
+**Reference, only if the Majority-view arc/collision-avoidance code is touched again** (none of
+#65-#71 currently touches it, so this is NOT condensed further here — see prior revisions of this
+file, e.g. `git log -p -- PROGRESS.md` around commits `a0d189c`/`84b37ec`/`b797ea7`, for the full
+`layoutArc`/`bandR`/`Rmax`-vs-`Wmax`/`PANE_EDGE_TOLERANCE_PX` writeup that used to live in this
+section — it's been trimmed from this briefing since it isn't the active task, not because it
+stopped being true).
 
 ## Phase 0 — Scaffold & contracts  ✅ DONE (2026-07-10)
 - [x] Create repo skeleton per `CLAUDE.md` §Repo map; confirm `index.html` loads an empty shell.
@@ -637,6 +402,26 @@ Prove the whole app shell and asset schema on one circuit with hand-authored sam
 - Next: ...
 - Blockers: ...
 -->
+
+### 2026-09-10 (dn) — Filed issues #65–#71 from operator's laundry list; started #65 (archive convention)
+- Phase: 4. Operator handed a 7-item laundry list of bugs/features (verbatim text kept locally in
+  the untracked `prompt_09_10_2026.txt`). Wrote up and filed each as its own GitHub issue: #65
+  (archive convention for removed features + a CLAUDE.md amendment), #66 (Summary > Appellate
+  Courts button should close the pane instead of showing "Coming soon."), #67 (remove the Change
+  view), #68 (SCOTUS FedSoc-mark global-state leak — a real bug), #69 (SCOTUS FedSoc key
+  reposition), #70 (remove the Set-upon-map district overlay, replace with zoom in/out inside
+  Summary > District Courts), #71 (dark mode palette + switch + a palette-authoring tool). Each
+  issue includes the operator's exact original wording at the bottom, per their request.
+- Proposed a priority order (small/safe fixes first, then the two archive-dependent removals,
+  dark mode last since it's the largest and benefits from landing after the cleanup); operator
+  approved it as given — see Resume briefing above for the ordered list.
+- Started #65 on branch `claude/archive-convention`: added `archive/README.md` (the archive
+  layout/convention) and a new CLAUDE.md §7 item 7, "Large removals default to archive, not
+  delete," plus an `archive/` row in the repo map.
+- Next: get explicit operator sign-off on the CLAUDE.md change (flagged in the PR description,
+  per CLAUDE.md's own hard-stop rule on protocol-file edits) and merge #65, then move to #68.
+- Blockers: none. Noticed but not acted on: issues #50/#60/#62 have merged PRs but were never
+  closed on GitHub.
 
 ### 2026-09-10 (dm) — PR #61 and PR #63 MERGED: operator reviewed both and gave explicit go-ahead
 - Phase: 4. Operator reviewed PR #61 (issue #60) and PR #63 (issue #62) together and said "they

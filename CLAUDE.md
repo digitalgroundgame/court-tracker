@@ -297,6 +297,26 @@ public-API policy, and `docs/DATA_SOURCES.md` for full collection methodology + 
      for some reason, stash it explicitly (`git stash push -u`) rather than leaving it bare in the
      working tree, and verify the committed tree's actual content — not just a green test run —
      before pushing, especially for a conflict that touched files beyond the obvious one.
+7. **Large removals default to archive, not delete** (added 2026-09-10, prompted by the operator's
+   issue #65 review of a standing feature-removal backlog): when removing a feature at the
+   operator's explicit request, move its own code into `archive/<feature-slug>/` (see
+   `archive/README.md` for the layout) with a `NOTES.md` — what it was, why it was removed, what
+   it depended on, and what reintroducing it would take — in the **same PR** as the removal,
+   unless the operator says otherwise for that specific removal.
+   - **Archive the feature's own code; delete everything the removal makes vestigial.** Anything
+     that only existed to support the removed feature — dead state fields, now-unused helper
+     functions, orphaned CSS selectors, now-dead data/manifest entries — gets deleted outright, not
+     archived. A removal that leaves any of this half-wired in (a flag nothing reads any more, a
+     button that silently does nothing) is not complete.
+   - **State both categories explicitly in the PR description**, under a "Removed / made
+     vestigial" heading: the feature's own archived code, and everything else deleted as a side
+     effect.
+   - **Verify in a running browser before merging, not just from the diff**: click through the
+     surrounding UI (not only the removed feature's own surface) to confirm nothing adjacent
+     regressed or silently disappeared. A removal PR's diff alone is not sufficient verification.
+   - A pure data/geometry correction, or removing something that was never real functionality (an
+     inert placeholder, dead code that already did nothing), needs none of this — say so in the PR
+     description instead of archiving it.
 
 ## Repo map
 ```
@@ -324,6 +344,7 @@ court-tracker/
 ├── assets/geo/           ← EXTERNAL geometry: national.svg, circuits/<id>.svg, insets/ (you consume)
 ├── assets/photos/        ← cached judge images (tracked in git — this is what the widget serves)
 ├── scripts/              ← collect_courtlistener.py, enrich_wikipedia.py, build_assets.py, qgis_export_template.py
+├── archive/              ← removed-but-reintroducible feature code, see §7's "Large removals" rule
 └── docs/                 ← CODEBOOK, DATA_SOURCES, GEOMETRY_CONTRACT, BUILD_SEQUENCE, REFERENCE_NOTES
 ```
 Also gitignored (see `.gitignore`): `node_modules/` (restore via `npm install`), `traces/`
