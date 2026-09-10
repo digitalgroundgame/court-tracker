@@ -12,8 +12,6 @@
 // overridden per-mount (issue #2) for a publisher serving the script from a different origin/path
 // than data/assets/ — see resolveAssetRoot()'s doc comment.
 
-import { PRESIDENCIES } from "./presidencies.js";
-
 // Default: everything (embed/, data/, assets/) stays in one tree, one directory below wherever
 // this script is served from — the layout this repo ships as-is.
 const DEFAULT_ASSET_ROOT = new URL("../", import.meta.url);
@@ -85,7 +83,8 @@ const S = {
   morphRAF: null,
   morphCancel: null,          // settles an in-flight morph as "cancelled" (see cancelMorph)
   majorityMode: false,        // kept in sync with paneMode==='majority' — existing arc code reads this
-  paneMode: "timeline",       // 'timeline' | 'majority' | 'change'
+  paneMode: "timeline",       // 'timeline' | 'majority' (the old 'change' streamgraph mode was
+                               // removed in issue #67 — see archive/change-view/)
   seniorMode: "hide",         // 'hide' | 'show' | 'include' — Majority-view senior handling
   _seniorModeForced: null,    // value to revert `seniorMode` to on the NEXT pane render, or null
                                // — set when search auto-reveals a hidden senior (see pinSearchedJudge);
@@ -98,9 +97,6 @@ const S = {
                                // renders, so SCOTUS's own always-FedSoc convention can never leak
                                // into or permanently overwrite it (issue #68).
   detailPinned: false,
-  appointmentsAll: null,      // data/appointments.json, lazy-loaded once for the Change view
-  presidentPhotos: null,      // data/president_photos.json, lazy-loaded once
-  streamColorScheme: "alt",   // 'alt' | 'fade' — Change view palette (operator A/B, CLAUDE ask)
   summaryView: "scotus",      // 'scotus' | 'district' — Summary pane sub-tab (the Appellate Courts
                                // button is not a real sub-view — issue #66 — so this never holds
                                // "appellate"; clicking it just closes the pane, see renderSummaryPane)
@@ -125,11 +121,6 @@ const SUMMARY_ID = "summary";
 
 const PARTY_CLASS = { Republican: "ctt-rep", Democratic: "ctt-dem" };
 
-// Day-number helpers for the Change view's time axis — same convention as appointments-chart.js
-// (days since the Unix epoch, computed off noon UTC so local timezone can't shift the date).
-const DAY_MS = 86400000;
-const dayNum = (iso) => Math.floor(Date.parse(iso + "T12:00:00Z") / DAY_MS);
-const isoOfDayNum = (day) => new Date(day * DAY_MS + DAY_MS / 2).toISOString().slice(0, 10);
 // Plain string slicing (not Date parsing) - `iso` is always a validated YYYY-MM-DD from
 // build_assets.py, and this avoids any local-timezone shift for a plain calendar date.
 const isoToMDY = (iso) => {
@@ -1108,20 +1099,18 @@ function renderPane(court) {
 
   // controls: view toggle + drill-in
   const controls = el("div", "ctt-pane-controls");
-  // Segmented like the None|FedSoc|ACS switch: the three modes read as ONE control (#operator).
+  // Segmented like the None|FedSoc|ACS switch: the two modes read as ONE control (#operator).
+  // (A third mode, "Change", lived here until issue #67 removed it — see archive/change-view/.)
   const modeWrap = el("div", "ctt-mode-switch", { role: "group", "aria-label": "Pane view" });
   const timelineBtn = el("button", "ctt-toggle ctt-mode-opt", { type: "button" });
   timelineBtn.textContent = "Timeline";
   const majorityBtn = el("button", "ctt-toggle ctt-mode-opt", { type: "button" });
   majorityBtn.textContent = "Majority";
-  const changeBtn = el("button", "ctt-toggle ctt-mode-opt", { type: "button" });
-  changeBtn.textContent = "Change";
   const setMode = (mode) => {
     S.paneMode = mode;
     S.majorityMode = mode === "majority";   // existing arc code keys off this boolean
     timelineBtn.classList.toggle("ctt-is-active", mode === "timeline");
     majorityBtn.classList.toggle("ctt-is-active", mode === "majority");
-    changeBtn.classList.toggle("ctt-is-active", mode === "change");
     // Territorial courts (fixed_term) have no toggle-gated note at all - nothing left to say
     // there once the majority-computation/senior text is dropped (see renderPane) - so this
     // must tolerate a null match rather than assume every court has one.
@@ -1129,19 +1118,11 @@ function renderPane(court) {
     if (majNote) majNote.style.display = mode === "majority" ? "" : "none";
     // No seniors -> nothing to fold: hide the checkbox row entirely (SCOTUS, fresh courts).
     body.querySelector(".ctt-foldrow").style.display = mode === "majority" && senior.length ? "" : "none";
-    stage.style.display = mode === "change" ? "none" : "";
-    streamStage.style.display = mode === "change" ? "" : "none";
-    // Change has no judge to hover and no reported-affiliation concept — both would just sit
-    // there empty/irrelevant and eat layout space (operator ask).
-    S.ui.detail.style.display = mode === "change" ? "none" : "";
-    affWrap.style.display = mode === "change" ? "none" : "";
-    if (mode === "change") renderStreamView(court, streamStage);
-    else layoutJudges();
+    layoutJudges();
   };
   timelineBtn.addEventListener("click", () => setMode("timeline"));
   majorityBtn.addEventListener("click", () => setMode("majority"));
-  changeBtn.addEventListener("click", () => setMode("change"));
-  modeWrap.append(timelineBtn, majorityBtn, changeBtn);
+  modeWrap.append(timelineBtn, majorityBtn);
   controls.append(modeWrap);
 
   // Affiliation marker: a segmented None|FedSoc|ACS control. Applies in BOTH timeline and
@@ -1205,9 +1186,7 @@ function renderPane(court) {
   const stageMain = el("div", "ctt-stage-main");
   stageRow.append(stageMain, S.ui.detail);
   const stage = el("div", "ctt-judge-stage");
-  const streamStage = el("div", "ctt-stream-stage");
-  streamStage.style.display = "none";
-  stageMain.append(foldRow, stage, streamStage);
+  stageMain.append(foldRow, stage);
   body.append(stageRow);
   resetDetail();
 
@@ -1302,7 +1281,7 @@ function renderSummaryPane() {
   const content = el("div", "ctt-summary-content");
 
   // Larger-than-usual segmented control (operator ask, enlarged further 2026-09-04) — same
-  // visual family as the pane's Timeline|Majority|Change switch (.ctt-toggle/.ctt-mode-opt),
+  // visual family as the pane's Timeline|Majority switch (.ctt-toggle/.ctt-mode-opt),
   // sized up via .ctt-summary-switch. Labels are the full section names — this doubles as the
   // pane's own heading, so the separate "Summary" title + "Supreme Court · Appellate Courts ·
   // District Courts" subtitle line above it were removed as redundant (operator ask; the
@@ -1358,7 +1337,8 @@ function renderSummaryContent(container) {
 }
 
 /** Summary > SCOTUS: the old direct SCOTUS pane's Majority view, permanently on (operator:
- *  eliminate Timeline and Change here — there is nothing to switch between any more), with a
+ *  eliminate Timeline here — there is nothing to switch between any more; a since-removed
+ *  "Change" mode never had a SCOTUS-side switch either, see issue #67/archive/change-view/), with a
  *  split double-ring layout (6 outer + 3 inner, see layoutScotusRing) and icons at 2x size
  *  ("since it is SCOTUS"). Reuses the exact same bench-building/hover/pin machinery as every
  *  other court's Majority view — buildBenchModel, renderJudgeIcons, the docked S.ui.detail
@@ -3361,418 +3341,6 @@ function showDetail(j, node) {
   box.style.display = "";
 }
 
-// ---- "Change" streamgraph: appointing-president headcount over time ------------
-// A stream = one PRESIDENT/TERM's currently-serving (active+senior) appointee count to the
-// SELECTED court, evaluated at every appointment/departure event since 1969 (shared date
-// range + party data with the beeswarm — see embed/presidencies.js). Two party halves (R
-// above / D below a zero line); within a half, streams stack innermost (OLDEST term) ->
-// outermost (most recent) — flipped from the first version (operator call, session ax: less
-// jagged, and worth trying the opposite of "current at center" once seen in practice) — a
-// FIXED order for the whole timeline. Values only ever change at a real event date, so
-// streams render as flat-topped step polygons, not smoothed curves, and never carry a
-// zero-thickness stretch as part of their own geometry (split into one polygon per
-// contiguous non-zero run — a zero-height segment was still part of the outline path,
-// which made hover strokes look inconsistent where two streams' invisible zero stretches
-// overlapped on the zero line).
-const CHANGE_DAY0 = dayNum(PRESIDENCIES[0][0]);
-const changeTodayNum = () => Math.floor(Date.now() / DAY_MS);
-
-async function ensureChangeData() {
-  if (!S.appointmentsAll) {
-    S.appointmentsAll = await fetchJSON("data/appointments.json").catch(() => []);
-  }
-  if (!S.presidentPhotos) {
-    S.presidentPhotos = await fetchJSON("data/president_photos.json").catch(() => ({}));
-  }
-}
-
-function presIndexForDay(day) {
-  let idx = 0;
-  for (let i = 0; i < PRESIDENCIES.length; i++) {
-    if (dayNum(PRESIDENCIES[i][0]) <= day) idx = i; else break;
-  }
-  return idx;
-}
-
-function buildStreamModel(courtId) {
-  const rows = (S.appointmentsAll || []).filter((r) => r.court_id === courtId
-    && r.commission_date
-    && !(r.appointing_president || "").startsWith("None")      // statutory reorg rows, not real appointments
-    && (r.president_party === "Republican" || r.president_party === "Democratic"));
-  if (!rows.length) return null;
-
-  // A recess appointee took the bench at the RECESS date (matches the beeswarm's convention:
-  // that's the date FJC credits to the appointing president's term).
-  const events = [];
-  for (const r of rows) {
-    const start = dayNum(r.recess_appointment_date || r.commission_date);
-    const pIdx = presIndexForDay(start);
-    events.push({ day: start, presIdx: pIdx, delta: 1 });
-    // Still-sitting rows get NO end event: the graph's right edge is already "today", so an
-    // open-ended contribution just reads correctly as "still there" without one.
-    // SCOTUS quirk (CLAUDE.md §3): a retired justice remains an Article III judge but never
-    // SITS again, unlike a circuit/district judge who keeps hearing cases as senior — so for
-    // scotus rows, `senior_date` (when `termination_date` is blank, as it is for two FJC rows:
-    // Kennedy/Breyer) IS the effective departure, not an "still contributing" transition the
-    // way it would be for every other court. Getting this wrong double-counted both as still
-    // sitting today, inflating the Court to 11 instead of 9 — caught via the model's own
-    // "today's total" sanity check.
-    const end = r.sitting !== "true"
-      ? (r.termination_date || (r.court_id === "scotus" ? r.senior_date : null))
-      : null;
-    if (end) events.push({ day: dayNum(end), presIdx: pIdx, delta: -1 });
-  }
-  const activeIdxs = [...new Set(events.map((e) => e.presIdx))];
-  if (!activeIdxs.length) return null;
-
-  events.sort((a, b) => a.day - b.day);
-  const todayNum = changeTodayNum();
-  const counts = new Map(activeIdxs.map((i) => [i, 0]));
-  const vertices = [{ day: CHANGE_DAY0, counts: Object.fromEntries(counts) }];
-  let i = 0;
-  while (i < events.length) {
-    const day = events[i].day;
-    while (i < events.length && events[i].day === day) {
-      counts.set(events[i].presIdx, counts.get(events[i].presIdx) + events[i].delta);
-      i++;
-    }
-    vertices.push({ day, counts: Object.fromEntries(counts) });
-  }
-  if (vertices[vertices.length - 1].day < todayNum) {
-    vertices.push({ day: todayNum, counts: Object.fromEntries(counts) });
-  }
-
-  const partyOf = (idx) => PRESIDENCIES[idx][2];
-  // Ascending index = ascending date = oldest term first = innermost (rank 0), per the flip.
-  const rTerms = activeIdxs.filter((idx) => partyOf(idx) === "R").sort((a, b) => a - b);
-  const dTerms = activeIdxs.filter((idx) => partyOf(idx) === "D").sort((a, b) => a - b);
-
-  let maxCount = 1;
-  for (const v of vertices) {
-    const rTotal = rTerms.reduce((s, idx) => s + (v.counts[idx] || 0), 0);
-    const dTotal = dTerms.reduce((s, idx) => s + (v.counts[idx] || 0), 0);
-    maxCount = Math.max(maxCount, rTotal, dTotal);
-  }
-
-  // Trim the leading/trailing stretch where EVERY stream reads zero (e.g. 1969 up to this
-  // court's first-ever tracked appointment) out of the visible x-axis (operator ask) — the
-  // model keeps the true dayMin/dayMax (CHANGE_DAY0..today) for correctness (valueAt(), the
-  // vertex sweep above), but the view only plots the range that actually has content.
-  let viewDayMin = null, viewDayMax = CHANGE_DAY0;
-  for (const v of vertices) {
-    const total = Object.values(v.counts).reduce((s, n) => s + n, 0);
-    if (total > 0) { if (viewDayMin == null) viewDayMin = v.day; viewDayMax = v.day; }
-  }
-  if (viewDayMin == null) { viewDayMin = CHANGE_DAY0; viewDayMax = todayNum; }
-
-  return { vertices, rTerms, dTerms, maxCount, dayMin: CHANGE_DAY0, dayMax: todayNum, viewDayMin, viewDayMax };
-}
-
-function valueAt(vertices, day, presIdx) {
-  let v = vertices[0];
-  for (const cand of vertices) {
-    if (cand.day > day) break;
-    v = cand;
-  }
-  return v.counts[presIdx] || 0;
-}
-
-// ---- color schemes (operator A/B ask, session's tune-explainer-style comparison) ----
-function hexToRgb(hex) {
-  const n = parseInt(hex.slice(1), 16);
-  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
-}
-function mixHex(a, b, t) {
-  const [ar, ag, ab] = hexToRgb(a), [br, bg, bb] = hexToRgb(b);
-  const m = (x, y) => Math.round(x + (y - x) * t);
-  return `rgb(${m(ar, br)}, ${m(ag, bg)}, ${m(ab, bb)})`;
-}
-// 'alt': alternating vibrant/light shade per stream. 'fade': full-vibrant at the zero line,
-// desaturating toward gray (capped at 75% of the way there, so the outermost term is still
-// tinted) as streams get further from the zero line — rank 0 is now the OLDEST term
-// (innermost), so "fade" now grays out toward the MOST RECENT term instead of the oldest.
-function streamColor(party, rank, total, scheme) {
-  const base = party === "R" ? "#d1343f" : "#2f6feb";
-  if (scheme === "fade") {
-    const t = total > 1 ? (rank / (total - 1)) * 0.75 : 0;
-    return mixHex(base, "#9aa3ad", t);
-  }
-  const light = party === "R" ? "#e8737c" : "#7ea6f5";
-  return rank % 2 === 0 ? base : light;
-}
-
-function renderStreamView(court, container) {
-  const myCourt = court.court_id;
-  container.innerHTML = "";
-  const loading = el("div", "ctt-stream-loading");
-  loading.textContent = "Loading appointment history…";
-  container.append(loading);
-  ensureChangeData().then(() => {
-    // Stale guard: the user may have switched courts/modes while this fetch was in flight.
-    if (S.selectedCourt !== myCourt || S.paneMode !== "change" || !container.isConnected) return;
-    container.innerHTML = "";
-    const model = buildStreamModel(myCourt);
-    if (!model) {
-      const empty = el("div", "ctt-stream-loading");
-      empty.textContent = "No appointment history for this court (data begins 1969-01-20).";
-      container.append(empty);
-      return;
-    }
-    buildStreamSVG(container, model);
-  });
-}
-
-function buildStreamSVG(container, model) {
-  container.innerHTML = "";   // re-entrant: the color-scheme switch rebuilds via this same call
-  const w = container.clientWidth || 640;
-  const H = 360;
-  const midY = H / 2;
-  const x0 = 44, x1 = w - 16;
-  const padTop = 26, padBottom = 46;
-  const halfH = Math.min(midY - padTop, H - padBottom - midY);
-  const pxPerJudge = halfH / model.maxCount;
-  // The x-axis plots the TRIMMED (viewDayMin..viewDayMax) range, not the full 1969..today
-  // domain — a leading/trailing stretch where every stream reads zero is excluded (operator
-  // ask); model.dayMin/dayMax (the untrimmed range) stay around for valueAt() lookups.
-  const span = model.viewDayMax - model.viewDayMin || 1;
-  // Clamped to [x0, x1]: a polygon's taper vertex (buildHalf, item #8) can reference a day
-  // BEFORE viewDayMin — the one zero-value vertex kept on the outside of a run for a clean
-  // taper — and for any court whose real history starts after 1969 (Federal Circuit, CIT,
-  // CFC, territorial courts: exactly the courts item #9's trim exists for), that day is
-  // 1969 itself. Unclamped, that mapped to a large negative x, and the resulting sliver
-  // (mostly clipped by the SVG's overflow, but not entirely) painted as a stray colored
-  // shard in the left margin — undermining the very trim this axis is supposed to show.
-  const xOf = (day) => Math.max(x0, Math.min(x1, x0 + ((day - model.viewDayMin) / span) * (x1 - x0)));
-  const dayOf = (x) => model.viewDayMin + ((x - x0) / (x1 - x0)) * span;
-
-  const head = el("div", "ctt-stream-head");
-  const hint = el("div", "ctt-stream-hint");
-  hint.textContent = "Drag (or click) the bar to see each president’s currently-serving appointees on this court.";
-  const schemeWrap = el("div", "ctt-mode-switch ctt-stream-scheme", { role: "group", "aria-label": "Stream color scheme" });
-  for (const [mode, text] of [["alt", "Alternating"], ["fade", "Fading"]]) {
-    const b = el("button", "ctt-toggle ctt-mode-opt", { type: "button" });
-    b.textContent = text;
-    b.classList.toggle("ctt-is-active", S.streamColorScheme === mode);
-    b.addEventListener("click", () => {
-      if (S.streamColorScheme === mode) return;
-      S.streamColorScheme = mode;
-      buildStreamSVG(container, model);   // simplest correct redraw of the whole view
-    });
-    schemeWrap.append(b);
-  }
-  head.append(hint, schemeWrap);
-  container.append(head);
-
-  const svg = svgEl("svg", { class: "ctt-stream-svg", viewBox: `0 0 ${w} ${H}` });
-  const iconLayer = el("div", "ctt-stream-icons");
-  container.append(svg, iconLayer);
-
-  // ---- presidency background bands (like the beeswarm: pastel R/D fill, dashed transition
-  // lines, plain-text surname — no counts, no year ticks, this is just temporal orientation) --
-  for (let i = 0; i < PRESIDENCIES.length; i++) {
-    const [start, name, party] = PRESIDENCIES[i];
-    const nextStart = i + 1 < PRESIDENCIES.length ? dayNum(PRESIDENCIES[i + 1][0]) : model.viewDayMax;
-    const d0 = Math.max(dayNum(start), model.viewDayMin);
-    const d1 = Math.min(nextStart, model.viewDayMax);
-    if (d1 <= d0) continue;   // this term falls entirely outside the trimmed visible range
-    const bx0 = xOf(d0), bx1 = xOf(d1);
-    svg.append(svgEl("rect", { class: party === "R" ? "ctt-stream-band-rep" : "ctt-stream-band-dem",
-      x: bx0, y: padTop, width: Math.max(0, bx1 - bx0), height: H - padTop - padBottom }));
-    if (bx0 > x0 + 0.5) {
-      svg.append(svgEl("line", { class: "ctt-stream-band-line", x1: bx0, y1: padTop, x2: bx0, y2: H - padBottom }));
-    }
-    const label = svgEl("text", { class: "ctt-stream-band-label", x: bx0 + 5, y: padTop + 13 });
-    label.textContent = name.split(" ").pop();
-    svg.append(label);
-  }
-
-  svg.append(svgEl("line", { class: "ctt-stream-zeroline", x1: x0, x2: x1, y1: midY, y2: midY }));
-
-  // Per-slice step points (a "slice" is one contiguous non-zero run, see buildHalf) — holds
-  // flat between consecutive vertices, no smoothing. Deliberately does NOT extend past the
-  // slice's own last vertex: that used to always reach to model.dayMax, which is exactly the
-  // zero-thickness geometry item #8 asked to remove.
-  const stepPoints = (vertsSlice, valueFn) => {
-    const pts = [];
-    for (let i = 0; i < vertsSlice.length; i++) {
-      const v = vertsSlice[i];
-      const y = valueFn(v);
-      pts.push([xOf(v.day), y]);
-      if (i + 1 < vertsSlice.length) {
-        const nextDay = vertsSlice[i + 1].day;
-        if (nextDay !== v.day) pts.push([xOf(nextDay), y]);
-      }
-    }
-    return pts;
-  };
-
-  const streamPolys = [];   // {node, rank, party, presIdx} — MULTIPLE entries can share a presIdx
-  const setStreamHover = (presIdx) => {
-    streamPolys.forEach((s) => {
-      const hl = presIdx != null && s.presIdx === presIdx;
-      s.node.classList.toggle("ctt-stream-hl", hl);
-      // SVG has no z-index — paint order IS DOM order. Adjacent streams share an edge, and a
-      // stroke draws centered ON the path (half into the neighbor), so a hovered polygon's
-      // thicker highlight stroke could get PARTIALLY PAINTED OVER by a later-drawn neighbor's
-      // fill at that shared boundary — the "outline gets disrupted by the adjacent polygon"
-      // the operator saw. Move the hovered piece(s) to just before the bar group — front of
-      // the OTHER polygons, but still under the bar/arrowheads so hovering never covers those.
-      if (hl) svg.insertBefore(s.node, barG);
-    });
-    iconLayer.querySelectorAll(".ctt-stream-pres-icon").forEach((n) =>
-      n.classList.toggle("ctt-stream-hl", presIdx != null && +n.dataset.presIdx === presIdx));
-  };
-
-  const buildHalf = (terms, sign, party) => {
-    let lowerFn = () => 0;
-    terms.forEach((presIdx, rank) => {
-      const lower = lowerFn;
-      const upper = (v) => lower(v) + (v.counts[presIdx] || 0);
-      // Split into one polygon per contiguous non-zero run: a zero-thickness stretch must
-      // never be part of a polygon's own geometry (invisible, but still an outline the hover
-      // stroke traced — where two streams' zero stretches sat on the same zero-line pixels,
-      // outlines looked inconsistent/disrupted). Each run keeps one zero-value vertex on
-      // either side (where they exist) so the shape still tapers naturally to a point.
-      const runs = [];
-      let curStart = null;
-      model.vertices.forEach((v, i) => {
-        const has = (v.counts[presIdx] || 0) > 0;
-        if (has && curStart == null) curStart = i;
-        if (!has && curStart != null) { runs.push([curStart, i]); curStart = null; }
-      });
-      if (curStart != null) runs.push([curStart, model.vertices.length - 1]);
-
-      runs.forEach(([s, e]) => {
-        const slice = model.vertices.slice(Math.max(0, s - 1), Math.min(model.vertices.length - 1, e) + 1);
-        if (slice.length < 2) return;
-        const pts = stepPoints(slice, (v) => midY - sign * upper(v) * pxPerJudge)
-          .concat(stepPoints(slice, (v) => midY - sign * lower(v) * pxPerJudge).reverse());
-        const poly = svgEl("polygon", {
-          class: "ctt-stream-poly", points: pts.map((p) => p.join(",")).join(" "),
-          fill: streamColor(party, rank, terms.length, S.streamColorScheme),
-        });
-        poly.addEventListener("pointerenter", () => setStreamHover(presIdx));
-        poly.addEventListener("pointerleave", () => setStreamHover(null));
-        svg.append(poly);
-        streamPolys.push({ node: poly, rank, party, presIdx });
-      });
-      lowerFn = upper;
-    });
-  };
-  buildHalf(model.rTerms, 1, "R");    // R above the zero line
-  buildHalf(model.dTerms, -1, "D");   // D below
-
-  // Reveal animation: rank 0 (innermost, now the OLDEST term after the flip) first, staggered
-  // outward per rank, fading in while sliding from further out.
-  streamPolys.forEach(({ node, rank, party }) => {
-    const dir = party === "R" ? -1 : 1;
-    node.style.transform = `translateY(${dir * 26}px)`;
-    node.style.opacity = "0";
-    node.style.transitionDelay = `${rank * 90}ms`;
-  });
-  requestAnimationFrame(() => requestAnimationFrame(() => {
-    streamPolys.forEach(({ node }) => { node.style.transform = ""; node.style.opacity = "1"; });
-  }));
-
-  // ---- draggable time bar + president icons/counts ------------------------------
-  const barTop = padTop, barBottom = H - padBottom;
-  const barG = svgEl("g", { class: "ctt-stream-bar" });
-  const arrowW = 22, arrowH = 8;
-  const HIT_HALF = 17;   // wide, symmetric grab target (item #3) — well past the 3px rect
-  barG.append(
-    svgEl("rect", { class: "ctt-stream-bar-rect", x: -1.5, y: barTop, width: 3, height: barBottom - barTop }),
-    svgEl("polygon", { class: "ctt-stream-bar-arrow",
-      points: `${-arrowW / 2},${barTop} ${arrowW / 2},${barTop} 0,${barTop + arrowH}` }),
-    svgEl("polygon", { class: "ctt-stream-bar-arrow",
-      points: `${-arrowW / 2},${barBottom} ${arrowW / 2},${barBottom} 0,${barBottom - arrowH}` }),
-    svgEl("rect", { class: "ctt-stream-bar-hit", x: -HIT_HALF, y: barTop, width: HIT_HALF * 2, height: barBottom - barTop }),
-  );
-  svg.append(barG);
-
-  const updateIcons = (day, x) => {
-    const items = [];
-    const collect = (terms, sign, party) => {
-      let lower = 0;
-      terms.forEach((presIdx) => {
-        const value = valueAt(model.vertices, day, presIdx);
-        const upper = lower + value;
-        items.push({ presIdx, party, value, centerY: midY - sign * ((lower + upper) / 2) * pxPerJudge });
-        lower = upper;
-      });
-    };
-    collect(model.rTerms, 1, "R");
-    collect(model.dTerms, -1, "D");
-
-    // One shared buffer pass across BOTH parties (operator ask, item #6) — icons near the
-    // zero line from opposite halves must bump each other too, not just within their own side.
-    const ICON_H = 42, GAP = 5;
-    const visible = items.filter((it) => it.value > 0).sort((a, b) => a.centerY - b.centerY);
-    for (let i = 1; i < visible.length; i++) {
-      const min = visible[i - 1].centerY + ICON_H + GAP;
-      if (visible[i].centerY < min) visible[i].centerY = min;
-    }
-
-    iconLayer.innerHTML = "";
-    for (const it of visible) {
-      const node = el("div", "ctt-stream-pres-icon");
-      node.dataset.presIdx = it.presIdx;
-      // Anchored to the RIGHT edge of the group (translate(-100%,-50%) in CSS), sitting just
-      // left of the bar rather than centered on it, however wide the name/number content
-      // ends up being (operator ask, item #4: "moved more to the left").
-      node.style.left = `${x - HIT_HALF - 16}px`;
-      node.style.top = `${it.centerY}px`;
-      const name = PRESIDENCIES[it.presIdx][1];
-      const num = el("div", "ctt-stream-pres-num");
-      num.textContent = String(it.value);
-      const av = el("div", `ctt-stream-pres-avatar ${it.party === "R" ? "ctt-rep" : "ctt-dem"}`);
-      const photo = (S.presidentPhotos || {})[name];
-      const src = photo?.photo_thumb ? resolve(photo.photo_thumb) : photo?.photo_url;
-      if (src) {
-        const img = el("img", null, { src, alt: name, loading: "lazy" });
-        img.addEventListener("error", () => { img.remove(); av.textContent = initials({ full_name: name }); });
-        av.append(img);
-      } else {
-        av.textContent = initials({ full_name: name });
-      }
-      node.append(num, av);   // number on the LEFT of the icon (operator ask, item #4)
-      node.addEventListener("pointerenter", () => setStreamHover(it.presIdx));
-      node.addEventListener("pointerleave", () => setStreamHover(null));
-      node.title = `${name}: ${it.value} currently serving on this court, as of ${isoOfDayNum(day)}`;
-      iconLayer.append(node);
-    }
-  };
-
-  let barDay = model.viewDayMin;
-  const setBarX = (x) => {
-    x = Math.max(x0, Math.min(x1, x));
-    barG.setAttribute("transform", `translate(${x}, 0)`);
-    barDay = Math.round(dayOf(x));
-    updateIcons(barDay, x);
-  };
-  const svgX = (clientX) => {
-    const rect = svg.getBoundingClientRect();
-    return rect.width ? ((clientX - rect.left) / rect.width) * w : x0;
-  };
-  let dragging = false;
-  const hitRect = barG.querySelector(".ctt-stream-bar-hit");
-  hitRect.addEventListener("pointerdown", (e) => {
-    dragging = true;
-    hitRect.setPointerCapture?.(e.pointerId);   // absent in some embed hosts/older WebViews
-    setBarX(svgX(e.clientX));
-    e.preventDefault();
-  });
-  hitRect.addEventListener("pointermove", (e) => { if (dragging) setBarX(svgX(e.clientX)); });
-  hitRect.addEventListener("pointerup", () => { dragging = false; });
-  hitRect.addEventListener("pointercancel", () => { dragging = false; });
-  // Clicking ANYWHERE in the streamgraph (a band, a stream, empty space) snaps the bar there
-  // too (operator ask, item #3) — dragging the hit rect itself already moved it on pointerdown,
-  // so skip re-handling that specific click to avoid a redundant (harmless but pointless) call.
-  svg.addEventListener("click", (e) => { if (e.target !== hitRect) setBarX(svgX(e.clientX)); });
-
-  setBarX(x0);   // "set at the beginning of the graph view" (now the trimmed left edge)
-}
-
-// ---- drill-in / out (zoom + crossfade; documented morph fallback) -------------
 // ---- seat blocks (map annotation) ---------------------------------------------
 // One small square per authorized judgeship, grouped by appointing party with vacancies last,
 // parked next to the court it belongs to. Circuits show on the national view, districts on
@@ -4481,7 +4049,6 @@ export async function mount(root, opts = {}) {
   S.view = "national"; S.activeCircuit = null; S.selectedCourt = null;
   S.majorityMode = false; S.paneMode = "timeline"; S.seniorMode = "hide"; S._seniorModeForced = null;
   S.detailPinned = false; S.affilMark = "none"; S._affilMarkUserChoice = "none";
-  S.appointmentsAll = null; S.presidentPhotos = null;
   S.summaryView = "scotus"; S.districtArrangement = null; S.districtArrangementAlt = null;
   S.districtOnMap = false; S.districtMapState = null; S.districtDetailPinnedId = null;
   S.searchIndex = null; S.searchIndexPromise = null; S.searchSeq = 0; S.searchRovingPref = new Map();
@@ -4572,7 +4139,7 @@ export default mount;
 // path it is tuning (WYSIWYG), instead of a second copy that could drift.
 export const _dev = {
   S, renderSeatBlocks, refreshSeatBlocks, viewBoxOf, flipConst, shapeAnchor, BLOCK_PX, drillIn, drillOut,
-  buildStreamModel, valueAt, ensureChangeData, dayNum, isoOfDayNum, PRESIDENCIES, initials, surname,
+  initials, surname,
   selectSummary, layoutScotusRing, deployDistrictOverlayAnimated, deployDistrictOverlay,
   defaultDistrictMapState, DISTRICT_ZOOM_STORAGE_KEY, DISTRICT_SQ_SCALE_HOVER, districtNationalTotals,
   scoreJudgeMatch, searchAndSort, presidentShorthand, courtLabelFor, navigateToSearchResult,
