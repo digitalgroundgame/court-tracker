@@ -410,11 +410,15 @@ try {
   console.log("issue #69: Summary > Supreme Court's FedSoc legend key sits centerward (not flush right) in the same horizontal band as the title/meta text, with a real buffer from that text");
   await ev(`[...document.querySelectorAll('.ctt-mode-opt')].find(b=>b.textContent==='Supreme Court').click()`); await sleep(400);
   const scotusHeaderGeom = JSON.parse(await ev(`(() => {
+    // title/meta are plain full-width block <div>s, so their OWN getBoundingClientRect().right is
+    // the container's edge, not the rendered text's — a Range over their contents measures the
+    // actual glyphs, same trick positionScotusAffilKey() itself uses.
+    const textRight = (el) => { const r = document.createRange(); r.selectNodeContents(el); return r.getBoundingClientRect().right; };
     const title = document.querySelector('.ctt-summary-subtitle'), meta = document.querySelector('.ctt-pane-meta');
     const key = document.querySelector('.ctt-scotus-affil-key');
-    const t = title.getBoundingClientRect(), m = meta.getBoundingClientRect(), k = key.getBoundingClientRect();
+    const t = title.getBoundingClientRect(), k = key.getBoundingClientRect();
     const content = document.querySelector('.ctt-summary-content').getBoundingClientRect();
-    return JSON.stringify({ titleTop: t.top, titleBottom: t.bottom, textRight: Math.max(t.right, m.right),
+    return JSON.stringify({ titleTop: t.top, titleBottom: t.bottom, textRight: Math.max(textRight(title), textRight(meta)),
       keyLeft: k.left, keyTop: k.top, keyBottom: k.bottom, keyRight: k.right, contentRight: content.right, contentWidth: content.width });
   })()`));
   console.log("   scotusHeaderGeom:", JSON.stringify(scotusHeaderGeom));

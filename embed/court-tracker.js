@@ -2437,17 +2437,30 @@ function orderedSlots(radii, counts) {
  *  or leave a stale inline `left` behind when the viewport later widens back past it. Called from
  *  layoutJudges() so both an initial render and every later resize keep it correctly placed. */
 const AFFIL_KEY_BUFFER_PX = 20;
+// .ctt-summary-subtitle/.ctt-pane-meta are plain full-width block <div>s, so
+// element.getBoundingClientRect().right is the CONTAINER's right edge, not the actual rendered
+// text's — a Range over their contents measures the glyphs themselves instead (same class of trap
+// noted elsewhere in this file re: .ctt-judge-label needing width:fit-content; a Range sidesteps
+// it here without touching that shared class, which other callers rely on staying full-width).
+function textContentRight(el) {
+  if (!el) return 0;
+  const range = document.createRange();
+  range.selectNodeContents(el);
+  return range.getBoundingClientRect().right;
+}
 function positionScotusAffilKey() {
   const container = S.ui.paneBody.querySelector(".ctt-summary-content");
   const key = container && container.querySelector(".ctt-scotus-affil-key");
   if (!key) return;
+  // No real layout (headless/jsdom, same signal majorityStageHeight already bails on) — every
+  // rect here would read 0, so there's nothing meaningful to compute; leave the CSS default in
+  // place rather than calling getComputedStyle in an environment where it may not even exist.
+  if (!container.getBoundingClientRect().width) return;
   if (getComputedStyle(key).position !== "absolute") { key.style.left = ""; return; }
   const label = container.querySelector(".ctt-summary-subtitle");
   const meta = container.querySelector(".ctt-pane-meta");
   const containerBox = container.getBoundingClientRect();
-  const textRight = Math.max(
-    label ? label.getBoundingClientRect().right : 0,
-    meta ? meta.getBoundingClientRect().right : 0) - containerBox.left;
+  const textRight = Math.max(textContentRight(label), textContentRight(meta)) - containerBox.left;
   const centerLeft = (containerBox.width - key.getBoundingClientRect().width) / 2;
   key.style.left = `${Math.max(centerLeft, textRight + AFFIL_KEY_BUFFER_PX)}px`;
 }
