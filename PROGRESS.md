@@ -10,43 +10,55 @@
 tracker (Phase-4 tail items open, PLUS a brand-new third pane view — "Change", slated for
 removal, see below) and the appointments beeswarm (feature-complete first version, operator
 refinement rounds ongoing; see sessions ai→at, aw).
-**Last updated:** 2026-09-10 (dn)
+**Last updated:** 2026-09-10 (do)
 
 ## Resume briefing
 <!-- Replaced wholesale at the end of each session — this is not an appended log, it's a
 briefing for the next session only. Session narrative belongs in ## Session log below;
 this section should say only what's needed to pick the work back up cleanly. -->
 
-**New backlog filed 2026-09-10: issues #65–#71**, from an operator laundry list of bugs/features
-(full verbatim text also sits in `prompt_09_10_2026.txt` at the repo root — untracked, not part of
-the repo, kept locally only). Operator-approved priority order:
-1. **#65** — archive convention + CLAUDE.md amendment (prerequisite for #67 and #70)
-2. **#68** — SCOTUS FedSoc-mark global-state leak (real bug)
-3. **#69** — SCOTUS FedSoc key reposition (small CSS, same area as #68)
+**Backlog from operator laundry list, issues #65–#71** (full verbatim text also sits in
+`prompt_09_10_2026.txt` at the repo root — untracked, kept locally only). Operator-approved
+priority order:
+1. ~~**#65** — archive convention + CLAUDE.md amendment~~ **MERGED** (PR #72, commit `c80b8c9`,
+   2026-09-10 — operator reviewed and approved the CLAUDE.md change specifically).
+2. ~~**#68** — SCOTUS FedSoc-mark global-state leak (real bug)~~ **FIXED, PR OPEN, not yet
+   reviewed/merged** — see below.
+3. **#69** — SCOTUS FedSoc key reposition (small CSS, same area as #68) — **next task**.
 4. **#66** — Summary > Appellate Courts button should close the pane, not show a placeholder
-5. **#67** — remove the Change view (archive per #65)
+5. **#67** — remove the Change view (archive per #65's convention, now merged)
 6. **#70** — remove the Set-upon-map district overlay, add zoom in/out to Summary > District
-   Courts instead (archive the removed part per #65)
+   Courts instead (archive the removed part)
 7. **#71** — dark mode palette + switch + a palette-authoring/preview tool (largest and most
    novel — sequenced last so it isn't built twice against soon-to-be-deleted UI from #67/#70)
 
-**In progress right now: #65.** Branch `claude/archive-convention`. Added `archive/README.md`
-(the archive layout/convention — empty otherwise, no feature archived yet) and a new CLAUDE.md §7
-item 7, "Large removals default to archive, not delete," plus an `archive/` row in the repo map.
-**This PR touches CLAUDE.md itself — per CLAUDE.md's own hard-stop rule, it needs explicit
-operator sign-off before merging, even though the change itself is routine.** Flagged prominently
-in the PR description; do not merge without that go-ahead landing first.
+**#68 is done and pushed on branch `claude/issue-68-fedsoc-global-leak`, PR not yet opened as of
+this writing this session — open it (`gh pr create`) if it isn't already there when you resume.**
+Fix: split `S.affilMark` (currently-applied value) from a new `S._affilMarkUserChoice` (the last
+REAL choice made on the ordinary None|FedSoc|ACS switch); `renderSummaryScotus`'s one-time FedSoc
+default no longer sets `_affilMarkTouched` itself (that used to be the actual bug — it permanently
+overwrote the ordinary switch's global state on the very first SCOTUS visit); `renderPane` now
+restores `S.affilMark` from `S._affilMarkUserChoice` at the top of every non-SCOTUS render. Two
+new regression checks added to `tests/browser-checks.mjs` (search "issue #68"); full suite
+(`npm test` + `npm run test:browser`) passes. **This PR does NOT touch CLAUDE.md/PROGRESS.md's
+protocol block — routine, self-mergeable once clean**, per CLAUDE.md's case-by-case merge
+authority — but hasn't been explicitly reviewed by the operator yet as of this writing.
 
-**Next task once #65 is merged**: #68 (SCOTUS FedSoc global-leak bug). Root cause is in
-`renderSummaryScotus` (embed/court-tracker.js, search for `_affilMarkTouched`): a single global
-`S.affilMark`/`S._affilMarkTouched` pair is shared between the ordinary per-court `None|FedSoc|ACS`
-switch and SCOTUS's own one-time FedSoc default, so visiting SCOTUS first permanently overwrites
-the ordinary switch's state. The issue's own body has the fix sketch (a separate
-`S._affilMarkUserChoice` slot, restored whenever a non-SCOTUS pane renders).
+**Next task**: #69 (SCOTUS FedSoc key reposition) — small CSS-only change to
+`.ctt-scotus-affil-key` (built in `renderSummaryScotus`, currently right-aligned per its own
+comment) to move it centerward while preserving its buffer from the title/meta text and its
+existing wrap-to-own-line behavior at narrow widths. Good candidate to pair with or follow
+directly after #68 merges, since it's in the exact same function.
 
 **Housekeeping noticed, not yet acted on**: issues #50, #60, #62 all have MERGED PRs (#56, #61,
 #63 respectively) but were never closed on GitHub — worth closing, just hadn't gotten to it this
 session; not itself a "merge authority" decision, just tidiness.
+
+**Gotcha hit this session, worth remembering**: a branch cut from local `main` BEFORE a
+concurrently-open PR merges will miss that PR's changes even after it merges on GitHub — local
+`main` doesn't move on its own. If a branch's `PROGRESS.md`/`CLAUDE.md` looks stale right after
+starting work, `git fetch origin main && git rebase origin/main` before continuing (commit
+whatever's in progress first if needed) rather than hand-reconciling drift later.
 
 **Reference, only if the Majority-view arc/collision-avoidance code is touched again** (none of
 #65-#71 currently touches it, so this is NOT condensed further here — see prior revisions of this
@@ -402,6 +414,27 @@ Prove the whole app shell and asset schema on one circuit with hand-authored sam
 - Next: ...
 - Blockers: ...
 -->
+
+### 2026-09-10 (do) — PR #72 (issue #65) MERGED (operator approved); fixed issue #68 (FedSoc global-leak bug)
+- Phase: 4. Operator reviewed PR #72 (the CLAUDE.md archive-convention amendment) and approved it
+  ("pr #72 looks good to me and i give approval") — squash-merged as `c80b8c9`; issue #65
+  auto-closed.
+- Fixed issue #68: `renderSummaryScotus`'s one-time FedSoc default used to set
+  `S._affilMarkTouched` itself, so the first-ever SCOTUS visit permanently overwrote the ordinary
+  per-court `None|FedSoc|ACS` switch's global state. Split "currently applied"
+  (`S.affilMark`) from "last real user choice" (new `S._affilMarkUserChoice`, written only by the
+  real switch); `renderPane` restores `affilMark` from the user's choice at the top of every
+  non-SCOTUS render, so SCOTUS's temporary override can no longer leak or persist. Added two
+  regression checks to `tests/browser-checks.mjs`; ran the full `npm test` + `npm run test:browser`
+  suites, both ALL PASS. Rebuilt `dist/` (`npm run build`).
+- Hit a real gotcha mid-session: the `claude/issue-68-fedsoc-global-leak` branch was cut from
+  local `main` before PR #72 merged, so it initially carried the PRE-amendment CLAUDE.md/
+  PROGRESS.md even after #72 merged on GitHub. Fixed with `git fetch origin main && git rebase
+  origin/main` (after committing the in-progress fix first) — noted in the Resume briefing above
+  so it isn't rediscovered the hard way again.
+- Next: push `claude/issue-68-fedsoc-global-leak`, open its PR, then move to issue #69 (SCOTUS
+  FedSoc key reposition — small CSS, same function as #68).
+- Blockers: none.
 
 ### 2026-09-10 (dn) — Filed issues #65–#71 from operator's laundry list; started #65 (archive convention)
 - Phase: 4. Operator handed a 7-item laundry list of bugs/features (verbatim text kept locally in
