@@ -427,16 +427,17 @@
    2026-09-05). flex-shrink:1 lets these rows compress to their allotted space instead, which is
    what actually lets min-height:0 + the table wrap's own overflow-y:auto take over. */
 .ctt-pane-body > .ctt-summary-content { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; }
-/* position:relative anchors Summary > Supreme Court's own right-aligned FedSoc key (operator
-   ask, 2026-09-11) — a plain flex property otherwise, doesn't affect layout on its own. */
+/* position:relative anchors Summary > Supreme Court's own FedSoc key (operator ask, 2026-09-11) —
+   a plain flex property otherwise, doesn't affect layout on its own. */
 .ctt-summary-content { min-height: 200px; position: relative; }
-/* Right-aligned in the SAME header band as the title/meta text above it — same
-   position:absolute + vertical-centering technique .ctt-district-deploy-btn already uses for the
-   analogous "right side of this row" placement in Summary > District. SCOTUS's own title+meta
-   are short enough (no line-wrapping risk the way District's deploy button needed padding-right
-   to guard against) that no text-side accommodation is needed here. */
+/* Centerward-but-clear-of-the-text placement in the SAME header band as the title/meta text above
+   it (issue #69 — a plain right:0 blended into the panel edge and was easy to miss). `left` is
+   set by positionScotusAffilKey() in JS, since keeping a real buffer from the title/meta text
+   while still favoring the horizontal center needs their actual measured width, not a fixed CSS
+   value; this rule only supplies the vertical position and the position:absolute the JS positioning
+   requires. */
 .ctt-scotus-affil-key {
-  position: absolute; top: 8px; right: 0; display: flex; align-items: center; gap: 6px;
+  position: absolute; top: 8px; display: flex; align-items: center; gap: 6px;
   font-size: 12px; color: var(--ctt-muted);
 }
 /* Same dashed-ring convention .ctt-affil-marked .ctt-avatar itself uses, at swatch size — a

@@ -407,18 +407,23 @@ try {
   const districtHintTop = await ev(`document.querySelector('.ctt-district-detail .ctt-detail-hint').getBoundingClientRect().top`);
   assert(scotusHintTop === districtHintTop, `empty-hint text starts at the SAME y-position in both sub-tabs (SCOTUS ${scotusHintTop} vs District ${districtHintTop})`);
 
-  console.log("Summary > Supreme Court: FedSoc legend key sits right-aligned in the SAME horizontal band as the title/meta text (operator ask, 2026-09-11)");
+  console.log("issue #69: Summary > Supreme Court's FedSoc legend key sits centerward (not flush right) in the same horizontal band as the title/meta text, with a real buffer from that text");
   await ev(`[...document.querySelectorAll('.ctt-mode-opt')].find(b=>b.textContent==='Supreme Court').click()`); await sleep(400);
   const scotusHeaderGeom = JSON.parse(await ev(`(() => {
-    const title = document.querySelector('.ctt-summary-subtitle'), key = document.querySelector('.ctt-scotus-affil-key');
-    const t = title.getBoundingClientRect(), k = key.getBoundingClientRect();
+    const title = document.querySelector('.ctt-summary-subtitle'), meta = document.querySelector('.ctt-pane-meta');
+    const key = document.querySelector('.ctt-scotus-affil-key');
+    const t = title.getBoundingClientRect(), m = meta.getBoundingClientRect(), k = key.getBoundingClientRect();
     const content = document.querySelector('.ctt-summary-content').getBoundingClientRect();
-    return JSON.stringify({ titleTop: t.top, titleBottom: t.bottom, keyTop: k.top, keyBottom: k.bottom, keyRight: k.right, contentRight: content.right });
+    return JSON.stringify({ titleTop: t.top, titleBottom: t.bottom, textRight: Math.max(t.right, m.right),
+      keyLeft: k.left, keyTop: k.top, keyBottom: k.bottom, keyRight: k.right, contentRight: content.right, contentWidth: content.width });
   })()`));
   console.log("   scotusHeaderGeom:", JSON.stringify(scotusHeaderGeom));
   assert(scotusHeaderGeom.keyTop < scotusHeaderGeom.titleBottom && scotusHeaderGeom.keyBottom > scotusHeaderGeom.titleTop,
     "the key vertically overlaps the title's own row (same horizontal band)");
-  assert(Math.abs(scotusHeaderGeom.keyRight - scotusHeaderGeom.contentRight) < 1, "the key is right-aligned to the panel's own right edge");
+  assert(scotusHeaderGeom.keyLeft - scotusHeaderGeom.textRight >= 19,
+    `the key keeps a real buffer (>=20px) from the title/meta text's own right edge (gap ${(scotusHeaderGeom.keyLeft - scotusHeaderGeom.textRight).toFixed(1)}px)`);
+  assert(scotusHeaderGeom.contentRight - scotusHeaderGeom.keyRight > scotusHeaderGeom.contentWidth * 0.1,
+    `the key no longer sits flush against the panel's right edge (gap from right edge ${(scotusHeaderGeom.contentRight - scotusHeaderGeom.keyRight).toFixed(1)}px, panel width ${scotusHeaderGeom.contentWidth.toFixed(0)}px)`);
 
   console.log("header search bar: right-aligned in the title band, dropdown opens over the map, no horizontal overflow at mobile width");
   await ev(`document.querySelector('.ctt-pane-close')?.click()`); await sleep(300);
