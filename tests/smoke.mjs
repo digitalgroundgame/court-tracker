@@ -1086,10 +1086,17 @@ const outerYs = [...scIcons].map(dist).filter((d) => Math.round(d.r) === uniqRad
 assert(innerYs.every((y) => !onHorizon(y)), "no inner-ring seat sits on the horizontal (all raised off 180°/0°)");
 assert(outerYs.filter(onHorizon).length === 2, "outer ring's two endpoint seats sit exactly on the horizontal (standard, unraised)");
 
-console.log("Summary > Appellate: blank placeholder (operator: come back to it later)");
+console.log("issue #66: Summary > Appellate Courts closes the pane and returns to the map, without changing the sub-view or its content");
+assert(root.querySelector(".ctt-pane").classList.contains("ctt-is-open"), "Summary pane is open before clicking Appellate Courts (precondition)");
 click(toggle("Appellate Courts")); await sleep(20);
-assert(/Coming soon/.test(root.querySelector(".ctt-summary-content").textContent), "Appellate shows a placeholder");
-assert(!root.querySelector(".ctt-judge-stage"), "no SCOTUS bench lingers under Appellate");
+assert(!root.querySelector(".ctt-pane").classList.contains("ctt-is-open"), "clicking Appellate Courts closes the Summary pane");
+assert(mod._dev.S.summaryView === "scotus", "S.summaryView is untouched by Appellate Courts (still whichever sub-view was last real)");
+assert(mod._dev.S.selectedCourt === null, "nothing remains selected after closing via Appellate Courts");
+// Reopening Summary lands back on the last REAL sub-view (Supreme Court), never a blank Appellate view.
+click(root.querySelector('.ctt-selector-item[data-court-id="summary"]')); await sleep(60);
+assert(root.querySelector(".ctt-summary-switch .ctt-mode-opt.ctt-is-active").textContent === "Supreme Court",
+  "reopening Summary lands back on Supreme Court, not Appellate Courts");
+assert(root.querySelectorAll(".ctt-judge-stage .ctt-judge").length === 9, "SCOTUS content is showing again after reopening, undisturbed");
 
 console.log("Summary > District: static cartogram preview (no map deployment yet)");
 click(toggle("District Courts")); await sleep(60);
@@ -1098,6 +1105,15 @@ assert(clusters.length === 12, `cartogram renders all 12 geographic circuits (go
 assert(root.querySelectorAll(".ctt-district-sq").length > 0, "cartogram renders district squares");
 assert(root.querySelectorAll(".ctt-district-sq.ctt-sq-rep, .ctt-district-sq.ctt-sq-dem").length > 0,
   "cartogram squares reuse the map's own R/D palette classes");
+
+console.log("issue #66 (cont.): Appellate Courts preserves District Courts too, not just Supreme Court");
+click(toggle("Appellate Courts")); await sleep(20);
+assert(!root.querySelector(".ctt-pane").classList.contains("ctt-is-open"), "Appellate Courts closes the pane from District Courts too");
+assert(mod._dev.S.summaryView === "district", "S.summaryView stays 'district', untouched by Appellate Courts");
+click(root.querySelector('.ctt-selector-item[data-court-id="summary"]')); await sleep(60);
+assert(root.querySelector(".ctt-summary-switch .ctt-mode-opt.ctt-is-active").textContent === "District Courts",
+  "reopening Summary lands back on District Courts, not Appellate Courts");
+assert(root.querySelectorAll(".ctt-district-cluster").length === 12, "District cartogram is showing again after reopening, undisturbed");
 
 console.log("Summary > District: controls row — right-aligned/width-matched deploy button, arrow-flanked label, left caption (operator ask, 2026-09-07)");
 const summaryDeployBtn = root.querySelector(".ctt-district-deploy-btn");

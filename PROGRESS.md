@@ -10,7 +10,7 @@
 tracker (Phase-4 tail items open, PLUS a brand-new third pane view — "Change", slated for
 removal, see below) and the appointments beeswarm (feature-complete first version, operator
 refinement rounds ongoing; see sessions ai→at, aw).
-**Last updated:** 2026-09-10 (dq)
+**Last updated:** 2026-09-10 (dr)
 
 ## Resume briefing
 <!-- Replaced wholesale at the end of each session — this is not an appended log, it's a
@@ -29,11 +29,11 @@ priority order:
 1. ~~**#65**~~ **MERGED** (PR #72, commit `c80b8c9`).
 2. ~~**#68**~~ **MERGED** (PR #73, commit `904e75a` — see below for the real bug caught mid-review
    and its correction; read it before touching the affil-mark code again).
-3. **#69** — SCOTUS FedSoc key reposition — **done, PR not yet opened as of this writing this
-   session — open it (`gh pr create`) if it isn't already there when you resume.** See below.
+3. ~~**#69**~~ **MERGED** (PR #74, commit `5886a82`).
 4. **#66** — Summary > Appellate Courts button should close the pane, not show a placeholder —
-   **next task**.
-5. **#67** — remove the Change view (archive per #65's convention, now merged)
+   **done, PR not yet opened as of this writing this session — open it (`gh pr create`) if it
+   isn't already there when you resume.** See below.
+5. **#67** — remove the Change view (archive per #65's convention, now merged) — **next task**.
 6. **#70** — remove the Set-upon-map district overlay, add zoom in/out to Summary > District
    Courts instead (archive the removed part)
 7. **#71** — dark mode palette + switch + a palette-authoring/preview tool (largest and most
@@ -47,31 +47,30 @@ SCOTUS as "None" too. Corrected: **SCOTUS's FedSoc marking is unconditional** �
 `renderSummaryScotus` always sets `S.affilMark = "fedsoc"`, every render, full stop. The old gating
 field is gone entirely. `S._affilMarkUserChoice` (the ordinary switch's own persistent value,
 restored by `renderPane` at the top of every non-SCOTUS render) is the only other piece of state
-and is unaffected by SCOTUS visits either direction. Now merged and closed — this is reference for
-future work in this area, not a task.
+and is unaffected by SCOTUS visits either direction.
 
-**Issue #69 is DONE (embed/court-tracker.js + .css changes committed on
-`claude/issue-69-fedsoc-key-position`, rebased cleanly onto post-#73 `main`), full test suite
-passing, verified with a real-browser screenshot — but no PR opened yet.** `positionScotusAffilKey()`
-(right before `layoutJudges`) centers `.ctt-scotus-affil-key` within `.ctt-summary-content` unless
-that would put it within `AFFIL_KEY_BUFFER_PX` (20px) of the title/meta text's own right edge, in
-which case it shifts right just enough to clear that buffer. Re-run on every `layoutJudges()` call
-(initial render + resize). No-ops below the existing 640px mobile breakpoint by checking
-`getComputedStyle(key).position !== "absolute"` rather than duplicating that threshold in JS.
-**Two real bugs found and fixed while building this, worth remembering if this area is touched
-again:**
-1. `.ctt-summary-subtitle`/`.ctt-pane-meta` are plain full-width block `<div>`s — their OWN
-   `getBoundingClientRect()` is the CONTAINER's edge, not the rendered text's. A `Range` over an
-   element's contents (`textContentRight()` helper) measures the actual glyphs instead; the same
-   fix had to be applied to the browser-checks.mjs assertion measuring the same thing (it had
-   the identical bug independently). Same class of trap as `.ctt-judge-label`'s existing
-   `width:fit-content` fix elsewhere in this file — different fix here since `.ctt-summary-subtitle`
-   is a shared class other callers need to stay full-width.
-2. jsdom (`tests/smoke.mjs`) reports 0 for every layout box and doesn't necessarily provide
-   `getComputedStyle` the way this function called it bare — crashed with "getComputedStyle is not
-   defined" until an early `if (!container.getBoundingClientRect().width) return;` guard was added
-   (same convention `majorityStageHeight` already uses for the same jsdom-has-no-real-layout
-   reason).
+**Issue #69, reference.** `positionScotusAffilKey()` (embed/court-tracker.js, called from
+`layoutJudges()`) centers `.ctt-scotus-affil-key` within `.ctt-summary-content` unless that would
+put it within `AFFIL_KEY_BUFFER_PX` (20px) of the title/meta text's own right edge. Two real
+measurement bugs worth remembering if this area is touched again: (1) `.ctt-summary-subtitle`/
+`.ctt-pane-meta` are plain full-width block `<div>`s, so their own `getBoundingClientRect()` is
+the CONTAINER's edge, not the rendered text's — use a `Range` over an element's contents
+(`textContentRight()` helper) to measure the actual glyphs instead; (2) jsdom reports 0 for every
+layout box and doesn't provide `getComputedStyle` the way this function first called it bare — any
+new per-render positioning helper needs the same early-return guard `majorityStageHeight` already
+uses for that reason.
+
+**Issue #66 is DONE, committed on branch `claude/issue-66-appellate-button`, full test suite
+passing, verified with a real-browser screenshot — but no PR opened yet.** Clicking "Appellate
+Courts" in `renderSummaryPane`'s tabs loop now gets the ordinary active/blue click-feedback class
+and calls `deselect()` (closing the whole Summary pane, returning to the map) instead of calling
+`setView("appellate")` — it never touches `S.summaryView`, so reopening Summary always lands back
+on whichever of SCOTUS/District was last real. `renderSummaryAppellate` (the old bare "Coming
+soon." placeholder) and its dispatch branch are removed outright — nothing to archive per
+CLAUDE.md §7, since it was never real functionality, just an inert placeholder (said so in the PR
+description instead). Regression coverage added in both `tests/smoke.mjs` (state-level: from both
+Supreme Court and District Courts as the prior real sub-view) and `tests/browser-checks.mjs`
+(real click-feedback class + pane-close, in an actual browser).
 
 **Housekeeping noticed, not yet acted on**: issues #50, #60, #62 all have MERGED PRs (#56, #61,
 #63 respectively) but were never closed on GitHub — worth closing, just hadn't gotten to it yet;
@@ -79,12 +78,12 @@ not itself a "merge authority" decision, just tidiness.
 
 **Standing gotcha, worth remembering every time a new branch is cut mid-backlog**: a branch cut
 from local `main` BEFORE a concurrently-open PR merges will miss that PR's changes even after it
-merges on GitHub — local `main` doesn't move on its own. Hit this twice in one session (#68's own
-branch, then #69's needing a rebase to pick up #68 after IT merged). If a branch's
-`PROGRESS.md`/`CLAUDE.md`/nearby code looks stale right after starting work, or a rebase after a
-sibling PR merges produces a real conflict, that's expected — resolve normally (`git fetch origin
-main && git rebase origin/main`, commit in-progress work first if needed, resolve any conflict and
-commit the resolution immediately per CLAUDE.md §7) rather than treating it as unusual.
+merges on GitHub — local `main` doesn't move on its own. If a branch's `PROGRESS.md`/`CLAUDE.md`/
+nearby code looks stale right after starting work, or a rebase after a sibling PR merges produces
+a real conflict, that's expected — resolve normally (`git fetch origin main && git rebase
+origin/main`, commit in-progress work first if needed, resolve any conflict and commit the
+resolution immediately per CLAUDE.md §7) rather than treating it as unusual. (Cut branches for #66
+and later AFTER the preceding PR had already merged, avoiding this entirely this round.)
 
 **Reference, only if the Majority-view arc/collision-avoidance code is touched again** (none of
 #65-#71 currently touches it, so this is NOT condensed further here — see prior revisions of this
@@ -440,6 +439,27 @@ Prove the whole app shell and asset schema on one circuit with hand-authored sam
 - Next: ...
 - Blockers: ...
 -->
+
+### 2026-09-10 (dr) — PR #74 (issue #69) MERGED (operator approved); completed issue #66 (Appellate Courts button)
+- Phase: 4. Operator approved PR #74 ("i like the look of this change, squash #74") — squash-merged
+  as `5886a82`; issue #69 auto-closed.
+- Implemented issue #66: the Appellate Courts sub-tab in Summary (`renderSummaryPane`'s tabs loop)
+  no longer calls `setView("appellate")` — it gets the ordinary active/blue click-feedback class
+  and calls `deselect()` instead, closing the pane and returning to the map without ever setting
+  `S.summaryView` or touching whatever content was previously showing. Removed
+  `renderSummaryAppellate` (the old "Coming soon." placeholder) and its now-dead dispatch branch
+  outright — not archived, since it was never real functionality (noted in the PR description per
+  CLAUDE.md §7's carve-out for exactly this case).
+- Added regression coverage in `tests/smoke.mjs` (checks `S.summaryView`/`S.selectedCourt` after
+  clicking Appellate Courts from both Supreme Court and District Courts as the prior real
+  sub-view) and `tests/browser-checks.mjs` (real click-feedback class + pane-close, in an actual
+  headless-Chrome browser). Full `npm test` + `npm run test:browser` — ALL PASS. Verified visually
+  with a screenshot (pane closes, map returns, Summary selector un-highlights).
+- Cut this branch (`claude/issue-66-appellate-button`) from `main` only AFTER PR #74 had already
+  merged, avoiding the stale-branch/rebase gotcha from earlier this session.
+- Next: open the PR for #66 (not yet opened as of this entry), then move to issue #67 (remove the
+  Change view) once #66 is reviewed — per the operator's pause-per-issue rhythm.
+- Blockers: none.
 
 ### 2026-09-10 (dq) — PR #73 (issue #68) MERGED (operator approved); completed issue #69 (FedSoc key reposition)
 - Phase: 4. Operator approved PR #73 ("73 is good and can be merged") — squash-merged as
