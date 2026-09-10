@@ -10,80 +10,81 @@
 tracker (Phase-4 tail items open, PLUS a brand-new third pane view — "Change", slated for
 removal, see below) and the appointments beeswarm (feature-complete first version, operator
 refinement rounds ongoing; see sessions ai→at, aw).
-**Last updated:** 2026-09-10 (dp)
+**Last updated:** 2026-09-10 (dq)
 
 ## Resume briefing
 <!-- Replaced wholesale at the end of each session — this is not an appended log, it's a
 briefing for the next session only. Session narrative belongs in ## Session log below;
 this section should say only what's needed to pick the work back up cleanly. -->
 
-**New working rhythm for this backlog (operator ask, 2026-09-10): pause after finishing each
-issue's work (PR opened + tests passing) for review, rather than chaining straight into the next
-one.** Don't self-merge OR start the next queued issue without the operator's go-ahead on THIS
-one first — see [[operator-wants-pr-review-before-merge]]-equivalent guidance if picking this back
-up without the live conversation for context.
+**Working rhythm for this backlog (operator ask, 2026-09-10): pause after finishing each issue's
+work (PR opened + tests passing) for review, rather than chaining straight into the next one.**
+Don't self-merge OR start the next queued issue without the operator's go-ahead on THIS one first
+— see [[operator-wants-pr-review-before-merge]] if picking this back up without the live
+conversation for context.
 
 **Backlog from operator laundry list, issues #65–#71** (full verbatim text also sits in
 `prompt_09_10_2026.txt` at the repo root — untracked, kept locally only). Operator-approved
 priority order:
-1. ~~**#65** — archive convention + CLAUDE.md amendment~~ **MERGED** (PR #72, commit `c80b8c9`,
-   2026-09-10 — operator reviewed and approved the CLAUDE.md change specifically).
-2. **#68** — SCOTUS FedSoc-mark global-state leak — **fixed, PR #73 open, awaiting operator
-   review** (see below — this one had a real correction mid-review, read it before touching this
-   area again).
-3. **#69** — SCOTUS FedSoc key reposition — **in progress, STASHED, not yet complete** (see below).
-4. **#66** — Summary > Appellate Courts button should close the pane, not show a placeholder
+1. ~~**#65**~~ **MERGED** (PR #72, commit `c80b8c9`).
+2. ~~**#68**~~ **MERGED** (PR #73, commit `904e75a` — see below for the real bug caught mid-review
+   and its correction; read it before touching the affil-mark code again).
+3. **#69** — SCOTUS FedSoc key reposition — **done, PR not yet opened as of this writing this
+   session — open it (`gh pr create`) if it isn't already there when you resume.** See below.
+4. **#66** — Summary > Appellate Courts button should close the pane, not show a placeholder —
+   **next task**.
 5. **#67** — remove the Change view (archive per #65's convention, now merged)
 6. **#70** — remove the Set-upon-map district overlay, add zoom in/out to Summary > District
    Courts instead (archive the removed part)
 7. **#71** — dark mode palette + switch + a palette-authoring/preview tool (largest and most
    novel — sequenced last so it isn't built twice against soon-to-be-deleted UI from #67/#70)
 
-**PR #73 (issue #68) — READ THIS BEFORE TOUCHING THE AFFIL-MARK CODE AGAIN.** The first version of
-the fix kept the pre-existing `_affilMarkTouched` gate on SCOTUS's FedSoc default ("only applies
-before any real choice exists elsewhere") — the operator caught LIVE, by actually using the
-widget, that this was wrong: setting the ordinary None|FedSoc|ACS switch to "None" and then
-visiting Summary > SCOTUS incorrectly showed SCOTUS as "None" too, instead of SCOTUS's own fixed
-FedSoc iconography. Corrected (commit `a96f623`, PR comment posted explaining the correction):
-**SCOTUS's FedSoc marking is now unconditional** — `renderSummaryScotus` always sets
-`S.affilMark = "fedsoc"`, full stop, every render. `_affilMarkTouched` is gone entirely (it became
-fully vestigial once the gate was removed — nothing else read it). `S._affilMarkUserChoice` (the
-ordinary switch's own persistent value, restored by `renderPane` at the top of every non-SCOTUS
-render) is the only other piece of state and is unaffected by SCOTUS visits in either direction.
-Both `tests/browser-checks.mjs` and `tests/smoke.mjs` have checks for the exact scenario the
-operator found (ordinary switch → "None", then visit SCOTUS, confirm FedSoc marking still shows).
-Full suite (`npm test` + `npm run test:browser`) passes as of the correction commit. **Still
-awaiting operator review/merge — do not merge without it.**
+**Issue #68, reference — READ BEFORE TOUCHING THE AFFIL-MARK CODE AGAIN.** The first version of the
+fix kept a gate on SCOTUS's FedSoc default ("only applies before any real choice exists
+elsewhere") — the operator caught LIVE, by actually using the widget, that this was wrong: setting
+the ordinary None|FedSoc|ACS switch to "None" then visiting Summary > SCOTUS incorrectly showed
+SCOTUS as "None" too. Corrected: **SCOTUS's FedSoc marking is unconditional** —
+`renderSummaryScotus` always sets `S.affilMark = "fedsoc"`, every render, full stop. The old gating
+field is gone entirely. `S._affilMarkUserChoice` (the ordinary switch's own persistent value,
+restored by `renderPane` at the top of every non-SCOTUS render) is the only other piece of state
+and is unaffected by SCOTUS visits either direction. Now merged and closed — this is reference for
+future work in this area, not a task.
 
-**#69 (FedSoc key reposition) is IN PROGRESS but incomplete, stashed on branch
-`claude/issue-69-fedsoc-key-position`** (`git stash list` on that branch to find it — message
-"wip: issue-69 fedsoc key reposition, 1 browser test failure to debug"). Work so far: added
-`positionScotusAffilKey()` (embed/court-tracker.js, right before `layoutJudges`) which centers
-`.ctt-scotus-affil-key` within `.ctt-summary-content` unless that would put it within
-`AFFIL_KEY_BUFFER_PX` (20px) of the title/meta text's own right edge, in which case it shifts
-right just enough to clear that buffer — measured live via `getBoundingClientRect`, re-run on
-every `layoutJudges()` call (so both initial render and window resize keep it correct). No-ops
-(clears any inline `left`) whenever `getComputedStyle(key).position !== "absolute"`, which lets
-the existing 640px mobile media query's `position:static` own-line behavior keep working
-untouched, without duplicating that breakpoint in JS. CSS (`.ctt-scotus-affil-key`) had its
-`right: 0` removed since `left` is now JS-driven. Updated the existing right-alignment browser
-test to check the new centered-with-buffer behavior instead — **that updated test had 1 FAILURE
-on the last run, not yet debugged** (the run's full failure detail scrolled out of view before it
-could be read — rerun `npm run test:browser` on the stashed changes first thing when resuming,
-find the ✗ line, and fix from there before doing anything else on this issue). This branch was
-created before PR #72 (issue #65) merged but was NOT yet rebased onto the updated `main` as of the
-stash — do that first too (`git fetch origin main && git rebase origin/main`, per the gotcha
-below), applying the stash back on top.
+**Issue #69 is DONE (embed/court-tracker.js + .css changes committed on
+`claude/issue-69-fedsoc-key-position`, rebased cleanly onto post-#73 `main`), full test suite
+passing, verified with a real-browser screenshot — but no PR opened yet.** `positionScotusAffilKey()`
+(right before `layoutJudges`) centers `.ctt-scotus-affil-key` within `.ctt-summary-content` unless
+that would put it within `AFFIL_KEY_BUFFER_PX` (20px) of the title/meta text's own right edge, in
+which case it shifts right just enough to clear that buffer. Re-run on every `layoutJudges()` call
+(initial render + resize). No-ops below the existing 640px mobile breakpoint by checking
+`getComputedStyle(key).position !== "absolute"` rather than duplicating that threshold in JS.
+**Two real bugs found and fixed while building this, worth remembering if this area is touched
+again:**
+1. `.ctt-summary-subtitle`/`.ctt-pane-meta` are plain full-width block `<div>`s — their OWN
+   `getBoundingClientRect()` is the CONTAINER's edge, not the rendered text's. A `Range` over an
+   element's contents (`textContentRight()` helper) measures the actual glyphs instead; the same
+   fix had to be applied to the browser-checks.mjs assertion measuring the same thing (it had
+   the identical bug independently). Same class of trap as `.ctt-judge-label`'s existing
+   `width:fit-content` fix elsewhere in this file — different fix here since `.ctt-summary-subtitle`
+   is a shared class other callers need to stay full-width.
+2. jsdom (`tests/smoke.mjs`) reports 0 for every layout box and doesn't necessarily provide
+   `getComputedStyle` the way this function called it bare — crashed with "getComputedStyle is not
+   defined" until an early `if (!container.getBoundingClientRect().width) return;` guard was added
+   (same convention `majorityStageHeight` already uses for the same jsdom-has-no-real-layout
+   reason).
 
 **Housekeeping noticed, not yet acted on**: issues #50, #60, #62 all have MERGED PRs (#56, #61,
-#63 respectively) but were never closed on GitHub — worth closing, just hadn't gotten to it this
-session; not itself a "merge authority" decision, just tidiness.
+#63 respectively) but were never closed on GitHub — worth closing, just hadn't gotten to it yet;
+not itself a "merge authority" decision, just tidiness.
 
-**Gotcha hit this session, worth remembering**: a branch cut from local `main` BEFORE a
-concurrently-open PR merges will miss that PR's changes even after it merges on GitHub — local
-`main` doesn't move on its own. If a branch's `PROGRESS.md`/`CLAUDE.md` looks stale right after
-starting work, `git fetch origin main && git rebase origin/main` before continuing (commit
-whatever's in progress first if needed) rather than hand-reconciling drift later.
+**Standing gotcha, worth remembering every time a new branch is cut mid-backlog**: a branch cut
+from local `main` BEFORE a concurrently-open PR merges will miss that PR's changes even after it
+merges on GitHub — local `main` doesn't move on its own. Hit this twice in one session (#68's own
+branch, then #69's needing a rebase to pick up #68 after IT merged). If a branch's
+`PROGRESS.md`/`CLAUDE.md`/nearby code looks stale right after starting work, or a rebase after a
+sibling PR merges produces a real conflict, that's expected — resolve normally (`git fetch origin
+main && git rebase origin/main`, commit in-progress work first if needed, resolve any conflict and
+commit the resolution immediately per CLAUDE.md §7) rather than treating it as unusual.
 
 **Reference, only if the Majority-view arc/collision-avoidance code is touched again** (none of
 #65-#71 currently touches it, so this is NOT condensed further here — see prior revisions of this
@@ -439,6 +440,27 @@ Prove the whole app shell and asset schema on one circuit with hand-authored sam
 - Next: ...
 - Blockers: ...
 -->
+
+### 2026-09-10 (dq) — PR #73 (issue #68) MERGED (operator approved); completed issue #69 (FedSoc key reposition)
+- Phase: 4. Operator approved PR #73 ("73 is good and can be merged") — squash-merged as
+  `904e75a`; issue #68 auto-closed.
+- Resumed issue #69 (stashed at end of the prior session-log entry): rebased
+  `claude/issue-69-fedsoc-key-position` onto the now-updated `main`, reapplied the stash, resolved
+  a real conflict in `renderSummaryScotus` (both #68's and #69's own changes touched the same
+  lines) by keeping #68's unconditional fedsoc assignment and folding in #69's own comment about
+  the key's new placement — committed the resolution immediately per CLAUDE.md §7. `dist/`'s
+  conflicted minified file was resolved by rebuilding from scratch rather than hand-merging.
+- Debugged and fixed the 1 browser-test failure left over from the previous session: the
+  positioning function and its own test were both measuring `.ctt-summary-subtitle`/
+  `.ctt-pane-meta`'s full block width instead of the actual rendered text (fixed with a `Range`
+  over each element's contents). Also fixed a jsdom-only crash (`getComputedStyle is not defined`)
+  by adding the same "no real layout" early-return guard `majorityStageHeight` already uses.
+- Verified with the full `npm test` + `npm run test:browser` suite (ALL PASS) AND a real headless-
+  Chrome screenshot of Summary > Supreme Court, confirming the key visually sits centered with a
+  clear buffer from both the title/meta text and the panel's own edge.
+- Next: open the PR for #69 (not yet opened as of this entry), then move to issue #66 once #69 is
+  reviewed — per the operator's new pause-per-issue rhythm (see Resume briefing above).
+- Blockers: none.
 
 ### 2026-09-10 (dp) — PR #73 (issue #68) corrected after operator caught a real bug live; adopted a new pause-per-issue workflow
 - Phase: 4. Operator tested PR #73 directly and reported: "it doesn't seem like the fix applied

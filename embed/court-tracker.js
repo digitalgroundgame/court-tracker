@@ -1377,9 +1377,12 @@ function renderSummaryScotus(container) {
   // restores it from `S._affilMarkUserChoice`, the actual persistent ordinary-court preference,
   // which this line never reads from or writes to.
   S.affilMark = "fedsoc";
-  // Key/legend explaining the dashed-ring convention, right-aligned in the same header band as
-  // the title/meta text above (operator ask, 2026-09-11) — .ctt-summary-content has
-  // position:relative for exactly this anchor.
+  // Key/legend explaining the dashed-ring convention, in the same header band as the title/meta
+  // text above (operator ask, 2026-09-11) — .ctt-summary-content has position:relative for
+  // exactly this anchor. Horizontal placement is centerward-but-clear-of-the-text, computed by
+  // positionScotusAffilKey() below (issue #69: it used to sit flush right, which the operator
+  // found easy to miss) — CSS only sets its vertical position and the position:absolute needed
+  // for that JS-driven `left` to apply.
   const affilKey = el("div", "ctt-scotus-affil-key");
   affilKey.innerHTML = `<span class="ctt-scotus-affil-key-swatch"></span>` +
     `= <em>reported</em> <strong>FedSoc</strong> <em>affiliation</em>`;
@@ -2425,7 +2428,45 @@ function orderedSlots(radii, counts) {
   return slots;
 }
 
+/** Summary > SCOTUS's FedSoc key: centered within `.ctt-summary-content` when there's room, but
+ *  never closer than AFFIL_KEY_BUFFER_PX to the title/meta text's own right edge (issue #69 — it
+ *  used to sit flush right, easy to miss; "centerward, with a buffer from the text" is the
+ *  operator's own spec). Reads `getComputedStyle` rather than duplicating the 640px mobile
+ *  breakpoint here: below it, CSS's own media query already switches the key to `position:static`
+ *  (its own line, under the title) — this function is a no-op there so it can't fight that rule
+ *  or leave a stale inline `left` behind when the viewport later widens back past it. Called from
+ *  layoutJudges() so both an initial render and every later resize keep it correctly placed. */
+const AFFIL_KEY_BUFFER_PX = 20;
+// .ctt-summary-subtitle/.ctt-pane-meta are plain full-width block <div>s, so
+// element.getBoundingClientRect().right is the CONTAINER's right edge, not the actual rendered
+// text's — a Range over their contents measures the glyphs themselves instead (same class of trap
+// noted elsewhere in this file re: .ctt-judge-label needing width:fit-content; a Range sidesteps
+// it here without touching that shared class, which other callers rely on staying full-width).
+function textContentRight(el) {
+  if (!el) return 0;
+  const range = document.createRange();
+  range.selectNodeContents(el);
+  return range.getBoundingClientRect().right;
+}
+function positionScotusAffilKey() {
+  const container = S.ui.paneBody.querySelector(".ctt-summary-content");
+  const key = container && container.querySelector(".ctt-scotus-affil-key");
+  if (!key) return;
+  // No real layout (headless/jsdom, same signal majorityStageHeight already bails on) — every
+  // rect here would read 0, so there's nothing meaningful to compute; leave the CSS default in
+  // place rather than calling getComputedStyle in an environment where it may not even exist.
+  if (!container.getBoundingClientRect().width) return;
+  if (getComputedStyle(key).position !== "absolute") { key.style.left = ""; return; }
+  const label = container.querySelector(".ctt-summary-subtitle");
+  const meta = container.querySelector(".ctt-pane-meta");
+  const containerBox = container.getBoundingClientRect();
+  const textRight = Math.max(textContentRight(label), textContentRight(meta)) - containerBox.left;
+  const centerLeft = (containerBox.width - key.getBoundingClientRect().width) / 2;
+  key.style.left = `${Math.max(centerLeft, textRight + AFFIL_KEY_BUFFER_PX)}px`;
+}
+
 function layoutJudges() {
+  positionScotusAffilKey();
   const stage = S.ui.paneBody.querySelector(".ctt-judge-stage");
   if (!stage || !stage._model) return;
   const model = stage._model;
