@@ -907,7 +907,7 @@ try {
     `a resize to 380px doesn't force SCOTUS's short surnames to initials when they fit fine (got ${JSON.stringify(labels)})`);
   await send("Emulation.clearDeviceMetricsOverride");
 
-  console.log("issue #68: Summary > SCOTUS's temporary FedSoc default no longer leaks into the ordinary None|FedSoc|ACS switch's global preference");
+  console.log("issue #68: Summary > SCOTUS's own fixed FedSoc convention neither leaks into, nor is overridden by, the ordinary None|FedSoc|ACS switch's global preference");
   // Fresh SCOTUS visit (nothing touched yet) -> selecting an ORDINARY court right after must show
   // "None" active on its own switch, not "FedSoc" inherited from SCOTUS's one-time default.
   await ev(`document.querySelector('.ctt-selector-back')?.click()`); await sleep(400);
@@ -924,6 +924,19 @@ try {
   const activeAfterRoundTrip = await ev(`document.querySelector('.ctt-affil-opt.ctt-is-active')?.getAttribute('data-affil')`);
   assert(activeAfterRoundTrip === "acs",
     `a real "ACS" choice on the ordinary switch survives visiting Summary > SCOTUS and landing on a different court afterward (got "${activeAfterRoundTrip}")`);
+
+  // SCOTUS's OWN convention is fixed to FedSoc regardless of the ordinary switch's setting
+  // elsewhere (real bug, caught by the operator directly: an earlier version of this fix gated
+  // SCOTUS's default on "the ordinary switch was never touched," so explicitly choosing "None" on
+  // an ordinary court incorrectly carried into SCOTUS too instead of SCOTUS always showing its own
+  // FedSoc iconography). Alito/Gorsuch/Kavanaugh/Barrett all have fedsoc_reported=true in the data,
+  // so at least one marked icon is expected on the SCOTUS ring whenever FedSoc marking is applied.
+  await ev(`document.querySelector('.ctt-affil-opt[data-affil="none"]')?.click()`); await sleep(200);
+  await ev(`document.querySelector('.ctt-selector-item[data-court-id="summary"]')?.click()`); await sleep(500);
+  const scotusMarkedCount = await ev(`document.querySelectorAll('.ctt-scotus-stage .ctt-judge.ctt-affil-marked').length`);
+  assert(scotusMarkedCount > 0,
+    `Summary > SCOTUS still shows FedSoc-marked icons even though the ordinary switch is explicitly set to "None" elsewhere (got ${scotusMarkedCount} marked icons)`);
+  await ev(`document.querySelector('.ctt-selector-item[data-court-id="ca1"]')?.click()`); await sleep(500);
   await ev(`document.querySelector('.ctt-affil-opt[data-affil="none"]')?.click()`); await sleep(200);   // leave state clean for anything appended after this
 } catch (e) { console.log("*** ", e.message); failures++; }
 finally { try { ws && ws.close(); } catch {} chrome.kill(); }

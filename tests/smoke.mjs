@@ -1005,10 +1005,10 @@ assert(root.querySelector(".ctt-pane").classList.contains("ctt-is-open"),
 click(natBlock("ca2")); await sleep(20);   // deselect -> clean state
 
 console.log("Summary pane (operator ask, 2026-09-03 — replaces the old lone SCOTUS entry)");
-// Reset the affiliation-mark state to a genuinely untouched one (an earlier test already made a
-// real choice via ca8's None|FedSoc|ACS switch) so the assertions below test the SCOTUS FedSoc
-// default's actual firing condition, not whatever that earlier interaction left behind.
-mod._dev.S.affilMark = "none"; mod._dev.S._affilMarkTouched = false;
+// Reset the affiliation-mark state (an earlier test already made a real choice via ca8's
+// None|FedSoc|ACS switch) so the assertions below test SCOTUS's own convention cleanly, not
+// whatever that earlier interaction left behind.
+mod._dev.S.affilMark = "none"; mod._dev.S._affilMarkUserChoice = "none";
 click(root.querySelector('.ctt-selector-item[data-court-id="summary"]')); await sleep(60);
 // No separate "Summary" title/subtitle inside the pane (operator ask, 2026-09-04: the
 // enlarged tab labels ARE the heading now) — the Summary selector-BAR entry is unaffected.
@@ -1036,21 +1036,26 @@ assert(!root.querySelector(".ctt-majority-note") && !root.querySelector(".ctt-al
   "Summary > SCOTUS has no majority/senior note (same rule as the old direct SCOTUS pane)");
 assert(root.querySelector(".ctt-majority-count"), "Summary > SCOTUS shows the x/y majority count");
 
-console.log("Summary > SCOTUS: FedSoc defaults ON (operator ask, 2026-09-11), with a legend key");
-assert(mod._dev.S.affilMark === "fedsoc", `visiting Summary > SCOTUS with no prior choice defaults the mark to fedsoc (got ${mod._dev.S.affilMark})`);
+console.log("Summary > SCOTUS: FedSoc is SCOTUS's own fixed convention (operator ask, 2026-09-11), with a legend key");
+assert(mod._dev.S.affilMark === "fedsoc", `visiting Summary > SCOTUS applies the fedsoc mark (got ${mod._dev.S.affilMark})`);
 const scotusFSMarked = [...scIcons].filter((n) => n.classList.contains("ctt-affil-marked"));
 const scotusJudgesData = [...scIcons].map((n) => n._judge).filter(Boolean);
 assert(scotusFSMarked.length === scotusJudgesData.filter((j) => j.fedsoc_reported).length && scotusFSMarked.length > 0,
-  `the default is actually applied — dashed rings mark exactly the reported justices (${scotusFSMarked.length})`);
+  `SCOTUS's convention is actually applied — dashed rings mark exactly the reported justices (${scotusFSMarked.length})`);
 const affilKey = root.querySelector(".ctt-scotus-affil-key");
 assert(affilKey && affilKey.querySelector(".ctt-scotus-affil-key-swatch"), "the FedSoc legend key exists with its dashed-ring swatch");
 assert(/reported/.test(affilKey.textContent) && /FedSoc/.test(affilKey.textContent) && /affiliation/.test(affilKey.textContent),
   `legend text explains the convention (got "${affilKey.textContent}")`);
-// A real prior choice must survive a later SCOTUS visit — the default is one-time, not sticky-reapplied.
-mod._dev.S.affilMark = "acs"; mod._dev.S._affilMarkTouched = true;
+// issue #68: SCOTUS's own FedSoc convention is UNCONDITIONAL (applies over a real prior non-fedsoc
+// choice too), but that prior choice must itself survive underneath it, unaffected, for whenever
+// an ordinary court is visited next (an earlier, buggy version of this fix gated SCOTUS's default
+// on "no real choice made yet," which let a real "acs" choice leak into and suppress SCOTUS's own
+// display — caught by the operator directly testing it).
+mod._dev.S.affilMark = "acs"; mod._dev.S._affilMarkUserChoice = "acs";
 click(root.querySelector('.ctt-selector-item[data-court-id="summary"]')); await sleep(20);   // deselect
 click(root.querySelector('.ctt-selector-item[data-court-id="summary"]')); await sleep(60);   // reselect -> re-renders SCOTUS
-assert(mod._dev.S.affilMark === "acs", "a real prior choice (even non-fedsoc) is never overridden by revisiting Summary > SCOTUS");
+assert(mod._dev.S.affilMark === "fedsoc", "SCOTUS always shows its own fixed FedSoc convention, even over a real prior non-fedsoc choice");
+assert(mod._dev.S._affilMarkUserChoice === "acs", "the real prior choice itself is preserved underneath SCOTUS's override, for the next ordinary court visited");
 
 console.log("Summary > SCOTUS: doubled icons + split double-ring geometry (operator ask)");
 const scaleTx = [...scIcons].find((n) => /scale\(2\)/.test(n.style.transform));

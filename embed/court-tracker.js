@@ -91,14 +91,12 @@ const S = {
                                // — set when search auto-reveals a hidden senior (see pinSearchedJudge);
                                // a real manual click on the Hide|Show|Include switch cancels this.
   affilMark: "none",          // 'none' | 'fedsoc' | 'acs' — CURRENTLY APPLIED mark (what's actually
-                               // rendered right now; SCOTUS's temporary default lives only here).
+                               // rendered right now; SCOTUS's own fixed FedSoc convention lives
+                               // only here, applied fresh on every SCOTUS render — see issue #68).
   _affilMarkUserChoice: "none",   // the last REAL choice made on an ordinary court's None|FedSoc|
                                // ACS switch — restored into `affilMark` whenever a non-SCOTUS pane
-                               // renders, so SCOTUS's temporary override can never leak into or
-                               // permanently overwrite it (issue #68).
-  _affilMarkTouched: false,   // has a real choice been made yet on the ordinary switch? Gates the
-                               // one-time SCOTUS FedSoc default from ever applying once a real
-                               // choice exists — set ONLY by the ordinary switch, never by SCOTUS.
+                               // renders, so SCOTUS's own always-FedSoc convention can never leak
+                               // into or permanently overwrite it (issue #68).
   detailPinned: false,
   appointmentsAll: null,      // data/appointments.json, lazy-loaded once for the Change view
   presidentPhotos: null,      // data/president_photos.json, lazy-loaded once
@@ -1158,8 +1156,7 @@ function renderPane(court) {
     b.addEventListener("click", () => {
       S.affilMark = mode;
       S._affilMarkUserChoice = mode;   // the real, persistent preference (issue #68) — SCOTUS's
-                                        // temporary override restores FROM this, never writes TO it
-      S._affilMarkTouched = true;   // a real choice — the SCOTUS FedSoc default never overrides this
+                                        // own fixed convention restores FROM this, never writes TO it
       affWrap.querySelectorAll(".ctt-affil-opt").forEach((o) =>
         o.classList.toggle("ctt-is-active", o.getAttribute("data-affil") === mode));
       applyAffilMarks();
@@ -1369,16 +1366,17 @@ function renderSummaryScotus(container) {
   meta.textContent = `${authorized} authorized · ${active.length} active · ${vacancies} vacant`;
   container.append(label, meta);
 
-  // FedSoc-reported affiliation defaults ON here (operator ask, 2026-09-11: "SCOTUS has few
-  // enough judges, it's worth having some custom iconography") — applied fresh on EVERY SCOTUS
-  // render, gated only on no real ordinary-switch choice existing yet (`_affilMarkTouched`), and
-  // deliberately NOT marked touched itself (fixed issue #68 — it used to set `_affilMarkTouched`
-  // here too, which meant this one-time default silently became a permanent, global override of
-  // the ordinary None|FedSoc|ACS switch the very first time anyone visited SCOTUS before ever
-  // touching that switch). `S.affilMark` here is a temporary, display-only override — leaving
-  // SCOTUS via `renderPane` restores it from `S._affilMarkUserChoice`, the actual persistent
-  // preference, which this line never writes to.
-  if (!S._affilMarkTouched) S.affilMark = "fedsoc";
+  // FedSoc-reported affiliation is SCOTUS's own fixed display convention (operator ask,
+  // 2026-09-11: "SCOTUS has few enough judges, it's worth having some custom iconography") —
+  // applied UNCONDITIONALLY on every SCOTUS render, regardless of whatever the ordinary
+  // None|FedSoc|ACS switch is currently set to elsewhere (confirmed by the operator directly,
+  // 2026-09-10, after an earlier version of this fix gated it on "only if the ordinary switch has
+  // never been touched," which was wrong: setting the ordinary switch to e.g. "None" then
+  // visiting SCOTUS incorrectly showed SCOTUS as "None" too, instead of SCOTUS's own convention).
+  // `S.affilMark` here is a temporary, display-only override — leaving SCOTUS via `renderPane`
+  // restores it from `S._affilMarkUserChoice`, the actual persistent ordinary-court preference,
+  // which this line never reads from or writes to.
+  S.affilMark = "fedsoc";
   // Key/legend explaining the dashed-ring convention, right-aligned in the same header band as
   // the title/meta text above (operator ask, 2026-09-11) — .ctt-summary-content has
   // position:relative for exactly this anchor.
@@ -4433,7 +4431,7 @@ export async function mount(root, opts = {}) {
   S.morphPlans.clear(); S.morphRAF = null; S.morphCancel = null; S.seatBlocks = null;
   S.view = "national"; S.activeCircuit = null; S.selectedCourt = null;
   S.majorityMode = false; S.paneMode = "timeline"; S.seniorMode = "hide"; S._seniorModeForced = null;
-  S.detailPinned = false; S.affilMark = "none"; S._affilMarkUserChoice = "none"; S._affilMarkTouched = false;
+  S.detailPinned = false; S.affilMark = "none"; S._affilMarkUserChoice = "none";
   S.appointmentsAll = null; S.presidentPhotos = null;
   S.summaryView = "scotus"; S.districtArrangement = null; S.districtArrangementAlt = null;
   S.districtOnMap = false; S.districtMapState = null; S.districtDetailPinnedId = null;
