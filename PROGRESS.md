@@ -10,7 +10,7 @@
 tracker (Phase-4 tail items open, PLUS a brand-new third pane view — "Change", built session
 (aw), operator review round addressed session (ax)) and the appointments beeswarm
 (feature-complete first version, operator refinement rounds ongoing; see sessions ai→at, aw).
-**Last updated:** 2026-09-09 (dk)
+**Last updated:** 2026-09-10 (dl)
 
 ## Resume briefing
 <!-- Replaced wholesale at the end of each session — this is not an appended log, it's a
@@ -27,28 +27,62 @@ below for the full incident and the corrected dates (ground truth: `git log --fo
 commit `a0d189c`, 2026-09-09).
 
 **Issue #60 (senior band compresses against the outer active ring — icon overlap) has a PR open,
-branch `claude/issue-60-band-gap-floor`, awaiting operator review** — a real bug in the merged #56
-algorithm, found by the operator testing the live GitHub Pages site on mobile right after #56
-landed. **Next task**: check `gh pr view` (find the PR number via `gh pr list` if not already
-known) for review status before assuming it's still open or starting new work on this area.
+branch `claude/issue-60-band-gap-floor` (PR #61), awaiting operator review** — a real bug in the
+merged #56 algorithm, found by the operator testing the live GitHub Pages site on mobile right
+after #56 landed.
 
-**Issue #60, if you're picking this back up**: `layoutArc`'s `resolveAt(s)` used to clamp `bandR`
-down to `effectiveMax` whenever `outermostActiveR` was itself within budget — but on a pane where
-`outermostActiveR` sat only slightly under `effectiveMax`, `+ROW_GAP` alone could already exceed
-it, and that clamp compressed the gap to a few px (visible icon overlap, confirmed at 412px/428px
-— common real device widths — across nearly every circuit with a senior band) instead of falling
-back to scroll. Fixed: `bandR` is never clamped down at all now; instead "the band's target exceeds
-`effectiveMax`" is one more `remaining` condition inside the existing Step-3 search (same pattern
-`PANE_EDGE_TOLERANCE_PX` uses, but — unlike that one — NOT magnitude-bounded, since icon-on-icon
-overlap is a correctness problem at any width, not an acceptable "needs to scroll" outcome). If the
-shrink floor still can't bring it in budget, `bandR` stays at its full, uncompressed offset, relying
-on the same scroll fallback the "Hide already scrolls" case already used. New regression tests in
-`tests/browser-checks.mjs` cover this with a REAL circular hitbox check (actual `.ctt-avatar`
-center-to-center distance vs. sum of real radii — not a bounding-box approximation), per an
-operator question about whether the algorithm's collision math correctly treats icons as circles
-(it does, for the existing label-vs-icon check; there's still no icon-vs-icon check by original
-design, so this fix's overlap guarantee rests on `ROW_GAP` (50px) vs. icon diameter (44px) leaving
-a real but modest 6px geometric margin — confirmed empirically to hold, not just assumed).
+**Issue #62 (senior band can clip above the pane's OWN TOP edge, 602-637px width, Seniors:Show) ALSO
+has a PR open (PR #63 — check `gh pr list` for the actual number if this looks stale), branch
+`claude/issue-62-rmax-priority-tiers`, STACKED ON TOP of #61's branch (not on `main` — #61 isn't
+merged yet), awaiting operator review.** Found immediately after implementing #61: fixing the
+horizontal-overflow case exposed that `bandR`'s "let it exceed the budget, rely on scroll" logic
+didn't distinguish WHICH axis was exceeded — scroll only rescues width overflow, never height, and
+the pane's height is fixed (never reflows the host page), so a case where `Rmax` (not `Wmax`) was
+the binding constraint just clipped silently above the stage, with nothing to catch it.
+
+**Next task for BOTH #61 and #62**: check `gh pr list`/`gh pr view` for review status before
+assuming either is still open or starting new work on this area — and note the merge order
+matters: #61 must merge before #62 can, since #62's branch is stacked on top of it.
+
+**Issue #60's original fix, superseded in structure (not in outcome) by #62 — read #62's own
+section below for the CURRENT mechanism.** #60's own diagnosis stands: `bandR` used to clamp down
+to `effectiveMax` whenever `outermostActiveR` was itself within budget, and that clamp compressed
+the band-to-bench gap to a few px (visible icon overlap, confirmed at 412px/428px — common real
+device widths — across nearly every circuit with a senior band) instead of falling back to scroll.
+#60's fix stopped clamping `bandR` down and folded "the band's target exceeds `effectiveMax`" into
+a flat `remaining` count the Step-3 search minimized — that flat-count approach is what #62 later
+found and replaced (see below); the underlying gap-floor invariant #60 established is unchanged.
+Regression tests for #60 remain in `tests/browser-checks.mjs`, including a REAL circular hitbox
+check (actual `.ctt-avatar` center-to-center distance vs. sum of real radii — not a bounding-box
+approximation), per an operator question about whether the algorithm's collision math correctly
+treats icons as circles (it does, for the existing label-vs-icon check; there's still no icon-vs-
+icon check by original design, so this fix's overlap guarantee rests on `ROW_GAP` (50px) vs. icon
+diameter (44px) leaving a real but modest 6px geometric margin — confirmed empirically to hold).
+
+**Issue #62, if you're picking this back up**: `resolveAt(s)`'s old `remaining` was a FLAT SUM of
+every failure type (real label/icon collisions, small pane-edge overflow, `bandR` exceeding
+`effectiveMax`) — with no sense of which type is more severe, and the Step-3 search's tie-break
+(strictly-less-than only; a tie never replaces an earlier, larger-scale candidate) could settle on
+a scale whose `bandR` badly overshot `Rmax` (the pane's HEIGHT budget — no scroll fallback exists
+for this axis, unlike `Wmax`) merely because a later, better scale only TIED the flat count instead
+of strictly improving it. Confirmed by temporarily instrumenting `resolveAt` to trace every
+candidate scale live: at ca9/Show/637px, the search settled on a scale with `bandR` 32.5px past
+`Rmax` when a scale within the SAME search range would have had only a 0.5px miss, never adopted
+because of the tie. **Fixed**: `resolveAt` now returns a 3-tier priority tuple instead of one flat
+number — `rmaxViolation` (measured directly against `Rmax`, NEVER `effectiveMax`, which conflates
+it with `Wmax`) first, `collisionCount` (real label/icon collisions) second, `paneViolation`
+(`overflowsPane`) third — compared lexicographically via the `betterCandidate` comparator, with
+"prefer the larger scale" still the final tiebreak on a full tie. `bandExceedsBudget` is gone
+entirely, replaced by `rmaxViolation`. **Two things to remember if you touch this again**:
+(1) `bandR` is always computed even when no band is rendered (Hide/Include mode) — `rmaxViolation`
+gates its `bandR` term behind `hasSeniorsBand`, or you reintroduce a real, already-found-once
+regression (cacd/Hide at desktop shrank to 0.80 with room to spare, from a purely phantom
+violation); (2) this was verified with a full before/after sweep of all 109 non-SCOTUS courts × 4
+widths × 3 modes against the pre-fix build — if you change this area again, that script
+(`before_after_sweep.mjs`, not committed — recreate it from this description if needed: navigate
+every court via `data/courts.csv`, drill into districts via `.ctt-drill`, sleep ≥700ms after both a
+width resize AND a senior-mode toggle before reading `model._arcRender`, since `.ctt-judge`'s 480ms
+CSS transition produces spurious diffs otherwise) is the fastest way to re-confirm no regression.
 
 **Reference: `layoutArc`/`layoutScotusRing`/the "issue #50" algorithm, as merged (PR #56, commit
 `a0d189c`, 2026-09-09).** This area was rewritten repeatedly in a short span
@@ -612,6 +646,73 @@ Prove the whole app shell and asset schema on one circuit with hand-authored sam
 - Next: ...
 - Blockers: ...
 -->
+
+### 2026-09-10 (dl) — Issue #62 filed and fixed: senior band could clip above the pane's own top edge, 602-637px wide, Seniors:Show
+- Phase: 4. Operator, testing #61's fix locally, found a new bug: on ca9 (and a couple of large
+  district courts), at window widths ~602-637px specifically, the top of the arrangement clipped
+  above the pane's own visible top edge in `Seniors: Show`. Narrowed to exactly this width range
+  because it's where `embed/court-tracker.css`'s one layout breakpoint (`max-width:640px`) switches
+  the widget from its desktop side-by-side layout to a stacked mobile one — genuinely less vertical
+  room there, tightening `Rmax` while `Wmax` stays comparatively loose.
+- **Diagnosis was iterative and self-correcting, worth recording so it isn't repeated**: an early
+  theory ("the senior band structurally needs multiple rings, like the active bench gets via
+  `planRings`, and never gets them") was investigated and found to be a real, general inefficiency
+  (`bandIntra` stays unresolved at literally every width tested, even 1600px) but NOT the proximal
+  cause — it doesn't discriminate clip-vs-no-clip widths, since it's present everywhere. The
+  operator explicitly pushed back on reaching for the deepest-sounding cause and asked for the MOST
+  PROXIMAL one instead; that reframing found the real mechanism: `resolveAt`'s old flat `remaining`
+  count couldn't distinguish "still violates the unrecoverable `Rmax` budget" from "still violates
+  the scroll-recoverable `Wmax`/pane-edge budget," and its tie-break (strict-less-than only) could
+  leave the search stuck on a scale with a large `Rmax` overshoot when a same-tallying, much-better
+  scale was reachable later in the same search range. Confirmed by temporarily instrumenting
+  `resolveAt` to trace every candidate scale live (not just the final result) — this is what
+  actually revealed the tie-break mechanism; reasoning about it from the final result alone wasn't
+  enough. A follow-up operator question ("did the tiers correctly handle the case where even the
+  floor scale still doesn't fit, and hands off to scroll?") led to a full sweep of the floor scale
+  against every court/width combination, which found — contrary to an earlier back-of-envelope
+  claim in this same investigation — that the floor scale ALWAYS satisfies `Rmax` once measured
+  against `Rmax` directly instead of the conflated `effectiveMax`; the "genuinely stuck, fall back
+  to scroll" path is correctly supported but was never actually reachable by real data.
+- **Fix**: `resolveAt` returns a 3-tier priority tuple (`rmaxViolation` > `collisionCount` >
+  `paneViolation`, each ranked by how recoverable the failure type actually is — vertical overflow
+  has no fallback at all and ranks highest; horizontal overflow is fully scroll-recoverable and
+  ranks lowest) compared lexicographically via a new `betterCandidate` comparator, replacing the old
+  flat `remaining` sum and the `effectiveMax`-conflated `bandExceedsBudget` flag entirely.
+- **A real regression found and fixed during implementation, caught by the operator testing
+  locally, not by any automated check**: `bandR` is always computed (`outermostActiveR + ROW_GAP`)
+  even when no band is rendered at all (Hide/Include mode) — the first version of `rmaxViolation`
+  included that phantom value unconditionally, forcing real, unnecessary icon shrinking in Hide
+  mode (cacd/Hide/desktop dropped to scale 0.80 with room to spare). Fixed by gating the `bandR`
+  term behind `hasSeniorsBand`, restoring the same guard the pre-fix `bandExceedsBudget` already had
+  and that got dropped in the rewrite.
+- **Verification, in increasing scope**: (1) a fine 2px-resolution sweep of ca9 across the whole
+  602-637px window — `bandR` at the floor scale stays a constant 256, always under `Rmax`=262;
+  (2) a multi-court sweep, redone once after finding a real navigation bug in the first pass
+  (district courts need real drill-in via `.ctt-drill`; a bare selector click for one silently
+  no-ops and re-measures whichever court was previously selected — the first pass's "nysd"/"cacd"
+  rows were actually just "cafc" three times) — zero `Rmax` violations across 13 courts × 13 widths
+  once navigation was corrected; (3) a full before/after sweep of all 109 non-SCOTUS courts × 4
+  widths × 3 Seniors modes (1,308 combinations) against the pre-fix build, run twice — the first
+  pass used a settle time shorter than `.ctt-judge`'s own 480ms CSS transition and produced 82
+  spurious `scrollWidth`-only diffs; re-run with a properly long settle eliminated all 82, leaving
+  exactly 12 genuine geometry differences, every one either a direct fix of the clipping bug or a
+  welcome "less unnecessary shrinking" side effect of the same tie-break fix — zero unexpected
+  differences anywhere in the real dataset.
+- Filed as issue #62 (`gh issue create`) with the full diagnosis, fix, regression, and verification
+  evidence recorded, matching the operator's established preference for capturing this level of
+  detail before implementing (same as issue #60).
+- **Branch note**: PR #61 (issue #60) is still open/unmerged as of this writing. This fix builds
+  directly on top of it (same function, same area), so its branch
+  (`claude/issue-62-rmax-priority-tiers`) is stacked ON `claude/issue-60-band-gap-floor`, not on
+  `main` — #61 needs to merge before #62 can. Both are still awaiting operator review; neither was
+  self-merged, consistent with how #56/#60 were handled (algorithm-sensitive work, hold for
+  explicit go-ahead).
+- All four suites (`npm test`, `test:dist`, `test:browser`, `test:browser:dist`) pass. New
+  regression tests added to `tests/browser-checks.mjs`: no icon renders above the stage's own top
+  edge at ca9/cacd/620px/Show, and cacd/Hide/desktop doesn't shrink unnecessarily (guards the
+  phantom-`bandR` regression specifically). `dist/` rebuilt and committed alongside `embed/`.
+- Next: PR open (branch `claude/issue-62-rmax-priority-tiers`, stacked on #61), awaiting operator
+  review — do not self-merge either #61 or #62.
 
 ### 2026-09-09 (dk) — Issue #60 filed and fixed: senior band compressed against the outer active ring below a ROW_GAP floor
 - Phase: 4. Right after PR #56 merged, operator reported a new bug testing the live GitHub Pages

@@ -2857,15 +2857,7 @@ function layoutArc(model, w, H, stage) {
     // the gap down to whatever thin sliver remained (sometimes just a few px) instead of falling
     // back to scroll — confirmed as a real bug (issue #60): the band rendered visibly overlapping
     // the outer active ring's icons, invisible to `findRingCollisions` (label-vs-icon only, never
-    // icon-vs-icon) so no scrollbar ever appeared either. Fixed by never clamping bandR down at
-    // all; instead, "the band's target exceeds effectiveMax" becomes its own `remaining` condition
-    // below, letting the Step-3 search (which already re-runs 0-2 at each candidate scale) try to
-    // shrink it back into budget, and — unlike `PANE_EDGE_TOLERANCE_PX` below, deliberately bounded
-    // to small overflow — this condition is NOT magnitude-bounded: icon-on-icon overlap is a
-    // correctness problem at any width, not an acceptable "needs to scroll" outcome the way plain
-    // pane-edge overflow is. If even the shrink floor can't bring it back in budget, bandR simply
-    // stays at its full, uncompressed offset, relying on the same horizontal-scroll fallback the
-    // "Hide already scrolls" case already uses.
+    // icon-vs-icon) so no scrollbar ever appeared either.
     let bandR = outermostActiveR + ROW_GAP;
     let bandCollide = { intra: false, inter: false };
     if (hasSeniorsBand) {
@@ -2890,7 +2882,6 @@ function layoutArc(model, w, H, stage) {
         inter: findRingCollisions(combined, b2, cx, cy, s, COLLISION_BUFFER_PX).inter,
       };
     }
-    const bandExceedsBudget = hasSeniorsBand && bandR > effectiveMax;
     // Real horizontal-extent check, using each label's OWN measured width (`seatHalfWidth`) — not
     // `effectiveMax`'s fixed margin, which only bounds RING-RADIUS growth and has no direct tie to
     // what a specific label actually measures. A particular judge's surname can legitimately need
@@ -2916,15 +2907,54 @@ function layoutArc(model, w, H, stage) {
     const overflowPx = span - w;
     const overflowsPane = overflowPx > 1 && overflowPx <= PANE_EDGE_TOLERANCE_PX;
 
-    const remaining = (activeCollide.intra ? 1 : 0) + (activeCollide.inter ? 1 : 0) +
-      (bandCollide.intra ? 1 : 0) + (bandCollide.inter ? 1 : 0) + (overflowsPane ? 1 : 0) +
-      (bandExceedsBudget ? 1 : 0);
-    return { radii: activeRadii, bandR, remaining, points };
+    // issue #63: a candidate scale's quality is a PRIORITY TUPLE, not a flat sum — different
+    // failure types are not interchangeable. Comparing tuples lexicographically (tier 1 first;
+    // only break ties with tier 2; only break THOSE ties with tier 3) means a scale is never kept
+    // as "best" over another that has a smaller violation of a HIGHER-priority type, even if their
+    // flat counts would have tied.
+    //   Tier 1 — VERTICAL (Rmax) overflow, measured directly against Rmax (never effectiveMax,
+    //     which conflates it with Wmax): the pane's own height is fixed (no vertical scroll exists,
+    //     per the widget's "fixed outer height, never reflows the host page" contract), so content
+    //     pushed past it is genuinely inaccessible — the worst outcome, and the only one with no
+    //     fallback at all. A prior version compared bandR against effectiveMax instead of Rmax
+    //     directly, and — combined with the flat-sum tie-break below picking whichever candidate
+    //     scale was found FIRST among ties — could settle on a scale with a large, easily-avoided
+    //     Rmax overshoot merely because a LATER, actually-better scale only tied instead of
+    //     strictly improving on the old flat count (confirmed live: ca9/Show at 602-637px wide
+    //     settled on a 26-32px Rmax overshoot when a same-or-better scale a few steps further down
+    //     the search would have had none at all).
+    //   Tier 2 — real label/icon collisions: visible and ugly, but content stays reachable — no
+    //     fallback either, but strictly less bad than content being hidden outright.
+    //   Tier 3 — HORIZONTAL (Wmax) overflow (`overflowsPane`): fully recoverable by scrolling, so
+    //     lowest priority — already bounded to small overflow only (`PANE_EDGE_TOLERANCE_PX`), per
+    //     the operator's explicit want that mobile's viewable width stay "arbitrary" rather than
+    //     forcing extra shrinking to avoid scroll there.
+    // Tier 4 (final tiebreak, unchanged) — among ties on all of the above, prefer the LARGER
+    //     scale: "don't shrink more than necessary," issue #50's own tie-break text.
+    // `bandR` is always computed (it's `outermostActiveR + ROW_GAP`, harmless as a dead value)
+    // even when no band is actually rendered (Hide/Include mode) — it must NOT count toward
+    // rmaxViolation in that case, or a purely phantom "the unrendered band would have exceeded
+    // Rmax" pushes Step 3 into unnecessary shrinking that has nothing to do with what's on screen
+    // (confirmed as a real regression: cacd/Hide at desktop width shrank to 0.80 with room to
+    // spare, purely from this phantom term — the active bench alone never needed it).
+    const rmaxViolation = Math.max(0, outermostActiveR - Rmax, hasSeniorsBand ? bandR - Rmax : 0);
+    const collisionCount = (activeCollide.intra ? 1 : 0) + (activeCollide.inter ? 1 : 0) +
+      (bandCollide.intra ? 1 : 0) + (bandCollide.inter ? 1 : 0);
+    const paneViolation = overflowsPane ? 1 : 0;
+    const isPerfect = rmaxViolation === 0 && collisionCount === 0 && paneViolation === 0;
+    return { radii: activeRadii, bandR, points, rmaxViolation, collisionCount, paneViolation, isPerfect };
   };
+
+  // Strictly-better-than comparator for the Step-3 search below: compares the tier-1/2/3 values in
+  // priority order, only falling through to the next tier on an exact tie at the one before it.
+  const betterCandidate = (a, b) =>
+    a.rmaxViolation !== b.rmaxViolation ? a.rmaxViolation < b.rmaxViolation :
+    a.collisionCount !== b.collisionCount ? a.collisionCount < b.collisionCount :
+    a.paneViolation < b.paneViolation;
 
   let scale = 1;
   let result = resolveAt(1);
-  if (result.remaining > 0) {
+  if (!result.isPerfect) {
     // Step 3, whole-bench: same floor/tie-break convention as shrinkForCollisions, re-running
     // BOTH the active AND band scoped steps 0-2 at each candidate size, picking ONE scale used
     // for everyone (see the comment above resolveAt for why this isn't scoped like Steps 1/2).
@@ -2933,8 +2963,8 @@ function layoutArc(model, w, H, stage) {
     let best = null;
     for (let s = 1; s >= floorScale - 1e-6; s -= 0.05) {
       const r = resolveAt(s);
-      if (!best || r.remaining < best.remaining) best = { scale: s, ...r };
-      if (r.remaining === 0) break;
+      if (!best || betterCandidate(r, best)) best = { scale: s, ...r };
+      if (r.isPerfect) break;
     }
     if (best) { scale = best.scale; result = best; }
   }

@@ -750,6 +750,61 @@ try {
     await send("Emulation.clearDeviceMetricsOverride");
   }
 
+  console.log("issue #62: the senior band must never clip above the stage's own top edge — a width-window where the old flat collision tally let the Step-3 search settle for a scale that still violated Rmax");
+  {
+    // 602-637px is exactly where embed/court-tracker.css's one layout breakpoint (max-width:640px)
+    // switches the widget from its desktop side-by-side layout to the stacked mobile one — the
+    // pane genuinely has less vertical room there, tightening Rmax while Wmax stays comparatively
+    // loose. The old flat remaining-count tie-break could settle on a scale whose bandR badly
+    // overshot Rmax, purely because a later, better-on-Rmax scale only TIED the old count instead
+    // of strictly improving it (confirmed live via a temporarily-instrumented resolveAt trace).
+    const checkNoClip = async (label) => {
+      const r = JSON.parse(await ev(`(() => {
+        const stage = document.querySelector('.ctt-judge-stage');
+        const model = stage._model, ar = model._arcRender;
+        const stageR = stage.getBoundingClientRect();
+        const icons = [...stage.querySelectorAll('.ctt-judge')].filter(n => !n.classList.contains('ctt-vacant') && !n.classList.contains('ctt-justice') && getComputedStyle(n).opacity !== '0');
+        let minTop = Infinity;
+        for (const n of icons) minTop = Math.min(minTop, n.getBoundingClientRect().top);
+        return JSON.stringify({ bandR: ar.bandR, outerActiveR: ar.radii[ar.radii.length - 1], stageTop: stageR.top, minTop });
+      })()`));
+      assert(r.minTop >= r.stageTop - 2,
+        `${label}: no icon renders above the stage's own top edge (icon top ${r.minTop.toFixed(1)} vs stage top ${r.stageTop.toFixed(1)})`);
+    };
+
+    await send("Emulation.setDeviceMetricsOverride", { width: 620, height: 900, deviceScaleFactor: 1, mobile: true });
+    await sleep(400);
+    await ev(`document.querySelector('.ctt-selector-back')?.click()`); await sleep(300);
+    await ev(`document.querySelector('.ctt-selector-item[data-court-id="ca9"]')?.click()`); await sleep(500);
+    await ev(`[...document.querySelectorAll(".ctt-toggle")].find(b => b.textContent === "Majority")?.click()`); await sleep(300);
+    await ev(`document.querySelector('.ctt-toggle[data-senior="show"]')?.click()`); await sleep(500);
+    await checkNoClip("ca9/620px/Show");
+
+    // cacd (Central District of California) is under ca9 and was ALSO confirmed clipping at this
+    // width before the fix — reached via real drill-in navigation (a district court isn't a
+    // top-level selector item; a bare click on its own data-court-id silently no-ops otherwise).
+    await ev(`document.querySelector('.ctt-drill')?.click()`); await sleep(1800);
+    await ev(`document.querySelector('.ctt-selector-item[data-court-id="cacd"]')?.click()`); await sleep(600);
+    await ev(`[...document.querySelectorAll(".ctt-toggle")].find(b => b.textContent === "Majority")?.click()`); await sleep(300);
+    await ev(`document.querySelector('.ctt-toggle[data-senior="show"]')?.click()`); await sleep(500);
+    await checkNoClip("cacd/620px/Show");
+    await send("Emulation.clearDeviceMetricsOverride");
+
+    // Regression guard, found live during this fix: bandR is always computed
+    // (outermostActiveR + ROW_GAP) even when no band is actually RENDERED (Hide/Include) — that
+    // phantom value must never count toward the Rmax-violation tier, or a purely hypothetical
+    // "the unrendered band would have exceeded Rmax" forces real, unnecessary shrinking. cacd/Hide
+    // at desktop width previously (incorrectly) shrank to 0.80 with room clearly still available.
+    await sleep(300);
+    await ev(`document.querySelector('.ctt-toggle[data-senior="hide"]')?.click()`); await sleep(500);
+    const hideScale = await ev(`(() => {
+      const n = [...document.querySelectorAll('.ctt-judge')].find(n => !n.classList.contains('ctt-vacant') && !n.classList.contains('ctt-justice') && getComputedStyle(n).opacity !== '0');
+      const m = /scale\\(([\\d.]+)\\)/.exec(n?.style.transform || '');
+      return m ? +m[1] : 1;
+    })()`);
+    assert(hideScale === 1, `cacd/Hide at desktop width doesn't shrink unnecessarily — no band is even rendered in this mode (got scale ${hideScale})`);
+  }
+
   console.log("Majority view scrolls horizontally to reach seats that would otherwise bleed off either edge — covers both Include's own crowding and the senior band's");
   {
     await send("Emulation.setDeviceMetricsOverride", { width: 380, height: 900, deviceScaleFactor: 1, mobile: true });
