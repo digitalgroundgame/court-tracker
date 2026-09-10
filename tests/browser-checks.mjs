@@ -670,6 +670,86 @@ try {
       `senior and active icons share ONE scale, never two different ones (senior ${JSON.stringify(br.seniorScales)}, active ${JSON.stringify(br.activeScales)})`);
   }
 
+  console.log("issue #60: the senior band must never compress against the outer active ring below a ROW_GAP floor, even when Hide fits with no scroll but Show would need slightly more room");
+  {
+    // Mirrors embed/court-tracker.js's own `ROW_GAP` constant — this test script runs as a
+    // separate Node process driving the page over CDP, with no access to the module's internal
+    // values, so this must be kept in sync by hand if ROW_GAP's source value ever changes.
+    const ROW_GAP = 50;
+    // Real device widths (412/428) where the compression bug reproduced across nearly every
+    // circuit with a senior band, before the fix: Hide fit with zero scrollbar, but Show's
+    // `bandR` target (outermostActiveR + ROW_GAP) exceeded the pane's width budget just enough
+    // that the old unconditional `Math.min(bandR, effectiveMax)` clamp compressed the gap to a
+    // few px instead of falling back to scroll.
+    const checkFloor = async (court, w) => {
+      await send("Emulation.setDeviceMetricsOverride", { width: w, height: 900, deviceScaleFactor: 1, mobile: true });
+      await sleep(300);
+      await ev(`document.querySelector('.ctt-selector-back')?.click()`); await sleep(200);
+      await ev(`document.querySelector('.ctt-selector-item[data-court-id="${court}"]')?.click()`); await sleep(400);
+      await ev(`[...document.querySelectorAll(".ctt-toggle")].find(b => b.textContent === "Majority")?.click()`); await sleep(300);
+      await ev(`document.querySelector('.ctt-toggle[data-senior="hide"]')?.click()`); await sleep(400);
+      const hide = JSON.parse(await ev(`(() => {
+        const stage = document.querySelector('.ctt-judge-stage');
+        return JSON.stringify({ scrollWidth: stage.scrollWidth, clientWidth: stage.clientWidth });
+      })()`));
+      assert(hide.scrollWidth <= hide.clientWidth + 1,
+        `${court}/${w}px: Seniors:Hide fits with no scrollbar (precondition for this test to be meaningful; got scrollWidth ${hide.scrollWidth} vs clientWidth ${hide.clientWidth})`);
+      await ev(`document.querySelector('.ctt-toggle[data-senior="show"]')?.click()`); await sleep(400);
+      const report = JSON.parse(await ev(`(() => {
+        const stage = document.querySelector('.ctt-judge-stage');
+        const model = stage._model, ar = model._arcRender;
+        const outerActiveR = ar.radii[ar.radii.length - 1];
+        // Real circular hitbox check (operator question, issue #60): actual center-to-center
+        // distance between every active/band icon pair vs the sum of their real rendered radii
+        // (.ctt-avatar's own rect, which is the true circle — not a bounding-box approximation).
+        const activeIcons = [...stage.querySelectorAll('.ctt-judge:not(.ctt-senior):not(.ctt-vacant):not(.ctt-justice)')];
+        const bandIcons = [...stage.querySelectorAll('.ctt-judge.ctt-senior')].filter(n => getComputedStyle(n).opacity !== '0');
+        const circle = (n) => { const r = n.querySelector('.ctt-avatar').getBoundingClientRect(); return { x: r.left + r.width/2, y: r.top + r.height/2, radius: r.width/2 }; };
+        const activeCircles = activeIcons.map(circle), bandCircles = bandIcons.map(circle);
+        let worstPenetration = 0;
+        for (const a of activeCircles) for (const b of bandCircles) {
+          const dist = Math.hypot(a.x - b.x, a.y - b.y);
+          worstPenetration = Math.max(worstPenetration, (a.radius + b.radius) - dist);
+        }
+        return JSON.stringify({ bandR: ar.bandR, outerActiveR, gap: ar.bandR - outerActiveR, worstActiveBandPenetration: worstPenetration });
+      })()`));
+      assert(report.gap >= ROW_GAP - 1,
+        `${court}/${w}px: band-to-bench gap stays at the ROW_GAP floor, not compressed (gap ${report.gap.toFixed(1)}, bandR ${report.bandR.toFixed(1)}, outerActiveR ${report.outerActiveR.toFixed(1)})`);
+      assert(report.worstActiveBandPenetration <= 0,
+        `${court}/${w}px: no active-ring icon circle actually overlaps a band icon circle (worst penetration ${report.worstActiveBandPenetration.toFixed(1)}px — real center-to-center distance vs sum of real radii, not a bounding-box approximation)`);
+    };
+    // Confirmed compressed pre-fix: ca2 and ca8 at 412px, ca6 at 428px (issue #60's own repro sweep).
+    await checkFloor("ca2", 412);
+    await checkFloor("ca8", 412);
+    await checkFloor("ca6", 428);
+    await send("Emulation.clearDeviceMetricsOverride");
+    await sleep(300);
+
+    // Regression guard: the "Hide already scrolls" case must stay unaffected (gap stays at the
+    // full floor even though the bench itself already overflows far more than the gap alone).
+    await send("Emulation.setDeviceMetricsOverride", { width: 340, height: 900, deviceScaleFactor: 1, mobile: true });
+    await sleep(300);
+    await ev(`document.querySelector('.ctt-selector-item[data-court-id="ca9"]')?.click()`); await sleep(400);
+    await ev(`[...document.querySelectorAll(".ctt-toggle")].find(b => b.textContent === "Majority")?.click()`); await sleep(300);
+    await ev(`document.querySelector('.ctt-toggle[data-senior="hide"]')?.click()`); await sleep(400);
+    const alreadyOverflows = JSON.parse(await ev(`(() => {
+      const stage = document.querySelector('.ctt-judge-stage');
+      return JSON.stringify({ scrollWidth: stage.scrollWidth, clientWidth: stage.clientWidth });
+    })()`));
+    assert(alreadyOverflows.scrollWidth > alreadyOverflows.clientWidth + 20,
+      `ca9/340px: Seniors:Hide genuinely already overflows, so this is a real test of the OTHER regime (scrollWidth ${alreadyOverflows.scrollWidth} vs clientWidth ${alreadyOverflows.clientWidth})`);
+    await ev(`document.querySelector('.ctt-toggle[data-senior="show"]')?.click()`); await sleep(400);
+    const stillHealthy = JSON.parse(await ev(`(() => {
+      const stage = document.querySelector('.ctt-judge-stage');
+      const ar = stage._model._arcRender;
+      const outerActiveR = ar.radii[ar.radii.length - 1];
+      return JSON.stringify({ gap: ar.bandR - outerActiveR });
+    })()`));
+    assert(stillHealthy.gap >= ROW_GAP - 1,
+      `ca9/340px (Hide already overflowing): band-to-bench gap stays healthy, unaffected by this fix (gap ${stillHealthy.gap.toFixed(1)})`);
+    await send("Emulation.clearDeviceMetricsOverride");
+  }
+
   console.log("Majority view scrolls horizontally to reach seats that would otherwise bleed off either edge — covers both Include's own crowding and the senior band's");
   {
     await send("Emulation.setDeviceMetricsOverride", { width: 380, height: 900, deviceScaleFactor: 1, mobile: true });
