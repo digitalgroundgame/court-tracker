@@ -10,7 +10,7 @@
 tracker (Phase-4 tail items open, PLUS a brand-new third pane view — "Change", built session
 (aw), operator review round addressed session (ax)) and the appointments beeswarm
 (feature-complete first version, operator refinement rounds ongoing; see sessions ai→at, aw).
-**Last updated:** 2026-09-09 (dj)
+**Last updated:** 2026-09-09 (dk)
 
 ## Resume briefing
 <!-- Replaced wholesale at the end of each session — this is not an appended log, it's a
@@ -24,9 +24,31 @@ git-commit dates from exactly this mistake; see `CLAUDE.md` §7 and the `(cp)` 2
 below for the full incident and the corrected dates (ground truth: `git log --format=%ad`).
 
 **PR #56 (issue #50's ring/arc collision-avoidance algorithm) is MERGED** (squashed onto `main` as
-commit `a0d189c`, 2026-09-09) — operator reviewed the final fixes and explicitly approved the
-squash-merge. **Next task**: check `gh issue list`/`gh pr list` fresh at session start — there's no
-obvious open follow-up on issue #50 as of this writing, but confirm rather than assume.
+commit `a0d189c`, 2026-09-09).
+
+**Issue #60 (senior band compresses against the outer active ring — icon overlap) has a PR open,
+branch `claude/issue-60-band-gap-floor`, awaiting operator review** — a real bug in the merged #56
+algorithm, found by the operator testing the live GitHub Pages site on mobile right after #56
+landed. **Next task**: check `gh pr view` (find the PR number via `gh pr list` if not already
+known) for review status before assuming it's still open or starting new work on this area.
+
+**Issue #60, if you're picking this back up**: `layoutArc`'s `resolveAt(s)` used to clamp `bandR`
+down to `effectiveMax` whenever `outermostActiveR` was itself within budget — but on a pane where
+`outermostActiveR` sat only slightly under `effectiveMax`, `+ROW_GAP` alone could already exceed
+it, and that clamp compressed the gap to a few px (visible icon overlap, confirmed at 412px/428px
+— common real device widths — across nearly every circuit with a senior band) instead of falling
+back to scroll. Fixed: `bandR` is never clamped down at all now; instead "the band's target exceeds
+`effectiveMax`" is one more `remaining` condition inside the existing Step-3 search (same pattern
+`PANE_EDGE_TOLERANCE_PX` uses, but — unlike that one — NOT magnitude-bounded, since icon-on-icon
+overlap is a correctness problem at any width, not an acceptable "needs to scroll" outcome). If the
+shrink floor still can't bring it in budget, `bandR` stays at its full, uncompressed offset, relying
+on the same scroll fallback the "Hide already scrolls" case already used. New regression tests in
+`tests/browser-checks.mjs` cover this with a REAL circular hitbox check (actual `.ctt-avatar`
+center-to-center distance vs. sum of real radii — not a bounding-box approximation), per an
+operator question about whether the algorithm's collision math correctly treats icons as circles
+(it does, for the existing label-vs-icon check; there's still no icon-vs-icon check by original
+design, so this fix's overlap guarantee rests on `ROW_GAP` (50px) vs. icon diameter (44px) leaving
+a real but modest 6px geometric margin — confirmed empirically to hold, not just assumed).
 
 **Reference: `layoutArc`/`layoutScotusRing`/the "issue #50" algorithm, as merged (PR #56, commit
 `a0d189c`, 2026-09-09).** This area was rewritten repeatedly in a short span
@@ -590,6 +612,53 @@ Prove the whole app shell and asset schema on one circuit with hand-authored sam
 - Next: ...
 - Blockers: ...
 -->
+
+### 2026-09-09 (dk) — Issue #60 filed and fixed: senior band compressed against the outer active ring below a ROW_GAP floor
+- Phase: 4. Right after PR #56 merged, operator reported a new bug testing the live GitHub Pages
+  site on mobile: in `Seniors: Show`, the senior band could render visibly overlapping the outer
+  active ring, specifically when `Seniors: Hide` already fit the pane with no scrollbar but adding
+  the band needed slightly more room than the pane's width allowed.
+- **Diagnosed and confirmed with a live sweep** across all circuit courts with a senior band, at
+  common real device widths (375/390/412/428px): at 412px and 428px, nearly every court (ca2, ca3,
+  ca4, ca6, ca7, ca8, ca10, ca11, cadc, cafc) showed the band-to-bench gap collapsed from a healthy
+  ~50px down to 3-7px, with real icon-icon overlap of 18-49px — and no scrollbar appeared at all,
+  since `findRingCollisions` only ever checked label-vs-icon, never icon-vs-icon. Confirmed the
+  operator's own pattern description exactly: the "Hide already scrolls" case (ca9 at 320-340px)
+  stayed at a full healthy 50px gap despite the bench itself already overflowing by ~200px.
+- **Root cause**: `resolveAt(s)`'s `let bandR = outermostActiveR + ROW_GAP; if (outermostActiveR <=
+  effectiveMax) bandR = Math.min(bandR, effectiveMax);` — the clamp only skipped when
+  `outermostActiveR` was ALREADY past budget; when it was within budget by less than `ROW_GAP`, the
+  clamp compressed the gap to whatever thin sliver remained instead of falling back to scroll.
+- **Discussion with the operator before filing**: presented the diagnosis plus two candidate fix
+  framings (a minimal one reusing the existing Step-3 `remaining`-condition pattern vs. a
+  fuller/more literal restructure) — operator picked the minimal one (initially mislabeled "B" in
+  an early draft, corrected once the operator clarified their fuller narrative language actually
+  described the SAME minimal approach, not a separate design). Operator also asked directly whether
+  the algorithm's collision math correctly treats icons as circles (center + radius) rather than
+  rectangles — confirmed `labelHitsIcon` already does real circle-vs-rectangle distance math for
+  label-vs-icon, but there is NO icon-vs-icon check anywhere by original design (commit 48f212a's
+  "some overlap is acceptable, only text-touching is the bug" precedent) — this fix's overlap
+  guarantee rests on `ROW_GAP`(50px) vs. icon diameter(44px) leaving a real but modest 6px margin,
+  now directly verified (not just assumed) by a new circular-hitbox regression test.
+- Filed as issue #60 (`gh issue create`) with the full diagnosis, decision, and hitbox-correctness
+  answer recorded, per the operator's explicit ask to capture the discussion in detail before
+  implementing.
+- **Fix**: `bandR` is never clamped down below `outermostActiveR + ROW_GAP` any more. Instead,
+  "the band's target exceeds `effectiveMax`" becomes one more `remaining` condition inside
+  `resolveAt`'s existing Step-3 search (same pattern `PANE_EDGE_TOLERANCE_PX` uses) — but
+  deliberately NOT magnitude-bounded like that one, since icon-on-icon overlap is a correctness
+  problem at any width. If the shrink floor still can't bring it in budget, `bandR` stays
+  uncompressed, relying on the same horizontal-scroll fallback already used elsewhere.
+- Verified: the live sweep re-run post-fix shows a consistent 50px gap at every previously-broken
+  width/court, real scroll now correctly engages where it silently didn't before, and both
+  regression invariants ("Hide already scrolls" stays healthy; desktop zero-overflow guarantees
+  from PR #56) hold unchanged. All four suites (`npm test`, `test:dist`, `test:browser`,
+  `test:browser:dist`) pass. New regression tests added to `tests/browser-checks.mjs`, including a
+  real circular hitbox check (actual `.ctt-avatar` center-to-center distance vs. sum of real radii,
+  not a bounding-box approximation) at the three confirmed-compressed court/width combinations, plus
+  a guard for the "Hide already scrolls" case staying unaffected.
+- Next: PR open on branch `claude/issue-60-band-gap-floor`, awaiting operator review before merge —
+  this touches the same collision-avoidance algorithm PR #56 just landed, so not self-merging it.
 
 ### 2026-09-09 (dj) — PR #56 MERGED: rewrote the PR description into a clean algorithm explanation (operator ask), squash-merged onto main
 - Phase: 4. Once (di)'s CI run came back green, the operator's original ask ("clean up the written

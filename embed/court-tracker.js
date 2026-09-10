@@ -2847,22 +2847,26 @@ function layoutArc(model, w, H, stage) {
 
     const outermostRi = activeRadii.length - 1;
     const outermostActiveR = activeRadii[outermostRi];
-    // The band always sits exactly ROW_GAP beyond the actual outermost ACTIVE ring — "locked to
-    // the outer perimeter" per issue #50's steps 1/2 framework — never independently re-clamped to
-    // effectiveMax when that would put it BELOW outermostActiveR. `growRingsForIntra`/
-    // `adjustInterRingGaps` only ever cap further growth at the ceiling passed in; they never
-    // shrink an already-larger starting radius, so on a width-constrained pane (roughly <1000px
-    // for a tall bench) `planRings`' own Rmax-only plan can legitimately leave outermostActiveR
-    // ITSELF past effectiveMax before this ever runs — a case the horizontal-scroll fallback is
-    // exactly meant to cover (residual overflow the shrink floor can't undo). Clamping bandR to
-    // effectiveMax unconditionally in that case pulled it back to less than outermostActiveR —
-    // confirmed as a real bug (ca9/Show, <1000px wide): the band rendered INSIDE the outer active
-    // ring instead of outside it ("sliding apart" from the perimeter). The effectiveMax clamp only
-    // applies when the active rings are themselves already within bounds — the ordinary case this
-    // clamp was written for (ca9/Show/desktop, session (dc): the band's own crowding alone pushed
-    // its natural start past the ceiling while the active rings were fine).
+    // The band always sits AT LEAST ROW_GAP beyond the actual outermost ACTIVE ring — "locked to
+    // the outer perimeter" per issue #50's steps 1/2 framework — and is NEVER clamped down below
+    // that, even when doing so would exceed effectiveMax. An earlier version DID clamp bandR to
+    // effectiveMax whenever outermostActiveR was itself within budget, on the theory that only the
+    // band's OWN crowding could ever push it past the ceiling — but on a width-constrained pane
+    // where outermostActiveR sits only slightly under effectiveMax, `+ROW_GAP` alone can already
+    // exceed it before any band-specific crowding is even considered, and that clamp compressed
+    // the gap down to whatever thin sliver remained (sometimes just a few px) instead of falling
+    // back to scroll — confirmed as a real bug (issue #60): the band rendered visibly overlapping
+    // the outer active ring's icons, invisible to `findRingCollisions` (label-vs-icon only, never
+    // icon-vs-icon) so no scrollbar ever appeared either. Fixed by never clamping bandR down at
+    // all; instead, "the band's target exceeds effectiveMax" becomes its own `remaining` condition
+    // below, letting the Step-3 search (which already re-runs 0-2 at each candidate scale) try to
+    // shrink it back into budget, and — unlike `PANE_EDGE_TOLERANCE_PX` below, deliberately bounded
+    // to small overflow — this condition is NOT magnitude-bounded: icon-on-icon overlap is a
+    // correctness problem at any width, not an acceptable "needs to scroll" outcome the way plain
+    // pane-edge overflow is. If even the shrink floor can't bring it back in budget, bandR simply
+    // stays at its full, uncompressed offset, relying on the same horizontal-scroll fallback the
+    // "Hide already scrolls" case already uses.
     let bandR = outermostActiveR + ROW_GAP;
-    if (outermostActiveR <= effectiveMax) bandR = Math.min(bandR, effectiveMax);
     let bandCollide = { intra: false, inter: false };
     if (hasSeniorsBand) {
       const bandR0 = bandR;
@@ -2886,6 +2890,7 @@ function layoutArc(model, w, H, stage) {
         inter: findRingCollisions(combined, b2, cx, cy, s, COLLISION_BUFFER_PX).inter,
       };
     }
+    const bandExceedsBudget = hasSeniorsBand && bandR > effectiveMax;
     // Real horizontal-extent check, using each label's OWN measured width (`seatHalfWidth`) — not
     // `effectiveMax`'s fixed margin, which only bounds RING-RADIUS growth and has no direct tie to
     // what a specific label actually measures. A particular judge's surname can legitimately need
@@ -2912,7 +2917,8 @@ function layoutArc(model, w, H, stage) {
     const overflowsPane = overflowPx > 1 && overflowPx <= PANE_EDGE_TOLERANCE_PX;
 
     const remaining = (activeCollide.intra ? 1 : 0) + (activeCollide.inter ? 1 : 0) +
-      (bandCollide.intra ? 1 : 0) + (bandCollide.inter ? 1 : 0) + (overflowsPane ? 1 : 0);
+      (bandCollide.intra ? 1 : 0) + (bandCollide.inter ? 1 : 0) + (overflowsPane ? 1 : 0) +
+      (bandExceedsBudget ? 1 : 0);
     return { radii: activeRadii, bandR, remaining, points };
   };
 
