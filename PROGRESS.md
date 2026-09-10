@@ -10,7 +10,7 @@
 tracker (Phase-4 tail items open, PLUS a brand-new third pane view — "Change", built session
 (aw), operator review round addressed session (ax)) and the appointments beeswarm
 (feature-complete first version, operator refinement rounds ongoing; see sessions ai→at, aw).
-**Last updated:** 2026-09-10 (dl)
+**Last updated:** 2026-09-10 (dm)
 
 ## Resume briefing
 <!-- Replaced wholesale at the end of each session — this is not an appended log, it's a
@@ -24,25 +24,13 @@ git-commit dates from exactly this mistake; see `CLAUDE.md` §7 and the `(cp)` 2
 below for the full incident and the corrected dates (ground truth: `git log --format=%ad`).
 
 **PR #56 (issue #50's ring/arc collision-avoidance algorithm) is MERGED** (squashed onto `main` as
-commit `a0d189c`, 2026-09-09).
-
-**Issue #60 (senior band compresses against the outer active ring — icon overlap) has a PR open,
-branch `claude/issue-60-band-gap-floor` (PR #61), awaiting operator review** — a real bug in the
-merged #56 algorithm, found by the operator testing the live GitHub Pages site on mobile right
-after #56 landed.
-
-**Issue #62 (senior band can clip above the pane's OWN TOP edge, 602-637px width, Seniors:Show) ALSO
-has a PR open (PR #63 — check `gh pr list` for the actual number if this looks stale), branch
-`claude/issue-62-rmax-priority-tiers`, STACKED ON TOP of #61's branch (not on `main` — #61 isn't
-merged yet), awaiting operator review.** Found immediately after implementing #61: fixing the
-horizontal-overflow case exposed that `bandR`'s "let it exceed the budget, rely on scroll" logic
-didn't distinguish WHICH axis was exceeded — scroll only rescues width overflow, never height, and
-the pane's height is fixed (never reflows the host page), so a case where `Rmax` (not `Wmax`) was
-the binding constraint just clipped silently above the stage, with nothing to catch it.
-
-**Next task for BOTH #61 and #62**: check `gh pr list`/`gh pr view` for review status before
-assuming either is still open or starting new work on this area — and note the merge order
-matters: #61 must merge before #62 can, since #62's branch is stacked on top of it.
+commit `a0d189c`, 2026-09-09). **PR #61 (issue #60, the band-gap-floor fix) and PR #63 (issue #62,
+the vertical-clipping fix) are BOTH MERGED** (squashed onto `main` as `84b37ec` and `b797ea7`,
+2026-09-10 — operator reviewed both together and gave explicit go-ahead to merge; #63 needed a
+rebase off the newly-squashed #61 commit before it would merge cleanly, since it had been branched
+off #61's own branch while #61 was still open). **Next task**: check `gh issue list`/`gh pr list`
+fresh — no obvious open follow-up on issues #50/#60/#62 as of this writing, but confirm rather than
+assume.
 
 **Issue #60's original fix, superseded in structure (not in outcome) by #62 — read #62's own
 section below for the CURRENT mechanism.** #60's own diagnosis stands: `bandR` used to clamp down
@@ -59,7 +47,7 @@ treats icons as circles (it does, for the existing label-vs-icon check; there's 
 icon check by original design, so this fix's overlap guarantee rests on `ROW_GAP` (50px) vs. icon
 diameter (44px) leaving a real but modest 6px geometric margin — confirmed empirically to hold).
 
-**Issue #62, if you're picking this back up**: `resolveAt(s)`'s old `remaining` was a FLAT SUM of
+**Issue #62, reference (merged as PR #63, commit `b797ea7`, 2026-09-10)**: `resolveAt(s)`'s old `remaining` was a FLAT SUM of
 every failure type (real label/icon collisions, small pane-edge overflow, `bandR` exceeding
 `effectiveMax`) — with no sense of which type is more severe, and the Step-3 search's tie-break
 (strictly-less-than only; a tie never replaces an earlier, larger-scale candidate) could settle on
@@ -84,8 +72,11 @@ every court via `data/courts.csv`, drill into districts via `.ctt-drill`, sleep 
 width resize AND a senior-mode toggle before reading `model._arcRender`, since `.ctt-judge`'s 480ms
 CSS transition produces spurious diffs otherwise) is the fastest way to re-confirm no regression.
 
-**Reference: `layoutArc`/`layoutScotusRing`/the "issue #50" algorithm, as merged (PR #56, commit
-`a0d189c`, 2026-09-09).** This area was rewritten repeatedly in a short span
+**Reference: `layoutArc`/`layoutScotusRing`/the "issue #50" algorithm, as merged (PR #56 commit
+`a0d189c` 2026-09-09; PR #61/#60 commit `84b37ec` and PR #63/#62 commit `b797ea7`, both 2026-09-10 —
+the two paragraphs directly above describe what those two changed; this section describes only
+PR #56's own original landing and is otherwise superseded by them where they overlap).** This area
+was rewritten repeatedly in a short span
 (cz→da→db/dc→dd→de→df→dg→dh→di) before landing in the state below, which is what's actually on
 `main` now — trust THIS section, not any older one, and not the commit-by-commit history on the
 now-merged branch (several intermediate commits describe states that no longer exist — (dh) in
@@ -646,6 +637,30 @@ Prove the whole app shell and asset schema on one circuit with hand-authored sam
 - Next: ...
 - Blockers: ...
 -->
+
+### 2026-09-10 (dm) — PR #61 and PR #63 MERGED: operator reviewed both and gave explicit go-ahead
+- Phase: 4. Operator reviewed PR #61 (issue #60) and PR #63 (issue #62) together and said "they
+  look good, you can go ahead and merge both."
+- **Merge order mattered**: #63's branch (`claude/issue-62-rmax-priority-tiers`) was stacked on
+  #61's branch (`claude/issue-60-band-gap-floor`), not on `main`, since #62's fix builds directly on
+  #60's code. Squash-merged #61 first (`84b37ec`). Retargeting #63 to `main` via `gh pr edit --base
+  main` then showed a real conflict — expected: `main` now has the *squashed* #61 commit, with
+  different ancestry than the unsquashed commits #63's branch was built from, even though the
+  actual file content is identical. Fixed by rebasing `claude/issue-62-rmax-priority-tiers` onto
+  `origin/main`: git recognized the #60 commit's changes were already present (via patch-id
+  matching against the squash) and automatically skipped it, cleanly replaying only the #62 commit
+  on top — no manual conflict resolution needed, confirmed by `git diff origin/main --stat` showing
+  exactly the #62 commit's own file changes and nothing else. Force-pushed the rebased branch,
+  waited for CI to re-run clean, then squash-merged #63 (`b797ea7`).
+- Verified after both merges: full test suite (`npm test`, `npm run test:browser`) passes against
+  the actual state now on `main`, matching what was verified pre-merge on the feature branches.
+- Updated `PROGRESS.md`'s Resume briefing: the "PR open, awaiting operator review" framing for both
+  issues is now stale and corrected; the #60/#62 technical reference paragraphs are otherwise left
+  as-is (still accurate documentation of the current, now-merged mechanism) with their headers
+  re-labeled from "if you're picking this back up" to "reference, as merged," matching the existing
+  pattern used for the PR #56 reference block.
+- Next: no obvious open follow-up on issues #50/#60/#62 as of this writing — re-check `gh issue
+  list`/`gh pr list` fresh at the next session start rather than assuming.
 
 ### 2026-09-10 (dl) — Issue #62 filed and fixed: senior band could clip above the pane's own top edge, 602-637px wide, Seniors:Show
 - Phase: 4. Operator, testing #61's fix locally, found a new bug: on ca9 (and a couple of large
