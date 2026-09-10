@@ -947,6 +947,21 @@ try {
     `Summary > SCOTUS still shows FedSoc-marked icons even though the ordinary switch is explicitly set to "None" elsewhere (got ${scotusMarkedCount} marked icons)`);
   await ev(`document.querySelector('.ctt-selector-item[data-court-id="ca1"]')?.click()`); await sleep(500);
   await ev(`document.querySelector('.ctt-affil-opt[data-affil="none"]')?.click()`); await sleep(200);   // leave state clean for anything appended after this
+
+  console.log("issue #66: Summary > Appellate Courts gets real click feedback (turns active/blue) then closes the pane, returning to the map");
+  await ev(`document.querySelector('.ctt-selector-item[data-court-id="summary"]')?.click()`); await sleep(400);
+  const appellateClick = JSON.parse(await ev(`(() => {
+    const btn = [...document.querySelectorAll('.ctt-summary-switch .ctt-mode-opt')].find((b) => b.textContent === 'Appellate Courts');
+    btn.click();
+    return JSON.stringify({
+      btnActive: btn.classList.contains('ctt-is-active'),
+      paneOpen: document.querySelector('.ctt-pane').classList.contains('ctt-is-open'),
+      summarySelected: document.querySelector('.ctt-selector-item[data-court-id="summary"]').classList.contains('ctt-is-selected'),
+    });
+  })()`));
+  assert(appellateClick.btnActive, "the Appellate Courts button gets the ordinary active/blue click-feedback class");
+  assert(!appellateClick.paneOpen, "the Summary pane closes immediately after clicking Appellate Courts");
+  assert(!appellateClick.summarySelected, "the Summary selector-bar entry is no longer marked selected (back to the plain map view)");
 } catch (e) { console.log("*** ", e.message); failures++; }
 finally { try { ws && ws.close(); } catch {} chrome.kill(); }
 

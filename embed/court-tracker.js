@@ -101,7 +101,9 @@ const S = {
   appointmentsAll: null,      // data/appointments.json, lazy-loaded once for the Change view
   presidentPhotos: null,      // data/president_photos.json, lazy-loaded once
   streamColorScheme: "alt",   // 'alt' | 'fade' — Change view palette (operator A/B, CLAUDE ask)
-  summaryView: "scotus",      // 'scotus' | 'appellate' | 'district' — Summary pane sub-tab
+  summaryView: "scotus",      // 'scotus' | 'district' — Summary pane sub-tab (the Appellate Courts
+                               // button is not a real sub-view — issue #66 — so this never holds
+                               // "appellate"; clicking it just closes the pane, see renderSummaryPane)
   districtArrangement: null,  // data/district_arrangement.json, lazy-loaded once (Summary > District)
   districtArrangementAlt: null,  // data/district_arrangement_alt.json, lazy-loaded once (ca1/ca3 drill-in sub-assembly only)
   districtOnMap: false,       // is the deployed cartogram currently VISIBLE on the national map
@@ -1283,12 +1285,14 @@ function renderPane(court) {
 
 // ---- Summary pane (SCOTUS | Appellate | District) -----------------------------
 // Replaces the old lone "Supreme Court" selector entry (operator ask, 2026-09-03): a single
-// "Summary" destination with its own 3-way sub-tab, defaulting to SCOTUS. Appellate is an
-// intentional placeholder (operator: "leave blank, come back to it later"). District renders
-// the operator-authored national cartogram (data/district_arrangement.json) statically, with
-// hover-grow-and-tint like the map's own seat blocks — the "lift onto the map" deployment
-// mechanic, the docked per-district detail viewer, and click-to-pin district info are a large,
-// separate feature not yet built (see PROGRESS.md); this is the pane content it will lift FROM.
+// "Summary" destination with its own 3-way sub-tab, defaulting to SCOTUS. Appellate Courts has no
+// content of its own — it used to be a "Coming soon." placeholder, but per issue #66 (2026-09-10)
+// it's now a jump-back-to-the-map shortcut instead (see renderSummaryPane's tabs loop) — it never
+// becomes the active sub-view. District renders the operator-authored national cartogram
+// (data/district_arrangement.json) statically, with hover-grow-and-tint like the map's own seat
+// blocks — the "lift onto the map" deployment mechanic, the docked per-district detail viewer, and
+// click-to-pin district info are a large, separate feature not yet built (see PROGRESS.md); this
+// is the pane content it will lift FROM.
 function renderSummaryPane() {
   unpinDetail();
   const body = S.ui.paneBody;
@@ -1314,7 +1318,17 @@ function renderSummaryPane() {
   for (const [v, label] of tabs) {
     const b = el("button", "ctt-toggle ctt-mode-opt", { type: "button" });
     b.textContent = label;
-    b.addEventListener("click", () => setView(v));
+    if (v === "appellate") {
+      // Not a real sub-view (issue #66): Appellate Courts has no content of its own to show, so
+      // clicking it gets the ordinary click-feedback active/blue treatment but does NOT set
+      // S.summaryView (Summary reopens on whichever of SCOTUS/District was last real) and does NOT
+      // touch the pane's current content — it just closes the whole Summary pane and returns to
+      // the map, same as re-clicking an already-open court. Replaces the old "Coming soon."
+      // placeholder content entirely; renderSummaryAppellate is gone.
+      b.addEventListener("click", () => { b.classList.add("ctt-is-active"); deselect(); });
+    } else {
+      b.addEventListener("click", () => setView(v));
+    }
     subWrap.append(b);
     btns[v] = b;
   }
@@ -1332,14 +1346,14 @@ function renderSummaryContent(container) {
   // same pattern renderSummaryPane/renderPane already use before their own wipes.
   S.ui.pane.append(S.ui.detail);
   container.innerHTML = "";
-  // Appellate/District never claim it — hide it by DEFAULT, unconditionally, before
-  // dispatching, so it can never render as a stray docked box wherever it happens to sit (a
-  // bare child of .ctt-pane showed up in the pane's bottom-left corner — operator report,
-  // 2026-09-04, reproduced by opening Summary straight into Appellate/District). SCOTUS
-  // re-parents it into its own stageRow and un-hides it via resetDetail().
+  // District never claims it — hide it by DEFAULT, unconditionally, before dispatching, so it can
+  // never render as a stray docked box wherever it happens to sit (a bare child of .ctt-pane
+  // showed up in the pane's bottom-left corner — operator report, 2026-09-04, reproduced by
+  // opening Summary straight into District). SCOTUS re-parents it into its own stageRow and
+  // un-hides it via resetDetail(). (Appellate Courts is no longer a real sub-view at all — issue
+  // #66 — so S.summaryView can only ever be "scotus" or "district" here.)
   S.ui.detail.style.display = "none";
   if (S.summaryView === "scotus") renderSummaryScotus(container);
-  else if (S.summaryView === "appellate") renderSummaryAppellate(container);
   else renderSummaryDistrict(container);
 }
 
@@ -1405,12 +1419,6 @@ function renderSummaryScotus(container) {
   S.paneMode = "majority";
   S.majorityMode = true;
   layoutJudges();
-}
-
-function renderSummaryAppellate(container) {
-  const note = el("div", "ctt-summary-placeholder");
-  note.textContent = "Coming soon.";
-  container.append(note);
 }
 
 // ---- Summary > District: static cartogram (no map deployment yet) -------------
