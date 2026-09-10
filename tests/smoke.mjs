@@ -353,59 +353,11 @@ click(seniorBtn("Hide")); await sleep(10);          // restore default for the t
 
 const toggle = (label) => [...root.querySelectorAll(".ctt-toggle")].find((b) => b.textContent === label);
 
-console.log("\"Change\" streamgraph: appointing-president headcount over time");
-const changeBtn = toggle("Change");
-assert(changeBtn, "Change control present alongside Timeline|Majority");
-click(changeBtn);
-await sleep(30);
-assert(changeBtn.classList.contains("ctt-is-active"), "Change mode activates");
-assert(stageEl.style.display === "none", "judge-icon stage hides in Change mode");
-const streamStage = root.querySelector(".ctt-stream-stage");
-assert(streamStage && streamStage.style.display !== "none", "stream stage shows in Change mode");
-// renderStreamView() awaits ensureChangeData() (a fetch) before building the SVG.
-for (let i = 0; i < 20 && !root.querySelector(".ctt-stream-poly"); i++) await sleep(20);
-const polys = root.querySelectorAll(".ctt-stream-poly");
-assert(polys.length > 0, `ca8 renders stream polygons (${polys.length})`);
-assert(root.querySelector(".ctt-stream-bar"), "draggable time bar present");
-assert(root.querySelectorAll(".ctt-stream-svg").length === 1, "exactly one stream SVG (not accumulated)");
-// Color-scheme A/B switch (operator ask): must REPLACE, not append, on toggle.
-const schemeBtn = (label) => [...root.querySelectorAll(".ctt-stream-scheme .ctt-mode-opt")].find((b) => b.textContent === label);
-assert(schemeBtn("Alternating").classList.contains("ctt-is-active"), "color scheme defaults to Alternating");
-click(schemeBtn("Fading"));
-await sleep(10);
-assert(schemeBtn("Fading").classList.contains("ctt-is-active"), "switching to Fading activates it");
-assert(root.querySelectorAll(".ctt-stream-svg").length === 1, "switching scheme replaces the view, doesn't duplicate it (regression)");
-assert(root.querySelectorAll(".ctt-stream-poly").length === polys.length, "same stream count after re-render");
-click(schemeBtn("Alternating")); await sleep(10);   // restore default
-
-// Model correctness, exercised directly (pixel-drag geometry needs a real browser —
-// tests/browser-checks.mjs — jsdom measures every box at 0; see that file's own note).
-const model = mod._dev.buildStreamModel("ca8");
-assert(model && model.rTerms.length > 0 && model.dTerms.length > 0,
-  `ca8 has both R (${model?.rTerms.length}) and D (${model?.dTerms.length}) presidency streams`);
-assert(model.vertices[0].day === mod._dev.dayNum("1969-01-20"), "timeline starts at the shared 1969 baseline");
-assert(model.vertices.every((v, i) => i === 0 || v.day > model.vertices[i - 1].day),
-  "vertices are strictly increasing in day (a real step function, no duplicate/out-of-order ties)");
-assert(model.vertices[0].day === model.dayMin && model.vertices.every((v) => v.counts &&
-  Object.values(v.counts).every((n) => n >= 0)), "no stream ever goes negative");
-const totalToday = [...model.rTerms, ...model.dTerms]
-  .reduce((s, idx) => s + mod._dev.valueAt(model.vertices, model.dayMax, idx), 0);
-assert(totalToday > 0, `ca8's currently-serving total across all president-streams is positive (${totalToday})`);
-// Regression: two SCOTUS rows (Kennedy, Breyer) carry senior_date but a BLANK
-// termination_date — a real FJC data gap, since SCOTUS retirees have no senior bench to
-// keep them counted the way a circuit/district judge's senior_date would. Missed once
-// (counted them as still sitting -> 11 justices instead of 9); model must use senior_date as
-// the effective departure for scotus rows specifically, not for ordinary courts.
-const scotusModel = mod._dev.buildStreamModel("scotus");
-const scotusToday = [...scotusModel.rTerms, ...scotusModel.dTerms]
-  .reduce((s, idx) => s + mod._dev.valueAt(scotusModel.vertices, scotusModel.dayMax, idx), 0);
-assert(scotusToday === 9, `SCOTUS currently-serving total is exactly 9, not inflated by ` +
-  `retired justices with no termination_date (got ${scotusToday})`);
-// Switching back to Timeline must leave the widget in a normal, re-usable state.
-click(toggle("Timeline"));
-await sleep(20);
-assert(stageEl.style.display !== "none", "judge-icon stage reappears after leaving Change mode");
-assert(streamStage.style.display === "none", "stream stage hides again");
+console.log("issue #67: the Change view is fully removed — no control, no leftover DOM, exactly 2 pane-view modes");
+assert(!toggle("Change"), "no 'Change' control exists on an ordinary court pane any more");
+assert(!root.querySelector(".ctt-stream-stage"), "no leftover .ctt-stream-stage node in the DOM");
+assert(root.querySelectorAll(".ctt-mode-switch[aria-label='Pane view'] .ctt-mode-opt").length === 2,
+  "the pane-view segmented control has exactly 2 options now (Timeline, Majority)");
 
 console.log("circuit justice placement (#7)");
 click(toggle("Timeline")); await sleep(20);
@@ -1030,8 +982,8 @@ assert(scIcons.length === 9, `nine justices rendered (${scIcons.length})`);
 assert(!root.querySelector(".ctt-judge-stage .ctt-justice"),
   "justices are ordinary party-ringed icons, not purple Circuit-Justice styling");
 assert([...scIcons].some((n) => n.querySelector(".ctt-chief-badge")), "the Chief Justice is badged");
-assert(!["Timeline", "Majority", "Change"].some((label) => toggle(label)),
-  "Timeline/Majority/Change do not exist at all for Summary > SCOTUS (operator: eliminated)");
+assert(!["Timeline", "Majority"].some((label) => toggle(label)),
+  "Timeline/Majority do not exist at all for Summary > SCOTUS (operator: eliminated)");
 assert(!root.querySelector(".ctt-majority-note") && !root.querySelector(".ctt-always-note"),
   "Summary > SCOTUS has no majority/senior note (same rule as the old direct SCOTUS pane)");
 assert(root.querySelector(".ctt-majority-count"), "Summary > SCOTUS shows the x/y majority count");

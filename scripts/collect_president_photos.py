@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """collect_president_photos.py — sourced (never fabricated) portrait photo for each president
-in embed/presidencies.js, for the map widget's "Change" streamgraph and the beeswarm's
-presidency-band label icon.
+in embed/presidencies.js, for the beeswarm's presidency-band label icon (the map widget's
+"Change" streamgraph, an earlier consumer of this same data, was removed in issue #67 — see
+archive/change-view/).
 
 Same sourcing discipline as enrich_wikipedia.py: looks up each president's Wikipedia lead
 image via the MediaWiki `pageimages` API, resolves it on Commons for a machine-readable

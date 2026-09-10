@@ -15,8 +15,6 @@
   --ctt-senior: #9aa3ad;
   --ctt-map: #e9edf2;
   --ctt-circuit: #cdd6e0;
-  --ctt-band-rep: #f9e9e9;
-  --ctt-band-dem: #e8eef9;
 
   box-sizing: border-box;
   position: relative;
@@ -648,47 +646,6 @@
 /* Reads a step darker than the panel rules, but stays clearly subordinate to the #444
    majority line so the two dotted strokes don't compete. */
 .ctt-arc-guide { fill: none; stroke: #a9b2bd; stroke-width: 1; stroke-dasharray: 2 5; }
-
-/* "Change" streamgraph: party-stacked, per-president appointment-headcount-over-time view. */
-.ctt-stream-stage { position: relative; width: 100%; margin-top: 4px; }
-.ctt-stream-loading { padding: 40px 0; text-align: center; color: var(--ctt-muted); font-style: italic; }
-.ctt-stream-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 4px; }
-.ctt-stream-hint { font-size: 11px; color: var(--ctt-muted); font-style: italic; }
-.ctt-stream-scheme { flex: 0 0 auto; }
-.ctt-stream-svg { display: block; width: 100%; height: 360px; cursor: pointer; }
-/* Presidency background bands — same idea as the beeswarm's (pastel fill, dashed transition
-   line, plain surname label), just without counts or year ticks (not needed here yet). */
-.ctt-stream-band-rep { fill: var(--ctt-band-rep); }
-.ctt-stream-band-dem { fill: var(--ctt-band-dem); }
-.ctt-stream-band-line { stroke: #b9c1cc; stroke-width: 1; stroke-dasharray: 3 3; }
-.ctt-stream-band-label { font-size: 11px; fill: var(--ctt-muted); }
-.ctt-stream-zeroline { stroke: var(--ctt-line); stroke-width: 1; }
-/* Stepped (not smoothed) stacked areas — the reveal animation drives transform/opacity from
-   JS, so the transition lives here rather than as an inline style per element. */
-.ctt-stream-poly { stroke: #fff; stroke-width: 1; transition: transform 420ms ease, opacity 420ms ease; cursor: pointer; }
-.ctt-stream-poly.ctt-stream-hl { stroke: var(--ctt-ink); stroke-width: 2; }
-.ctt-stream-bar-rect { fill: #1b1f24; }
-.ctt-stream-bar-arrow { fill: #1b1f24; }
-.ctt-stream-bar-hit { fill: transparent; cursor: ew-resize; touch-action: none; }
-/* Icons float in an HTML layer over the SVG (so avatar photos / initials fallback reuse the
-   same DOM pattern as the judge icons) — the icon layer shares the SVG's coordinate box 1:1. */
-.ctt-stream-icons { position: absolute; inset: 0; pointer-events: none; }
-.ctt-stream-pres-icon {
-  position: absolute; transform: translate(-100%, -50%); display: flex; align-items: center;
-  gap: 5px; pointer-events: auto; cursor: pointer; white-space: nowrap;
-}
-.ctt-stream-pres-avatar {
-  width: 38px; height: 38px; border-radius: 50%; border: 2px solid var(--ctt-other);
-  overflow: hidden; display: flex; align-items: center; justify-content: center;
-  font-size: 13px; font-weight: 600; background: #eef1f5; color: #333; flex: 0 0 auto;
-}
-.ctt-stream-pres-avatar img { width: 100%; height: 100%; object-fit: cover; }
-.ctt-stream-pres-avatar.ctt-rep { border-color: var(--ctt-rep); }
-.ctt-stream-pres-avatar.ctt-dem { border-color: var(--ctt-dem); }
-.ctt-stream-pres-num { font-size: 14px; color: var(--ctt-ink); }
-/* Only one icon (and its matching stream) highlighted at a time (operator spec). */
-.ctt-stream-pres-icon.ctt-stream-hl .ctt-stream-pres-avatar { outline: 3px solid #e8b400; outline-offset: 1px; }
-.ctt-stream-pres-icon.ctt-stream-hl .ctt-stream-pres-num { font-weight: 700; }
 
 /* judge-detail panel. On HOVER it is pointer-events:none so it never blocks hovering the
    icons beneath it (kills the flicker in #8). On CLICK it becomes "pinned" (.ctt-pinned):
