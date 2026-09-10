@@ -326,7 +326,7 @@
    Two zoom buttons now occupy this same slot (issue #70 — replaces the removed "Set upon map"
    deploy button; see archive/set-upon-map/). */
 .ctt-district-zoom-controls { position: absolute; top: 50%; right: 0; transform: translateY(-50%); width: 232px; display: flex; gap: 8px; }
-.ctt-district-zoom-btn { flex: 1 1 0; text-align: center; }
+.ctt-district-zoom-btn { flex: 1 1 0; text-align: center; padding-left: 6px; padding-right: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* "hit the limit" feedback (issue #70 spec) — always in sync with live zoom state (see
    updateDistrictZoomButtonStyles), so it reverts the instant zoom moves off that limit, rather
    than being a one-off flash on the wasted click. */

@@ -1068,8 +1068,8 @@ assert(root.querySelector(".ctt-summary-switch .ctt-mode-opt.ctt-is-active").tex
 assert(root.querySelectorAll(".ctt-district-cluster").length === 12, "District cartogram is showing again after reopening, undisturbed");
 
 console.log("issue #70: Summary > District controls row shows two zoom buttons where the deploy button used to be, left caption unaffected (operator ask, 2026-09-07)");
-const summaryZoomOut = [...root.querySelectorAll(".ctt-district-zoom-btn")].find((b) => b.textContent === "−");
-const summaryZoomIn = [...root.querySelectorAll(".ctt-district-zoom-btn")].find((b) => b.textContent === "+");
+const summaryZoomOut = [...root.querySelectorAll(".ctt-district-zoom-btn")].find((b) => b.textContent === "Zoom Out");
+const summaryZoomIn = [...root.querySelectorAll(".ctt-district-zoom-btn")].find((b) => b.textContent === "Zoom In");
 const summaryCaption = root.querySelector(".ctt-district-caption-row");
 assert(summaryZoomOut && summaryZoomIn, "both zoom buttons exist in the caption row");
 assert(!root.querySelector(".ctt-district-deploy-btn"), "the old deploy button no longer exists");
@@ -1252,8 +1252,8 @@ click(root.querySelector('.ctt-selector-item[data-court-id="summary"]')); await 
 console.log("issue #70: Summary > District Courts zoom in/out (replaces the removed 'Set upon map' deployment — see archive/set-upon-map/)");
 click(root.querySelector('.ctt-selector-item[data-court-id="summary"]')); await sleep(60);
 click(toggle("District Courts")); await sleep(60);
-const zoomOutBtn = () => [...root.querySelectorAll(".ctt-district-zoom-btn")].find((b) => b.textContent === "−");
-const zoomInBtn = () => [...root.querySelectorAll(".ctt-district-zoom-btn")].find((b) => b.textContent === "+");
+const zoomOutBtn = () => [...root.querySelectorAll(".ctt-district-zoom-btn")].find((b) => b.textContent === "Zoom Out");
+const zoomInBtn = () => [...root.querySelectorAll(".ctt-district-zoom-btn")].find((b) => b.textContent === "Zoom In");
 assert(mod._dev.S.districtZoom === mod._dev.DISTRICT_ZOOM_MIN, `zoom starts at the minimum (got ${mod._dev.S.districtZoom})`);
 assert(zoomOutBtn().classList.contains("ctt-district-zoom-btn-limit"), "zoom-out shows the at-limit style when already at minimum zoom");
 assert(!zoomInBtn().classList.contains("ctt-district-zoom-btn-limit"), "zoom-in does NOT show the at-limit style (room to zoom in)");

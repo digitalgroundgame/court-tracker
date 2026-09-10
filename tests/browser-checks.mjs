@@ -191,7 +191,7 @@ try {
     const svg = document.querySelector('.ctt-district-cartogram-wrap .ctt-district-cartogram');
     return JSON.stringify({ width: svg.getBoundingClientRect().width });
   })()`));
-  await ev(`[...document.querySelectorAll('.ctt-district-zoom-btn')].find(b=>b.textContent==='+').click()`); await sleep(200);
+  await ev(`[...document.querySelectorAll('.ctt-district-zoom-btn')].find(b=>b.textContent==='Zoom In').click()`); await sleep(200);
   const zoomGeomAfter = JSON.parse(await ev(`(() => {
     const svg = document.querySelector('.ctt-district-cartogram-wrap .ctt-district-cartogram');
     return JSON.stringify({ width: svg.getBoundingClientRect().width });
@@ -200,7 +200,7 @@ try {
     `zooming in visibly enlarges the real rendered cartogram (before ${zoomGeomBefore.width}, after ${zoomGeomAfter.width})`);
   const wrapOverflow = await ev(`getComputedStyle(document.querySelector('.ctt-district-cartogram-wrap')).overflow`);
   assert(wrapOverflow === "hidden", `the viewing area actually clips overflow (got "${wrapOverflow}")`);
-  await ev(`[...document.querySelectorAll('.ctt-district-zoom-btn')].find(b=>b.textContent==='−').click()`); await sleep(200);   // restore default
+  await ev(`[...document.querySelectorAll('.ctt-district-zoom-btn')].find(b=>b.textContent==='Zoom Out').click()`); await sleep(200);   // restore default
 
   console.log("ordinary court panes (reached via drill-in) do NOT reserve extra title height - that was a MISAPPLICATION of the operator's 2026-09-07 ask, corrected 2026-09-09 to apply only to the Summary docked tooltip's own name label (see below)");
   await ev(`document.querySelector('.ctt-selector-item[data-court-id="ca9"]').click()`); await sleep(500);
@@ -351,16 +351,16 @@ try {
   // Zoom in enough to create real, sizeable overflow, then drag far past it in both directions —
   // the content must stop with its OWN edge flush against the viewing area's edge, never further
   // (dragging LEFT reveals what overflows on the right, and vice versa).
-  await ev(`[...document.querySelectorAll('.ctt-district-zoom-btn')].find(b=>b.textContent==='+').click()`); await sleep(150);
-  await ev(`[...document.querySelectorAll('.ctt-district-zoom-btn')].find(b=>b.textContent==='+').click()`); await sleep(150);
+  await ev(`[...document.querySelectorAll('.ctt-district-zoom-btn')].find(b=>b.textContent==='Zoom In').click()`); await sleep(150);
+  await ev(`[...document.querySelectorAll('.ctt-district-zoom-btn')].find(b=>b.textContent==='Zoom In').click()`); await sleep(150);
   await dragCartogramBy(-3000, 0);
   let cg = await cartogramGeom();
   assert(cg.right >= -1 && cg.right < 5, `dragging far left stops with the content's own right edge flush against the viewing area (got ${cg.right})`);
   await dragCartogramBy(6000, 0);
   cg = await cartogramGeom();
   assert(cg.left >= -1 && cg.left < 5, `dragging far right stops with the content's own left edge flush against the viewing area (got ${cg.left})`);
-  await ev(`[...document.querySelectorAll('.ctt-district-zoom-btn')].find(b=>b.textContent==='−').click()`); await sleep(150);
-  await ev(`[...document.querySelectorAll('.ctt-district-zoom-btn')].find(b=>b.textContent==='−').click()`); await sleep(150);   // restore default
+  await ev(`[...document.querySelectorAll('.ctt-district-zoom-btn')].find(b=>b.textContent==='Zoom Out').click()`); await sleep(150);
+  await ev(`[...document.querySelectorAll('.ctt-district-zoom-btn')].find(b=>b.textContent==='Zoom Out').click()`); await sleep(150);   // restore default
 
   console.log("ca1/ca3 drill-in sub-assemblies use the alternate arrangement; unaffected circuits/presentations don't (operator ask, 2026-09-10)");
   await ev(`document.querySelector('.ctt-pane-close').click()`); await sleep(400);

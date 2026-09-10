@@ -1813,9 +1813,9 @@ function renderSummaryDistrict(container) {
   // over from localStorage, if this session already starts at MIN or MAX).
   const zoomControls = el("div", "ctt-district-zoom-controls", { role: "group", "aria-label": "Zoom district map" });
   const zoomOutBtn = el("button", "ctt-toggle ctt-district-zoom-btn", { type: "button", "aria-label": "Zoom out" });
-  zoomOutBtn.textContent = "−";
+  zoomOutBtn.textContent = "Zoom Out";
   const zoomInBtn = el("button", "ctt-toggle ctt-district-zoom-btn", { type: "button", "aria-label": "Zoom in" });
-  zoomInBtn.textContent = "+";
+  zoomInBtn.textContent = "Zoom In";
   zoomOutBtn.addEventListener("click", () => setDistrictZoom(S.districtZoom / DISTRICT_ZOOM_STEP));
   zoomInBtn.addEventListener("click", () => setDistrictZoom(S.districtZoom * DISTRICT_ZOOM_STEP));
   zoomControls.append(zoomOutBtn, zoomInBtn);
