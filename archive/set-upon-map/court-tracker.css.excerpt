@@ -1,0 +1,45 @@
+/* .ctt-district-deploy-btn replaced by the two zoom in/out buttons, issue #70 — see the live
+   .ctt-district-zoom-controls rule for what stands in this same 232px slot now. */
+.ctt-district-deploy-btn { position: absolute; top: 50%; right: 0; transform: translateY(-50%); width: 232px; text-align: center; }
+
+/* "Set upon map" deployed cartogram — sits over the national map, positioned/sized via inline
+   style (left/top/width) driven by S.districtMapState. Never rendered in circuit-local view
+   (see updateDistrictOverlayVisibility). */
+.ctt-district-overlay {
+  position: absolute; z-index: 3; cursor: grab; user-select: none;
+  filter: drop-shadow(0 2px 6px rgba(0,0,0,0.18));
+}
+.ctt-district-overlay.ctt-dragging { cursor: grabbing; }
+.ctt-district-overlay .ctt-district-cartogram { width: 100%; height: auto; display: block; pointer-events: none; }
+.ctt-district-overlay .ctt-district-sq { pointer-events: auto; }
+
+/* The deploy-only "pull out" animation (operator spec — never for returning). A short-lived,
+   position:fixed clone that flies from the Summary pane's on-screen rect to the on-map target
+   rect; removed the instant the transition ends, when the real .ctt-district-overlay takes
+   over. z-index above everything (including the pane, which is already closing underneath it)
+   so the migration reads as one continuous object, not something popping in behind the pane. */
+.ctt-district-flyover {
+  position: fixed; z-index: 20; pointer-events: none;
+  filter: drop-shadow(0 2px 6px rgba(0,0,0,0.18));
+}
+.ctt-district-flyover .ctt-district-cartogram { width: 100%; height: 100%; display: block; }
+/* Fixed to the VIEWPORT's own corner (not the draggable assembly — see the buildShell comment
+   on districtCornerControls) so dragging the assembly, including partially past the bottom edge
+   on purpose, never carries its controls out of reach (operator ask, 2026-09-06). Top-right
+   (operator ask, 2026-09-07 — moved from an earlier bottom-left choice): z-index above the
+   assembly's own (3) so the controls stay clickable if a drag/resize brings the two into visual
+   overlap anyway. National view only, and hidden whenever the pane is open — see
+   renderDistrictCornerControls. Buttons render −/+/× in DOM order (see there) so × lands
+   right-most, i.e. furthest from the map content, matching the pane-close (×)'s own corner
+   convention elsewhere in the app. */
+.ctt-district-corner-controls {
+  position: absolute; right: 16px; top: 16px; z-index: 4; display: flex; gap: 4px;
+}
+/* "fill color-transparent but dark circle and button label colors" (operator spec) — distinct
+   from .ctt-pane-close's solid-fill style; these read as an overlay chrome, not pane chrome. */
+.ctt-district-overlay-btn {
+  width: 26px; height: 26px; border-radius: 50%; background: transparent;
+  border: 1.5px solid var(--ctt-ink); color: var(--ctt-ink); font-size: 14px; line-height: 1;
+  cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0;
+}
+.ctt-district-overlay-btn:hover { background: rgba(27,31,36,0.08); }

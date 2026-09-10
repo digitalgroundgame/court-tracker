@@ -184,29 +184,23 @@ try {
   assert(!tallCa1, "ca1 (no note-bearing court in its district list) does NOT get the taller pane");
   await ev(`document.querySelector('.ctt-selector-back')?.click()`); await sleep(600);
 
-  console.log("District 'Set upon map' pull-out animation: real colors, not solid black (jsdom can't test this — .ctt-district-flyover lives OUTSIDE .ctt-root, so its var(--ctt-rep) etc. only resolve with real computed-style inheritance)");
+  console.log("issue #70: Summary > District Courts zoom actually scales the real rendered cartogram (real CSS transform, real computed size)");
   await ev(`document.querySelector('.ctt-selector-item[data-court-id="summary"]').click()`); await sleep(400);
   await ev(`[...document.querySelectorAll('.ctt-mode-opt')].find(b=>b.textContent==='District Courts').click()`); await sleep(500);
-  await ev(`document.querySelector('.ctt-district-deploy-btn').click()`);
-  await sleep(120);   // mid-flight — the flyover should exist and already be animating
-  const flyMid = JSON.parse(await ev(`(() => {
-    const fly = document.querySelector('.ctt-district-flyover');
-    if (!fly) return JSON.stringify({ exists: false });
-    const sq = fly.querySelector('.ctt-district-sq.ctt-sq-rep, .ctt-district-sq.ctt-sq-dem');
-    return JSON.stringify({ exists: true, fill: sq && getComputedStyle(sq).fill, paneOpen: document.querySelector('.ctt-pane').classList.contains('ctt-is-open') });
+  const zoomGeomBefore = JSON.parse(await ev(`(() => {
+    const svg = document.querySelector('.ctt-district-cartogram-wrap .ctt-district-cartogram');
+    return JSON.stringify({ width: svg.getBoundingClientRect().width });
   })()`));
-  assert(flyMid.exists, "the flyover clone exists mid-animation");
-  assert(!flyMid.paneOpen, "the Summary pane has already closed while the flyover is still animating ('the summary pane flips up')");
-  assert(flyMid.fill && flyMid.fill !== "rgb(0, 0, 0)",
-    `flyover squares render their REAL red/blue/etc color, not solid black from a missing CSS var (got ${flyMid.fill})`);
-  await sleep(700);   // let the animation finish
-  const settled = JSON.parse(await ev(`(() => {
-    const fly = document.querySelector('.ctt-district-flyover');
-    const ov = document.querySelector('.ctt-district-overlay');
-    return JSON.stringify({ flyGone: !fly, overlayVisible: ov && getComputedStyle(ov).display !== 'none' });
+  await ev(`[...document.querySelectorAll('.ctt-district-zoom-btn')].find(b=>b.textContent==='+').click()`); await sleep(200);
+  const zoomGeomAfter = JSON.parse(await ev(`(() => {
+    const svg = document.querySelector('.ctt-district-cartogram-wrap .ctt-district-cartogram');
+    return JSON.stringify({ width: svg.getBoundingClientRect().width });
   })()`));
-  assert(settled.flyGone, "the flyover clone is removed once the animation settles");
-  assert(settled.overlayVisible, "the real persistent overlay is visible in its place");
+  assert(zoomGeomAfter.width > zoomGeomBefore.width * 1.1,
+    `zooming in visibly enlarges the real rendered cartogram (before ${zoomGeomBefore.width}, after ${zoomGeomAfter.width})`);
+  const wrapOverflow = await ev(`getComputedStyle(document.querySelector('.ctt-district-cartogram-wrap')).overflow`);
+  assert(wrapOverflow === "hidden", `the viewing area actually clips overflow (got "${wrapOverflow}")`);
+  await ev(`[...document.querySelectorAll('.ctt-district-zoom-btn')].find(b=>b.textContent==='−').click()`); await sleep(200);   // restore default
 
   console.log("ordinary court panes (reached via drill-in) do NOT reserve extra title height - that was a MISAPPLICATION of the operator's 2026-09-07 ask, corrected 2026-09-09 to apply only to the Summary docked tooltip's own name label (see below)");
   await ev(`document.querySelector('.ctt-selector-item[data-court-id="ca9"]').click()`); await sleep(500);
@@ -246,26 +240,19 @@ try {
   const allSame = heights.every((h) => h === heights[0]);
   assert(allSame, `the docked tooltip's name box height is IDENTICAL across every district hovered (never shrinks/grows with name length) (${JSON.stringify(nameHeights)})`);
 
-  console.log("Summary > District controls row: deploy button right-aligned + width-matched to the docked panel (operator ask, 2026-09-07)");
+  console.log("issue #70: Summary > District controls row: zoom buttons right-aligned + width-matched to the docked panel (same slot the removed deploy button used, operator ask, 2026-09-07)");
   // Already on Summary > District from the name-height check just above — re-clicking the
   // already-selected "summary" item here would TOGGLE IT CLOSED instead of doing nothing.
-  const alignGeom = JSON.parse(await ev(`(() => {
-    const btn = document.querySelector('.ctt-district-deploy-btn'), detail = document.querySelector('.ctt-district-detail');
-    const b = btn.getBoundingClientRect(), d = detail.getBoundingClientRect();
+  const zoomAlignGeom = JSON.parse(await ev(`(() => {
+    const controls = document.querySelector('.ctt-district-zoom-controls'), detail = document.querySelector('.ctt-district-detail');
+    const b = controls.getBoundingClientRect(), d = detail.getBoundingClientRect();
     return JSON.stringify({ widthDiff: Math.abs(b.width - d.width), rightDiff: Math.abs(b.right - d.right) });
   })()`));
-  assert(alignGeom.widthDiff < 1, `deploy button width matches the docked panel (diff ${alignGeom.widthDiff})`);
-  assert(alignGeom.rightDiff < 1, `deploy button right edge aligns with the docked panel (diff ${alignGeom.rightDiff})`);
+  assert(zoomAlignGeom.widthDiff < 1, `zoom controls width matches the docked panel (diff ${zoomAlignGeom.widthDiff})`);
+  assert(zoomAlignGeom.rightDiff < 1, `zoom controls right edge aligns with the docked panel (diff ${zoomAlignGeom.rightDiff})`);
 
-  console.log("fixed corner controls sit top-right; drill-in sub-assembly sits bottom-left (operator ask, 2026-09-07)");
-  await ev(`document.querySelector('.ctt-pane-close').click()`); await sleep(400);   // close Summary — the corner controls are hidden while any pane is open
-  await ev(`document.querySelector('.ctt-district-corner-controls .ctt-district-overlay-btn').click()`); await sleep(700);
-  const cornerGeom = JSON.parse(await ev(`(() => {
-    const box = document.querySelector('.ctt-district-corner-controls'), vp = document.querySelector('.ctt-map-viewport');
-    const r = box.getBoundingClientRect(), v = vp.getBoundingClientRect();
-    return JSON.stringify({ top: r.top - v.top, right: v.right - r.right });
-  })()`));
-  assert(cornerGeom.top < 30 && cornerGeom.right < 30, `corner controls anchored near the top-right (${JSON.stringify(cornerGeom)})`);
+  console.log("drill-in sub-assembly still sits bottom-left (operator ask, 2026-09-07) — unaffected by the Set-upon-map removal");
+  await ev(`document.querySelector('.ctt-pane-close').click()`); await sleep(400);
   await ev(`document.querySelector('.ctt-selector-item[data-court-id="ca8"]').click()`); await sleep(400);
   await ev(`document.querySelector('.ctt-drill').click()`); await sleep(1800);
   const subGeom = JSON.parse(await ev(`(() => {
@@ -274,18 +261,23 @@ try {
     return JSON.stringify({ bottom: v.bottom - r.bottom, left: r.left - v.left });
   })()`));
   assert(subGeom.bottom < 30 && subGeom.left < 30, `sub-assembly anchored near the bottom-left (${JSON.stringify(subGeom)})`);
-  await ev(`document.querySelector('.ctt-selector-back')?.click()`); await sleep(600);
 
-  console.log("REGRESSION (operator report, 2026-09-07): hovering one district in the deployed assembly must not grow every district");
-  const growthDids = JSON.parse(await ev(`(() => {
-    const sq = document.querySelector('.ctt-district-overlay .ctt-district-sq[data-district-id="cacd"]');
+  // REGRESSION (originally caught 2026-09-07 via the now-removed "Set upon map" overlay, re-homed
+  // on the sub-assembly since issue #70 removed that overlay — see archive/set-upon-map/NOTES.md
+  // — the sub-assembly's own wireDistrictCartogramHover call site has the SAME "no isPinned
+  // passed" shape that originally caused this bug, so it's still the real remaining risk).
+  console.log("REGRESSION (operator report, 2026-09-07): hovering one district in the sub-assembly must not grow every district in it");
+  const subGrowTargetDid = await ev(`document.querySelector('.ctt-district-subassembly .ctt-district-sq[data-district-id]').getAttribute('data-district-id')`);
+  await ev(`(() => {
+    const sq = document.querySelector('.ctt-district-subassembly .ctt-district-sq[data-district-id="${subGrowTargetDid}"]');
     const r = sq.getBoundingClientRect();
     sq.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: r.x + 1, clientY: r.y + 1 }));
-    return null;
-  })()`));
+  })()`);
   await sleep(300);
-  const grownDids = JSON.parse(await ev(`JSON.stringify([...new Set([...document.querySelectorAll('.ctt-district-overlay .ctt-district-sq.ctt-district-sq-grown')].map(s=>s.getAttribute('data-district-id')))])`));
-  assert(JSON.stringify(grownDids) === JSON.stringify(["cacd"]), `only cacd's cells are grown, not the whole assembly (got ${grownDids})`);
+  const subGrownDids = JSON.parse(await ev(`JSON.stringify([...new Set([...document.querySelectorAll('.ctt-district-subassembly .ctt-district-sq.ctt-district-sq-grown')].map(s=>s.getAttribute('data-district-id')))])`));
+  assert(JSON.stringify(subGrownDids) === JSON.stringify([subGrowTargetDid]),
+    `only ${subGrowTargetDid}'s cells are grown, not the whole sub-assembly (got ${subGrownDids})`);
+  await ev(`document.querySelector('.ctt-selector-back')?.click()`); await sleep(600);
 
   console.log("Summary > District caption: bolded title + summary meta line underneath (operator ask, 2026-09-08)");
   await ev(`document.querySelector('.ctt-selector-item[data-court-id="summary"]').click()`); await sleep(400);
@@ -332,56 +324,43 @@ try {
   assert(scotusRects.stageTop === districtRects.layoutTop, `content row starts at the SAME y-position in both sub-tabs (SCOTUS ${scotusRects.stageTop} vs District ${districtRects.layoutTop})`);
   assert(scotusRects.stageBottom === districtRects.layoutBottom, `content row ends at the SAME y-position in both sub-tabs (SCOTUS ${scotusRects.stageBottom} vs District ${districtRects.layoutBottom})`);
 
-  console.log("assembly edge-clipping is now symmetric on all 4 edges, each capped near 80% hidden (operator ask, 2026-09-08)");
-  await ev(`document.querySelector('.ctt-pane-close').click()`); await sleep(400);   // close Summary — may already be deployed from earlier in this run
-  const alreadyDeployed = await ev(`getComputedStyle(document.querySelector('.ctt-district-overlay')).display !== 'none'`);
-  if (!alreadyDeployed) { await ev(`document.querySelector('.ctt-district-corner-controls .ctt-district-overlay-btn').click()`); await sleep(700); }
-  const dragBy = async (dx, dy) => {
+  console.log("issue #70: Summary > District pan is clamped to the ACTUAL overflow at the current zoom (not a fixed fraction like the removed overlay's 80% rule) — and is impossible at all when fully zoomed out");
+  await ev(`document.querySelector('.ctt-pane-close').click()`); await sleep(400);
+  await ev(`document.querySelector('.ctt-selector-item[data-court-id="summary"]').click()`); await sleep(400);
+  await ev(`[...document.querySelectorAll('.ctt-mode-opt')].find(b=>b.textContent==='District Courts').click()`); await sleep(500);
+  const dragCartogramBy = async (dx, dy) => {
     await ev(`(() => {
-      const ov = document.querySelector('.ctt-district-overlay');
-      const r = ov.getBoundingClientRect();
-      ov.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: r.x + 10, clientY: r.y + 10 }));
-      window.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: r.x + 10 + (${dx}), clientY: r.y + 10 + (${dy}) }));
+      const wrap = document.querySelector('.ctt-district-cartogram-wrap');
+      const r = wrap.getBoundingClientRect();
+      wrap.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: r.x + r.width / 2, clientY: r.y + r.height / 2 }));
+      window.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: r.x + r.width / 2 + (${dx}), clientY: r.y + r.height / 2 + (${dy}) }));
       window.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
     })()`);
-    await sleep(100);
+    await sleep(150);
   };
-  const overlayGeom = async () => JSON.parse(await ev(`(() => {
-    const ov = document.querySelector('.ctt-district-overlay'), vp = document.querySelector('.ctt-map-viewport');
-    const r = ov.getBoundingClientRect(), v = vp.getBoundingClientRect();
-    return JSON.stringify({ w: r.width, h: r.height, left: v.left - r.left, right: r.right - v.right, top: v.top - r.top, bottom: r.bottom - v.bottom });
+  const cartogramGeom = async () => JSON.parse(await ev(`(() => {
+    const svg = document.querySelector('.ctt-district-cartogram-wrap .ctt-district-cartogram'), wrap = document.querySelector('.ctt-district-cartogram-wrap');
+    const r = svg.getBoundingClientRect(), w = wrap.getBoundingClientRect();
+    return JSON.stringify({ left: r.left - w.left, right: w.right - r.right });
   })()`));
-  await dragBy(-2000, 0);
-  let og = await overlayGeom();
-  assert(og.left > 0 && og.left <= og.w * 0.81, `left-edge clip capped near 80% of width (${og.left} / ${og.w})`);
-  await dragBy(4000, 0);
-  og = await overlayGeom();
-  assert(og.right > 0 && og.right <= og.w * 0.81, `right-edge clip capped near 80% of width (${og.right} / ${og.w})`);
-  await dragBy(0, -2000);
-  og = await overlayGeom();
-  assert(og.top > 0 && og.top <= og.h * 0.81, `top-edge clip capped near 80% of height (${og.top} / ${og.h})`);
-  await dragBy(0, 4000);
-  og = await overlayGeom();
-  assert(og.bottom > 0 && og.bottom <= og.h * 0.81, `bottom-edge clip capped near 80% of height (${og.bottom} / ${og.h})`);
-
-  console.log("deploy-button arrows flip direction with the label (operator ask, 2026-09-10)");
-  await ev(`document.querySelector('.ctt-selector-item[data-court-id="summary"]').click()`); await sleep(400);
-  await ev(`[...document.querySelectorAll('.ctt-mode-opt')].find(b=>b.textContent==='District Courts').click()`); await sleep(600);
-  const btnLabels = JSON.parse(await ev(`(() => {
-    const btn = document.querySelector('.ctt-district-deploy-btn');
-    const before = btn.textContent;
-    btn.click();
-    return JSON.stringify({ before, after: btn.textContent });
-  })()`));
-  await sleep(900);
-  console.log("   btnLabels:", JSON.stringify(btnLabels));
-  const arrowOf = (s) => s.trim()[0];
-  assert(btnLabels.before !== btnLabels.after, "label text actually changed");
-  assert(arrowOf(btnLabels.before) !== arrowOf(btnLabels.after),
-    `arrow direction flips along with the label (before "${btnLabels.before}" after "${btnLabels.after}")`);
-  assert((btnLabels.before.includes("Set upon map") && arrowOf(btnLabels.before) === "▼") ||
-    (btnLabels.before.includes("Remove from map") && arrowOf(btnLabels.before) === "▲"),
-    `"Set upon map" points down, "Remove from map" points up (got "${btnLabels.before}")`);
+  const beforeZoomGeom = await cartogramGeom();
+  await dragCartogramBy(-2000, 0);
+  const afterDragAtMinZoom = await cartogramGeom();
+  assert(Math.abs(afterDragAtMinZoom.left - beforeZoomGeom.left) < 1,
+    `at minimum zoom (nothing overflows), dragging does not move the content at all (before left ${beforeZoomGeom.left}, after ${afterDragAtMinZoom.left})`);
+  // Zoom in enough to create real, sizeable overflow, then drag far past it in both directions —
+  // the content must stop with its OWN edge flush against the viewing area's edge, never further
+  // (dragging LEFT reveals what overflows on the right, and vice versa).
+  await ev(`[...document.querySelectorAll('.ctt-district-zoom-btn')].find(b=>b.textContent==='+').click()`); await sleep(150);
+  await ev(`[...document.querySelectorAll('.ctt-district-zoom-btn')].find(b=>b.textContent==='+').click()`); await sleep(150);
+  await dragCartogramBy(-3000, 0);
+  let cg = await cartogramGeom();
+  assert(cg.right >= -1 && cg.right < 5, `dragging far left stops with the content's own right edge flush against the viewing area (got ${cg.right})`);
+  await dragCartogramBy(6000, 0);
+  cg = await cartogramGeom();
+  assert(cg.left >= -1 && cg.left < 5, `dragging far right stops with the content's own left edge flush against the viewing area (got ${cg.left})`);
+  await ev(`[...document.querySelectorAll('.ctt-district-zoom-btn')].find(b=>b.textContent==='−').click()`); await sleep(150);
+  await ev(`[...document.querySelectorAll('.ctt-district-zoom-btn')].find(b=>b.textContent==='−').click()`); await sleep(150);   // restore default
 
   console.log("ca1/ca3 drill-in sub-assemblies use the alternate arrangement; unaffected circuits/presentations don't (operator ask, 2026-09-10)");
   await ev(`document.querySelector('.ctt-pane-close').click()`); await sleep(400);

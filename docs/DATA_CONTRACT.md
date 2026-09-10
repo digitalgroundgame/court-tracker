@@ -49,8 +49,10 @@ The `reference-renderer` tier is the formalization of the epic's "portable data 
 reference-renderer-specific artifacts" split (issue #13). Concretely: `seat_blocks.json`'s
 per-court **counts** are portable arithmetic, but its `anchor`/`size` are hand-tuned pixel
 placements for one specific map; `district_arrangement*.json` is a hand-built cartogram grid for
-one specific "Set upon map" feature. A renderer with a different visual language wants the counts
-and its own layout.
+this repo's own district-block views (Summary > District Courts, the circuit-drill-in
+sub-assembly — the map-deployed "Set upon map" presentation that also once consumed it was
+removed in issue #70). A renderer with a different visual language wants the counts and its own
+layout.
 
 Photo binaries (`assets/photos/**`) and geometry (`assets/geo/**`) are `stable` in the sense that
 matters here — the *path scheme* and the SVG interface are contract (the latter specified in
