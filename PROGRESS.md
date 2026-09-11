@@ -11,26 +11,25 @@ tracker (Phase-4 tail items open; the third pane view — "Change" — was remov
 #67, archived in `archive/change-view/`; the map-deployed "Set upon map" district overlay was
 removed the same day, issue #70, archived in `archive/set-upon-map/`) and the appointments
 beeswarm (feature-complete first version, operator refinement rounds ongoing; see sessions ai→at,
-aw, dx).
-**Last updated:** 2026-09-11 (dx)
+aw, dx, dy).
+**Last updated:** 2026-09-11 (dy)
 
 ## Resume briefing
 <!-- Replaced wholesale at the end of each session — this is not an appended log, it's a
 briefing for the next session only. Session narrative belongs in ## Session log below;
 this section should say only what's needed to pick the work back up cleanly. -->
 
-**Where things stand**: a non-backlog, operator-reported bug in the appointments-timeline
-beeswarm (president band-label spacing) was fixed this session on branch
-`claude/appointments-timeline-buffering` — PR open, awaiting operator review (see Session log
-below for the full write-up). **Issue #71 (dark mode + typography theming) remains deferred and
-not started**, but its scope is now FULLY resolved: see the comment posted on issue #71
-(2026-09-11) rather than re-reading old open questions here — it covers the six backlog issues'
-(#65-#70) impact on #71's view inventory, the operator's scope expansion to cover every font
-property (runtime-switchable, same mechanism as color), the beeswarm widget now being confirmed
-IN SCOPE, every originally-open question answered, and a proposed 3-PR phased breakdown (1. token
-audit, no visual change; 2. runtime mechanism + initial dark theme + demo switch + docs; 3.
-`tools/theme-editor.html` authoring tool). **No further design questions should be needed before
-starting PR 1 of #71 whenever it's next prioritized.**
+**Where things stand**: PR #80 (appointments-timeline president-label spacing fixes, a
+non-backlog operator-reported bug) is MERGED (squashed as `3b75e43`) — no open branch, nothing
+mid-flight there. **Issue #71 (dark mode + typography theming) remains deferred and not started**,
+but its scope is now FULLY resolved: see the comment posted on issue #71 (2026-09-11) rather than
+re-reading old open questions here — it covers the six backlog issues' (#65-#70) impact on #71's
+view inventory, the operator's scope expansion to cover every font property (runtime-switchable,
+same mechanism as color), the beeswarm widget now being confirmed IN SCOPE, every originally-open
+question answered, and a proposed 3-PR phased breakdown (1. token audit, no visual change; 2.
+runtime mechanism + initial dark theme + demo switch + docs; 3. `tools/theme-editor.html`
+authoring tool). **No further design questions should be needed before starting PR 1 of #71
+whenever it's next prioritized — this is the natural next task.**
 
 **Working rhythm (still in force, operator ask 2026-09-10): pause after finishing each unit of
 work for review — don't self-merge, don't start the next thing without explicit go-ahead.** See
@@ -397,6 +396,13 @@ Prove the whole app shell and asset schema on one circuit with hand-authored sam
 - Next: ...
 - Blockers: ...
 -->
+
+### 2026-09-11 (dy) — PR #80 MERGED (operator approved, "this looks excellent, you can go ahead and squash it")
+- Phase: 4. Squash-merged as `3b75e43`. Ledger-only entry, no new code — logging the merge per this
+  repo's usual pattern (see (dv) for precedent) since (dx) below already carries the full write-up.
+- Next: issue #71 (dark mode + typography theming) — scope is fully resolved (comment on the
+  issue), ready to start PR 1 (token audit) whenever prioritized. No other open work right now.
+- Blockers: none.
 
 ### 2026-09-11 (dx) — Fixed two appointments-timeline president-label spacing bugs; issue #71 scope fully resolved (deferred, not started)
 - Phase: 4. Operator asked to discuss/revise issue #71 first (six of seven recently-merged backlog
