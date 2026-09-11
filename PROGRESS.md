@@ -36,16 +36,16 @@ starting PR 1 of #71 whenever it's next prioritized.**
 work for review — don't self-merge, don't start the next thing without explicit go-ahead.** See
 [[operator-wants-pr-review-before-merge]].
 
-**New standing environment gotcha this session**: `/tmp` fills up with `ctbc-*` Chrome
-test-profile directories that `tests/browser-checks.mjs:11` (`MARK =
-\`/tmp/ctbc-${process.pid}\``) creates on every `npm run test:browser` run and never cleans up —
-hardcoded to `/tmp`, doesn't honor `TMPDIR`/`os.tmpdir()`. This accumulated to ~13GB/100% full
-across past sessions and fully blocked real-browser verification this session — a session cannot
-delete outside the repo directory even with explicit operator sign-off (sandbox-level restriction,
-not a prompt decline). Worth fixing the test runner (clean up after itself, or honor `TMPDIR`) or
-clearing `/tmp/ctbc-*` out-of-band. **This session's appointments-chart.js fix has NOT been
-visually confirmed in a real browser** — smoke tests (jsdom) pass and the CSS math was checked by
-hand, but treat the actual rendering as unverified until someone looks at it.
+**Standing environment gotcha, hit and worked around this session (not yet fixed at the root)**:
+`/tmp` fills up with `ctbc-*` Chrome test-profile directories that `tests/browser-checks.mjs:11`
+(`MARK = \`/tmp/ctbc-${process.pid}\``) creates on every `npm run test:browser` run and never
+cleans up — hardcoded to `/tmp`, doesn't honor `TMPDIR`/`os.tmpdir()`. This accumulated to
+~13GB/100% full across past sessions, blocking real-browser verification AND, once, the harness's
+own output capture entirely (no Bash command of any kind could run). A session cannot delete
+outside the repo directory even with explicit operator sign-off (sandbox-level restriction, not a
+prompt decline) — the operator cleared it manually from their own shell both times this recurred
+mid-session. **Will recur again** until someone fixes the test runner itself (clean up its profile
+dir after each run, or honor `TMPDIR`) — worth doing before this eats another session's time.
 
 **Housekeeping still not acted on**: issues #50, #60, #62 all have MERGED PRs (#56, #61, #63) but
 were never closed on GitHub — still just tidiness, not urgent.
@@ -433,9 +433,19 @@ Prove the whole app shell and asset schema on one circuit with hand-authored sam
   same branch. **`npm run test:browser` (real-browser visual verification) could NOT be run** — see
   the Resume briefing's new `/tmp` gotcha above. Treat the visual fix as unverified until someone
   looks at it rendered.
-- Next: operator review of PR on `claude/appointments-timeline-buffering` — ideally with an actual
-  look in a browser. Issue #71 picks up whenever next prioritized (see Resume briefing).
-- Blockers: `/tmp` full (environment, not code) prevented real-browser verification this session.
+- **Follow-up same session**: `/tmp` was blocking the harness's own output capture entirely (not
+  just browser tests) partway through — the operator manually cleared some of the `ctbc-*` dirs
+  from their own shell (outside this session's sandbox) and confirmed it was enough (100% -> 45%
+  used, 8.7GB free). Once unblocked: ran `npm run test:browser` for real this time — ALL PASS,
+  including existing coverage of this exact wrap/no-wrap label logic (the `· ` joiner hide/show
+  test, the "should NOT wrap" single-line-row test). Operator then reviewed the rendered PR and
+  asked for the wrapped count-label block to sit ~2-4px lower — bumped `WRAP_Y0` 32 → 35, pushed as
+  a follow-up commit on the same branch/PR (not a new PR). `npm test` + `npm run build` re-run
+  clean after the nudge. **Real-browser visual verification is now actually done**, superseding the
+  "unverified" note above.
+- Next: operator review of PR on `claude/appointments-timeline-buffering`. Issue #71 picks up
+  whenever next prioritized (see Resume briefing).
+- Blockers: none remaining — the `/tmp` blocker from earlier in this session is resolved.
 
 ### 2026-09-10 (dw) — Session paused at operator's request, ahead of starting issue #71
 - Phase: 4. No code work this entry — the operator asked to pause the session here (context
