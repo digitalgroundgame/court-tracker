@@ -426,11 +426,10 @@ function drawAll() {
       // counts on that same line — they wrap below it instead (operator spec, session ao,
       // adapted for the icon's added width). All wrapped lines stay flush-left under the name
       // (x0+6) regardless of which category leads (SCOTUS or Appellate) — no line gets pushed
-      // right of the icon. Instead the whole block starts lower (y=32, not 16+12=28) so the
-      // FIRST line's glyphs clear the icon's bottom edge (icon bottom ≈ 22px; cta-band-label is
-      // 11px, so a y=32 baseline puts its cap-height top at ~24px — operator report: a
-      // horizontal shift on line 1 looked "pushed right", out of line with lines below it.
-      const WRAP_Y0 = 32;
+      // right of the icon. Instead the whole block starts lower so the FIRST line's glyphs clear
+      // the icon's bottom edge (icon bottom ≈ 22px) — nudged a further 3px past that clearance
+      // point per operator feedback after seeing it rendered (was 32).
+      const WRAP_Y0 = 35;
       segs.forEach((s, si) => {
         const ts = svgEl("tspan", si === 0 ? { x: x0 + 6, y: WRAP_Y0 } : { x: x0 + 6, dy: 12 });
         ts.textContent = s;
