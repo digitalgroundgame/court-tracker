@@ -11,40 +11,38 @@ tracker (Phase-4 tail items open; the third pane view — "Change" — was remov
 #67, archived in `archive/change-view/`; the map-deployed "Set upon map" district overlay was
 removed the same day, issue #70, archived in `archive/set-upon-map/`) and the appointments
 beeswarm (feature-complete first version, operator refinement rounds ongoing; see sessions ai→at,
-aw, dx, dy).
-**Last updated:** 2026-09-11 (dy)
+aw, dx, dy, dz).
+**Last updated:** 2026-09-11 (dz)
 
 ## Resume briefing
 <!-- Replaced wholesale at the end of each session — this is not an appended log, it's a
 briefing for the next session only. Session narrative belongs in ## Session log below;
 this section should say only what's needed to pick the work back up cleanly. -->
 
-**Where things stand**: PR #80 (appointments-timeline president-label spacing fixes, a
-non-backlog operator-reported bug) is MERGED (squashed as `3b75e43`) — no open branch, nothing
-mid-flight there. **Issue #71 (dark mode + typography theming) remains deferred and not started**,
-but its scope is now FULLY resolved: see the comment posted on issue #71 (2026-09-11) rather than
-re-reading old open questions here — it covers the six backlog issues' (#65-#70) impact on #71's
-view inventory, the operator's scope expansion to cover every font property (runtime-switchable,
-same mechanism as color), the beeswarm widget now being confirmed IN SCOPE, every originally-open
-question answered, and a proposed 3-PR phased breakdown (1. token audit, no visual change; 2.
-runtime mechanism + initial dark theme + demo switch + docs; 3. `tools/theme-editor.html`
-authoring tool). **No further design questions should be needed before starting PR 1 of #71
-whenever it's next prioritized — this is the natural next task.**
+**Where things stand**: a non-backlog, operator-reported bug — the edge stow tab ("▼ Show") stayed
+visible but inert after fully deselecting a court (nothing left to reveal) — was fixed this session
+on branch `claude/stow-arrow-hidden-when-inert`, PR open awaiting operator review (see Session log
+below). **Issue #71 (dark mode + typography theming) remains deferred and not started**, but its
+scope is fully resolved: see the comment posted on issue #71 (2026-09-11) rather than re-reading
+old open questions here — six backlog issues' (#65-#70) impact on #71's view inventory, the font
+property scope expansion (runtime-switchable, same mechanism as color), the beeswarm widget
+confirmed IN SCOPE, every originally-open question answered, and a proposed 3-PR phased breakdown
+(1. token audit, no visual change; 2. runtime mechanism + initial dark theme + demo switch + docs;
+3. `tools/theme-editor.html` authoring tool). **No further design questions should be needed
+before starting PR 1 of #71 whenever it's next prioritized — this is the natural next task once
+the current small PR is reviewed.**
 
 **Working rhythm (still in force, operator ask 2026-09-10): pause after finishing each unit of
 work for review — don't self-merge, don't start the next thing without explicit go-ahead.** See
 [[operator-wants-pr-review-before-merge]].
 
-**Standing environment gotcha, hit and worked around this session (not yet fixed at the root)**:
-`/tmp` fills up with `ctbc-*` Chrome test-profile directories that `tests/browser-checks.mjs:11`
-(`MARK = \`/tmp/ctbc-${process.pid}\``) creates on every `npm run test:browser` run and never
-cleans up — hardcoded to `/tmp`, doesn't honor `TMPDIR`/`os.tmpdir()`. This accumulated to
-~13GB/100% full across past sessions, blocking real-browser verification AND, once, the harness's
-own output capture entirely (no Bash command of any kind could run). A session cannot delete
-outside the repo directory even with explicit operator sign-off (sandbox-level restriction, not a
-prompt decline) — the operator cleared it manually from their own shell both times this recurred
-mid-session. **Will recur again** until someone fixes the test runner itself (clean up its profile
-dir after each run, or honor `TMPDIR`) — worth doing before this eats another session's time.
+**`/tmp` environment gotcha (recurring, not yet fixed at the root — see prior sessions' notes)**:
+`tests/browser-checks.mjs:11` (`MARK = \`/tmp/ctbc-${process.pid}\``) creates a fresh Chrome
+profile dir on every `npm run test:browser` run and never cleans it up — hardcoded to `/tmp`,
+doesn't honor `TMPDIR`/`os.tmpdir()`. Has twice filled `/tmp` to 100% across recent sessions,
+including blocking the harness's own output capture entirely. **Was healthy this session** (4%
+used at last check) — the operator's manual cleanup at the end of the previous session held. Still
+worth fixing the test runner itself before it recurs.
 
 **Housekeeping still not acted on**: issues #50, #60, #62 all have MERGED PRs (#56, #61, #63) but
 were never closed on GitHub — still just tidiness, not urgent.
@@ -396,6 +394,32 @@ Prove the whole app shell and asset schema on one circuit with hand-authored sam
 - Next: ...
 - Blockers: ...
 -->
+
+### 2026-09-11 (dz) — Fixed: edge stow tab ("▼ Show") stayed visible-but-inert after fully deselecting a court
+- Phase: 4. Operator-reported bug, no GitHub issue filed (worked directly on branch
+  `claude/stow-arrow-hidden-when-inert`). Not part of the #65-71 backlog; issue #71 remains
+  deferred (see Resume briefing).
+- Root cause: `.ctt-pane-stow` (the small tab poking out at the top of the map viewport,
+  `embed/court-tracker.js`'s `stow` button) is a single toggle serving two different situations
+  that look identical from the DOM's perspective — "a court is selected but its pane is stowed"
+  (▼, clicking correctly re-opens it) and "nothing is selected at all" (initial page load, or
+  right after the × close button / re-clicking an open selection / drilling out of a circuit all
+  call `deselect()`/clear `S.selectedCourt`). The button was rendered unconditionally by CSS in
+  both cases, so after a full deselect the tab stayed visible showing "▼" with genuinely nothing
+  for it to reveal — clicking silently did nothing.
+- Fix: `stow` now starts with the existing `ctt-hidden-hard` utility class (hidden by default,
+  since nothing is selected at mount) and `togglePane()` toggles that class on `!S.selectedCourt`
+  on every call — every state-changing path (`selectCourt`, `selectSummary`, `deselect`,
+  `drillOut`) already sets `S.selectedCourt` before calling `togglePane`, so this one line covers
+  all of them without touching each call site.
+- Added smoke-test coverage: initial mount (nothing selected) starts with the tab hidden; the tab
+  stays visible while a court is selected even with its pane stowed (existing edge-tab-reshow
+  coverage, now also asserting non-hidden); deselecting fully hides it again.
+- Verified: `npm test` (smoke) + `npm run test:browser` (real browser, `/tmp` was healthy this
+  session — 4% used) — ALL PASS. `npm run build` — `dist/` rebuilt, committed in the same branch.
+- Next: operator review of this PR, then issue #71 (dark mode + typography theming) is next up —
+  scope fully resolved, ready for PR 1 whenever prioritized.
+- Blockers: none.
 
 ### 2026-09-11 (dy) — PR #80 MERGED (operator approved, "this looks excellent, you can go ahead and squash it")
 - Phase: 4. Squash-merged as `3b75e43`. Ledger-only entry, no new code — logging the merge per this
