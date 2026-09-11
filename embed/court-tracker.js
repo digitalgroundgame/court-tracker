@@ -1771,22 +1771,20 @@ function renderDistrictSubassembly(circuitId) {
 }
 
 function renderSummaryDistrict(container) {
-  // Mirrors renderSummaryScotus's own subtitle+meta chain EXACTLY — same classes, same flex-
-  // column context (so adjacent margins don't collapse), same flush-with-container-top start —
-  // so the two Summary sub-tabs' docked panels measure pixel-identical top-to-bottom (operator
-  // report, 2026-09-09: promoting this caption to a title+meta pair, session cb, nested it
-  // inside .ctt-pane-controls instead, whose own scoped margin pushed the text down 6px and
-  // broke that parity). The zoom controls overlay this same header via position:absolute
-  // (see .ctt-district-caption-row's own CSS) instead of sharing a flex row with the caption,
-  // so they can be right-aligned without perturbing the caption's own height/margins at all —
-  // same slot the removed "Set upon map" deploy button used to occupy (issue #70).
-  //
-  // Load the persisted zoom level ONCE per session, the first time this actually renders (lazy,
-  // matching the removed overlay's own "only consulted at deploy time" convention) — a later
-  // re-render (switching Summary sub-tabs and back) must keep whatever the LIVE session value
-  // currently is, not silently reload the stale on-disk one out from under an in-progress zoom.
-  if (!S._districtZoomLoaded) { S.districtZoom = loadStoredDistrictZoom(); S._districtZoomLoaded = true; }
+  // Mirrors renderSummaryScotus's own subtitle+meta chain EXACTLY — same classes, so the two
+  // Summary sub-tabs' docked panels measure pixel-identical top-to-bottom (operator report,
+  // 2026-09-09; the descendant selector `.ctt-district-caption-row .ctt-summary-subtitle` the
+  // regression test for this uses doesn't care that captionText now nests it one level deeper —
+  // captionText itself carries no padding/margin/border, so captionTitle's own top-left is
+  // unaffected). The caption text and zoom controls are now genuine flex-row SIBLINGS with
+  // flex-wrap (issue #70 follow-up — operator report: the old position:absolute overlay kept the
+  // zoom controls pinned at a fixed width regardless of how little room was left, squeezing the
+  // title into an increasingly narrow, multi-line column instead of just dropping the controls to
+  // their own line below). captionText's min-width is what decides the wrap point: once the row
+  // can't fit both it AND the zoom controls' own fixed width side by side, the controls wrap to a
+  // fresh line and captionText reclaims the FULL row width, same as it would completely alone.
   const captionRow = el("div", "ctt-district-caption-row");
+  const captionText = el("div", "ctt-district-caption-text");
   const captionTitle = el("div", "ctt-summary-subtitle");
   captionTitle.textContent = "Party of District Court Appointments, Arranged by Circuit";
   const captionMeta = el("div", "ctt-pane-meta");
@@ -1807,19 +1805,24 @@ function renderSummaryDistrict(container) {
     note.textContent = " *";
     captionMeta.append(note);
   }
-  // Two zoom buttons replace the old deploy button's slot (issue #70) — style feedback for "at
-  // the limit" is applied/kept in sync by applyDistrictZoomTransform()/updateDistrictZoomButtonStyles()
-  // below, not set once here, so it always reflects the CURRENT zoom (including a value carried
-  // over from localStorage, if this session already starts at MIN or MAX).
+  captionText.append(captionTitle, captionMeta);
+  // Three buttons replace the old deploy button's slot (issue #70; Reset added per operator
+  // follow-up ask) — style feedback for "at the limit" is applied/kept in sync by
+  // applyDistrictZoomTransform()/updateDistrictZoomButtonStyles() below, not set once here, so it
+  // always reflects the CURRENT zoom (including a value carried over from localStorage, if this
+  // session already starts at MIN or MAX).
   const zoomControls = el("div", "ctt-district-zoom-controls", { role: "group", "aria-label": "Zoom district map" });
+  const zoomResetBtn = el("button", "ctt-toggle ctt-district-zoom-reset-btn", { type: "button", "aria-label": "Reset zoom" });
+  zoomResetBtn.textContent = "Reset";
   const zoomOutBtn = el("button", "ctt-toggle ctt-district-zoom-btn", { type: "button", "aria-label": "Zoom out" });
   zoomOutBtn.textContent = "Zoom Out";
   const zoomInBtn = el("button", "ctt-toggle ctt-district-zoom-btn", { type: "button", "aria-label": "Zoom in" });
   zoomInBtn.textContent = "Zoom In";
+  zoomResetBtn.addEventListener("click", () => setDistrictZoom(DISTRICT_ZOOM_MIN));
   zoomOutBtn.addEventListener("click", () => setDistrictZoom(S.districtZoom / DISTRICT_ZOOM_STEP));
   zoomInBtn.addEventListener("click", () => setDistrictZoom(S.districtZoom * DISTRICT_ZOOM_STEP));
-  zoomControls.append(zoomOutBtn, zoomInBtn);
-  captionRow.append(captionTitle, captionMeta, zoomControls);
+  zoomControls.append(zoomResetBtn, zoomOutBtn, zoomInBtn);
+  captionRow.append(captionText, zoomControls);
   container.append(captionRow);
 
   const layout = el("div", "ctt-district-layout");

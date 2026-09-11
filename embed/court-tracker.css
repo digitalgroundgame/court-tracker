@@ -306,27 +306,52 @@
 .ctt-judge.ctt-justice-inhead .ctt-avatar { width: 34px; height: 34px; margin: 0; font-size: 12px; }
 .ctt-judge.ctt-justice-inhead .ctt-judge-label { margin: 0; text-align: left; max-width: 120px; }
 
-.ctt-pane-controls { display: flex; gap: 8px; align-items: center; margin: 6px 0; flex-wrap: wrap; }
+/* flex-wrap-REVERSE (not plain wrap) is the fix for an operator-reported bug: as the pane
+   narrows, .ctt-drill ("View districts →") is LAST in DOM/flex order, so under plain wrap it
+   lands on the LAST (bottom-most) wrapped line — stacking it below Timeline|Majority and the
+   Mark switch, with the separate Seniors switch (.ctt-foldrow, its own element below this one)
+   further below still. wrap-reverse keeps each line's own INTERNAL (horizontal) order untouched
+   — so a single unwrapped row still reads left-to-right exactly as before, .ctt-drill's own
+   margin-left:auto still pushing it to the right of that one row — but REVERSES which line ends
+   up on top when there's more than one: the line .ctt-drill wraps onto alone (last in flow) now
+   renders FIRST (top-most), since it's the "more important" navigational control (operator ask)
+   and should float above the mode/affiliation switches rather than get buried under them. */
+.ctt-pane-controls { display: flex; gap: 8px; align-items: center; margin: 6px 0; flex-wrap: wrap-reverse; }
 /* Summary > District's caption (title + summary meta line, operator ask 2026-09-08) needs to
    start at EXACTLY the same position as Summary > SCOTUS's own subtitle+meta chain
    (renderSummaryScotus) so the two docked panels measure pixel-identical top-to-bottom (operator
    report, 2026-09-09 — an earlier version nested the caption inside .ctt-pane-controls, whose
-   own margin pushed it down 6px and broke that parity). flex-direction:column (not the .ctt-
-   pane-controls row it used to share) matters too: .ctt-summary-subtitle/.ctt-pane-meta's own
-   adjacent margins only stay non-collapsing (4px gap, matching SCOTUS) as flex children — in
-   plain block flow they'd collapse to 2px. position:relative anchors the deploy button below. */
-.ctt-district-caption-row { position: relative; display: flex; flex-direction: column; }
-/* Room for the absolutely-positioned button (232px + 8px gap) so the caption text wraps exactly
-   as it did when the two shared a flex row — not narrower, not wider. */
-.ctt-district-caption-row .ctt-summary-subtitle, .ctt-district-caption-row .ctt-pane-meta { padding-right: 240px; }
-/* Right-aligned and vertically centered against the caption block, matching the docked detail
-   panel's own 232px width (.ctt-district-detail) so the two visually line up as one column
-   (operator ask, 2026-09-07). position:absolute (not a flex sibling any more) means it can't
-   perturb the caption's own height/margins — see .ctt-district-caption-row's own comment.
-   Two zoom buttons now occupy this same slot (issue #70 — replaces the removed "Set upon map"
-   deploy button; see archive/set-upon-map/). */
-.ctt-district-zoom-controls { position: absolute; top: 50%; right: 0; transform: translateY(-50%); width: 232px; display: flex; gap: 8px; }
-.ctt-district-zoom-btn { flex: 1 1 0; text-align: center; padding-left: 6px; padding-right: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+   own margin pushed it down 6px and broke that parity).
+   flex-wrap (issue #70 follow-up, operator report) is what fixes the narrow-width bug a plain
+   position:absolute overlay had: that kept the zoom controls pinned at a fixed width regardless
+   of how little room was left, squeezing the title into an increasingly narrow multi-line column
+   instead of just dropping the controls to their own line. Now a genuine flex row: when both
+   .ctt-district-caption-text (below) and the zoom controls' own fixed width don't fit side by
+   side, the controls wrap to a fresh line and the caption text reclaims the full row width. */
+.ctt-district-caption-row { display: flex; flex-wrap: wrap; align-items: center; column-gap: 12px; row-gap: 6px; }
+/* flex-direction:column (not the .ctt-pane-controls row it used to share) matters here:
+   .ctt-summary-subtitle/.ctt-pane-meta's own adjacent margins only stay non-collapsing (4px gap,
+   matching SCOTUS) as flex children — in plain block flow they'd collapse to 2px. No padding/
+   margin/border of its own, so nesting the title one level deeper here doesn't move its own
+   top-left position at all (the pixel-parity regression test's descendant selector still finds it
+   fine regardless of nesting depth). min-width is the actual WRAP TRIGGER for the row above: once
+   the row can't fit this much room AND the zoom controls' fixed width together, wrapping kicks in. */
+.ctt-district-caption-text { flex: 1 1 300px; min-width: 300px; display: flex; flex-direction: column; }
+/* flex:0 0 auto (natural width, not a forced fixed box) — three buttons need real room for their
+   own readable labels ("Reset"/"Zoom Out"/"Zoom In"), and squeezing them into the old single
+   deploy button's exact 232px (tried first — see git history) forced ellipsis-truncated text or
+   made the WHOLE group balloon past 232px anyway (a flex item's automatic min-content size can
+   override a smaller flex-basis when its content can't shrink further, a real regression caught
+   by this file's own alignment test). Still reads as "sharing the same slot" the removed deploy
+   button occupied (operator ask, issue #70 follow-up) because captionText's flex-grow eats all
+   the space to its LEFT — this group still lands flush against the row's own right edge, same as
+   the docked detail panel below does in its own row, just without being forced to its EXACT
+   232px width too. */
+.ctt-district-zoom-controls { flex: 0 0 auto; display: flex; gap: 6px; }
+.ctt-district-zoom-btn { flex: 0 0 auto; text-align: center; padding-left: 10px; padding-right: 10px; white-space: nowrap; }
+/* Deliberately smaller/narrower than the +/- buttons (operator ask) — a plain reset action reads
+   fine as the smallest of the three. */
+.ctt-district-zoom-reset-btn { flex: 0 0 auto; padding-left: 8px; padding-right: 8px; }
 /* "hit the limit" feedback (issue #70 spec) — always in sync with live zoom state (see
    updateDistrictZoomButtonStyles), so it reverts the instant zoom moves off that limit, rather
    than being a one-off flash on the wasted click. */

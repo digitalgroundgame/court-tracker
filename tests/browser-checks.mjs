@@ -240,16 +240,34 @@ try {
   const allSame = heights.every((h) => h === heights[0]);
   assert(allSame, `the docked tooltip's name box height is IDENTICAL across every district hovered (never shrinks/grows with name length) (${JSON.stringify(nameHeights)})`);
 
-  console.log("issue #70: Summary > District controls row: zoom buttons right-aligned + width-matched to the docked panel (same slot the removed deploy button used, operator ask, 2026-09-07)");
+  console.log("issue #70: Summary > District controls row: zoom buttons (Reset/Zoom Out/Zoom In) right-aligned to match the docked panel's own right edge (same slot the removed deploy button used, operator ask, 2026-09-07)");
   // Already on Summary > District from the name-height check just above — re-clicking the
   // already-selected "summary" item here would TOGGLE IT CLOSED instead of doing nothing.
+  // Natural (not forced-232px) width now — see .ctt-district-zoom-controls's own CSS comment for
+  // why an exact width match isn't the goal any more, only right-edge alignment.
   const zoomAlignGeom = JSON.parse(await ev(`(() => {
     const controls = document.querySelector('.ctt-district-zoom-controls'), detail = document.querySelector('.ctt-district-detail');
     const b = controls.getBoundingClientRect(), d = detail.getBoundingClientRect();
-    return JSON.stringify({ widthDiff: Math.abs(b.width - d.width), rightDiff: Math.abs(b.right - d.right) });
+    return JSON.stringify({ rightDiff: Math.abs(b.right - d.right), buttonCount: controls.querySelectorAll('button').length });
   })()`));
-  assert(zoomAlignGeom.widthDiff < 1, `zoom controls width matches the docked panel (diff ${zoomAlignGeom.widthDiff})`);
   assert(zoomAlignGeom.rightDiff < 1, `zoom controls right edge aligns with the docked panel (diff ${zoomAlignGeom.rightDiff})`);
+  assert(zoomAlignGeom.buttonCount === 3, `Reset + Zoom Out + Zoom In are all present (got ${zoomAlignGeom.buttonCount})`);
+
+  console.log("REGRESSION (operator report): as the pane narrows, the zoom controls drop to their OWN line below the caption text, instead of squeezing the title into a cramped multi-line column beside a fixed-width button block");
+  await send("Emulation.setDeviceMetricsOverride", { width: 780, height: 760, deviceScaleFactor: 1, mobile: false });
+  await sleep(400);
+  const wrapGeom = JSON.parse(await ev(`(() => {
+    const title = document.querySelector('.ctt-district-caption-row .ctt-summary-subtitle');
+    const controls = document.querySelector('.ctt-district-zoom-controls');
+    const row = document.querySelector('.ctt-district-caption-row');
+    return JSON.stringify({ titleWidth: title.getBoundingClientRect().width, rowWidth: row.getBoundingClientRect().width,
+      controlsTop: controls.getBoundingClientRect().top, titleBottom: title.getBoundingClientRect().bottom });
+  })()`));
+  assert(wrapGeom.titleWidth > wrapGeom.rowWidth * 0.85,
+    `at 780px the caption title reclaims (most of) the FULL row width once wrapped (title ${wrapGeom.titleWidth} vs row ${wrapGeom.rowWidth})`);
+  assert(wrapGeom.controlsTop >= wrapGeom.titleBottom - 1,
+    `the zoom controls sit on their own line BELOW the title once wrapped (controls top ${wrapGeom.controlsTop}, title bottom ${wrapGeom.titleBottom})`);
+  await send("Emulation.clearDeviceMetricsOverride"); await sleep(300);
 
   console.log("drill-in sub-assembly still sits bottom-left (operator ask, 2026-09-07) — unaffected by the Set-upon-map removal");
   await ev(`document.querySelector('.ctt-pane-close').click()`); await sleep(400);
@@ -941,6 +959,29 @@ try {
   assert(appellateClick.btnActive, "the Appellate Courts button gets the ordinary active/blue click-feedback class");
   assert(!appellateClick.paneOpen, "the Summary pane closes immediately after clicking Appellate Courts");
   assert(!appellateClick.summarySelected, "the Summary selector-bar entry is no longer marked selected (back to the plain map view)");
+
+  console.log("REGRESSION (operator report): as an ordinary court pane narrows and its controls wrap onto multiple lines, 'View districts →' floats to the TOP of the stack instead of getting buried below Timeline|Majority and the Mark switch");
+  await ev(`document.querySelector('.ctt-selector-item[data-court-id="ca8"]')?.click()`); await sleep(500);
+  await send("Emulation.setDeviceMetricsOverride", { width: 700, height: 900, deviceScaleFactor: 1, mobile: false });
+  await sleep(400);
+  const controlsStack = JSON.parse(await ev(`(() => {
+    const drill = document.querySelector('.ctt-drill');
+    const modeWrap = document.querySelector('.ctt-pane-controls .ctt-mode-switch');
+    const foldRow = document.querySelector('.ctt-foldrow');
+    return JSON.stringify({
+      drillTop: drill.getBoundingClientRect().top,
+      modeWrapTop: modeWrap.getBoundingClientRect().top,
+      foldRowTop: foldRow.getBoundingClientRect().top,
+      wrapped: drill.getBoundingClientRect().top < modeWrap.getBoundingClientRect().top - 1 ||
+               drill.getBoundingClientRect().top > modeWrap.getBoundingClientRect().bottom + 1,
+    });
+  })()`));
+  assert(controlsStack.wrapped, "sanity: the controls have genuinely wrapped onto separate lines at this width, so this test means something");
+  assert(controlsStack.drillTop < controlsStack.modeWrapTop,
+    `'View districts' sits ABOVE Timeline|Majority once wrapped (drill top ${controlsStack.drillTop} vs mode-switch top ${controlsStack.modeWrapTop})`);
+  assert(controlsStack.modeWrapTop < controlsStack.foldRowTop,
+    `Timeline|Majority still sits above the Seniors switch, which stays at the bottom as before (mode-switch top ${controlsStack.modeWrapTop} vs fold-row top ${controlsStack.foldRowTop})`);
+  await send("Emulation.clearDeviceMetricsOverride");
 } catch (e) { console.log("*** ", e.message); failures++; }
 finally { try { ws && ws.close(); } catch {} chrome.kill(); }
 

@@ -1067,11 +1067,13 @@ assert(root.querySelector(".ctt-summary-switch .ctt-mode-opt.ctt-is-active").tex
   "reopening Summary lands back on District Courts, not Appellate Courts");
 assert(root.querySelectorAll(".ctt-district-cluster").length === 12, "District cartogram is showing again after reopening, undisturbed");
 
-console.log("issue #70: Summary > District controls row shows two zoom buttons where the deploy button used to be, left caption unaffected (operator ask, 2026-09-07)");
+console.log("issue #70: Summary > District controls row shows Reset/Zoom Out/Zoom In where the deploy button used to be, left caption unaffected (operator ask, 2026-09-07)");
 const summaryZoomOut = [...root.querySelectorAll(".ctt-district-zoom-btn")].find((b) => b.textContent === "Zoom Out");
 const summaryZoomIn = [...root.querySelectorAll(".ctt-district-zoom-btn")].find((b) => b.textContent === "Zoom In");
+const summaryZoomReset = root.querySelector(".ctt-district-zoom-reset-btn");
 const summaryCaption = root.querySelector(".ctt-district-caption-row");
 assert(summaryZoomOut && summaryZoomIn, "both zoom buttons exist in the caption row");
+assert(summaryZoomReset && summaryZoomReset.textContent === "Reset", "the Reset button exists, to the left of Zoom Out");
 assert(!root.querySelector(".ctt-district-deploy-btn"), "the old deploy button no longer exists");
 assert(summaryCaption?.querySelector(".ctt-summary-subtitle")?.textContent === "Party of District Court Appointments, Arranged by Circuit",
   "left-aligned caption title text is present and correct (bolded like a standard title, operator ask, 2026-09-08)");
@@ -1254,6 +1256,10 @@ click(root.querySelector('.ctt-selector-item[data-court-id="summary"]')); await 
 click(toggle("District Courts")); await sleep(60);
 const zoomOutBtn = () => [...root.querySelectorAll(".ctt-district-zoom-btn")].find((b) => b.textContent === "Zoom Out");
 const zoomInBtn = () => [...root.querySelectorAll(".ctt-district-zoom-btn")].find((b) => b.textContent === "Zoom In");
+const zoomResetBtn = () => root.querySelector(".ctt-district-zoom-reset-btn");
+const zoomControlsOrder = [...root.querySelector(".ctt-district-zoom-controls").children].map((b) => b.textContent);
+assert(JSON.stringify(zoomControlsOrder) === JSON.stringify(["Reset", "Zoom Out", "Zoom In"]),
+  `Reset sits to the LEFT of Zoom Out, which sits to the left of Zoom In (got ${JSON.stringify(zoomControlsOrder)})`);
 assert(mod._dev.S.districtZoom === mod._dev.DISTRICT_ZOOM_MIN, `zoom starts at the minimum (got ${mod._dev.S.districtZoom})`);
 assert(zoomOutBtn().classList.contains("ctt-district-zoom-btn-limit"), "zoom-out shows the at-limit style when already at minimum zoom");
 assert(!zoomInBtn().classList.contains("ctt-district-zoom-btn-limit"), "zoom-in does NOT show the at-limit style (room to zoom in)");
@@ -1273,6 +1279,13 @@ assert(zoomInBtn().classList.contains("ctt-district-zoom-btn-limit"), "zoom-in s
 const maxZoom = mod._dev.S.districtZoom;
 click(zoomInBtn()); await sleep(10);
 assert(mod._dev.S.districtZoom === maxZoom, "clicking zoom-in again at the maximum does not change the zoom level further");
+
+console.log("issue #70 follow-up: Reset sets the zoom straight back to 1x (minimum) from anywhere");
+assert(mod._dev.S.districtZoom === mod._dev.DISTRICT_ZOOM_MAX, "sanity: still at max zoom before clicking Reset");
+click(zoomResetBtn()); await sleep(10);
+assert(mod._dev.S.districtZoom === mod._dev.DISTRICT_ZOOM_MIN, `Reset returns zoom to the minimum (1x) (got ${mod._dev.S.districtZoom})`);
+assert(zoomOutBtn().classList.contains("ctt-district-zoom-btn-limit"), "zoom-out's at-limit style shows again after a Reset, same as reaching the minimum any other way");
+click(zoomInBtn()); click(zoomInBtn());   // back to a non-trivial zoom for the next block
 
 console.log("zooming back out clears the max-limit style, and reaching the minimum again re-shows it on zoom-out (confirms the style genuinely REVERTS, not permanent)");
 for (let i = 0; i < 20; i++) click(zoomOutBtn());
