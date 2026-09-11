@@ -11,88 +11,44 @@ tracker (Phase-4 tail items open; the third pane view — "Change" — was remov
 #67, archived in `archive/change-view/`; the map-deployed "Set upon map" district overlay was
 removed the same day, issue #70, archived in `archive/set-upon-map/`) and the appointments
 beeswarm (feature-complete first version, operator refinement rounds ongoing; see sessions ai→at,
-aw).
-**Last updated:** 2026-09-10 (dw)
+aw, dx).
+**Last updated:** 2026-09-11 (dx)
 
 ## Resume briefing
 <!-- Replaced wholesale at the end of each session — this is not an appended log, it's a
 briefing for the next session only. Session narrative belongs in ## Session log below;
 this section should say only what's needed to pick the work back up cleanly. -->
 
-**Where things stand**: 6 of 7 issues from the operator's 2026-09-10 laundry list are done and
-merged (#65, #68, #69, #66, #67, #70 — see the Session log below for each). **Only issue #71
-remains, and no work on it has started yet.** No open branch, no PR, nothing mid-flight — this
-session ended cleanly at a natural stopping point (context budget), not a blocker.
+**Where things stand**: a non-backlog, operator-reported bug in the appointments-timeline
+beeswarm (president band-label spacing) was fixed this session on branch
+`claude/appointments-timeline-buffering` — PR open, awaiting operator review (see Session log
+below for the full write-up). **Issue #71 (dark mode + typography theming) remains deferred and
+not started**, but its scope is now FULLY resolved: see the comment posted on issue #71
+(2026-09-11) rather than re-reading old open questions here — it covers the six backlog issues'
+(#65-#70) impact on #71's view inventory, the operator's scope expansion to cover every font
+property (runtime-switchable, same mechanism as color), the beeswarm widget now being confirmed
+IN SCOPE, every originally-open question answered, and a proposed 3-PR phased breakdown (1. token
+audit, no visual change; 2. runtime mechanism + initial dark theme + demo switch + docs; 3.
+`tools/theme-editor.html` authoring tool). **No further design questions should be needed before
+starting PR 1 of #71 whenever it's next prioritized.**
 
-**Working rhythm established this whole backlog (operator ask, 2026-09-10, still in force): pause
-after finishing each issue's work (PR opened + tests passing) for review — don't self-merge, and
-don't start the next item without the operator's explicit go-ahead first.** See
-[[operator-wants-pr-review-before-merge]]. This has applied to every issue so far and should
-continue for #71.
+**Working rhythm (still in force, operator ask 2026-09-10): pause after finishing each unit of
+work for review — don't self-merge, don't start the next thing without explicit go-ahead.** See
+[[operator-wants-pr-review-before-merge]].
 
-**Issue #71, full scope (from its own GitHub issue body — read that directly, this is a summary):**
-dark mode for the court-tracker widget, meaning ALL of the following, not just a color swap:
-1. A **runtime palette-switching mechanism** in `embed/court-tracker.js`/`.css` that a host page
-   can control (an attribute and/or a small public JS API — exact shape not yet decided, see open
-   questions below) — this needs to meet the project's actual release/embeddability standards
-   (works from `file://`, no build step, documented in the README's embedding guide), not just
-   work in the local demo.
-2. A visible dark-mode switch on the **local demo page** (`index.html`) that exercises that same
-   public mechanism — a real usage example, not a separate demo-only implementation.
-3. A **separate internal authoring/preview tool** (not shipped to end users) showing one instance
-   of every visually distinct "view" the widget has — one district pane, one appellate pane,
-   Summary > Supreme Court, Summary > District Courts, the Timeline view (its own "view" per the
-   operator), Majority view, national map view, a circuit-local drilled-in view, at least one
-   inset — with a live color-editing control next to every colored/textual element, and a "sync
-   with other instances of this property" option wherever a color is shared across multiple shown
-   views.
-4. An **export** action producing a palette JSON file in whatever format the runtime mechanism
-   (item 1) actually consumes, plus **load/edit/switch-between-multiple-palettes** in that same
-   tool.
-5. An initial **dark palette** the operator will iterate on — not required to be final/perfect.
+**Standing environment gotcha, hit and worked around this session (not yet fixed at the root)**:
+`/tmp` fills up with `ctbc-*` Chrome test-profile directories that `tests/browser-checks.mjs:11`
+(`MARK = \`/tmp/ctbc-${process.pid}\``) creates on every `npm run test:browser` run and never
+cleans up — hardcoded to `/tmp`, doesn't honor `TMPDIR`/`os.tmpdir()`. This accumulated to
+~13GB/100% full across past sessions, blocking real-browser verification AND, once, the harness's
+own output capture entirely (no Bash command of any kind could run). A session cannot delete
+outside the repo directory even with explicit operator sign-off (sandbox-level restriction, not a
+prompt decline) — the operator cleared it manually from their own shell both times this recurred
+mid-session. **Will recur again** until someone fixes the test runner itself (clean up its profile
+dir after each run, or honor `TMPDIR`) — worth doing before this eats another session's time.
 
-**Open questions to resolve BEFORE writing code — flag these to the operator rather than guessing
-silently (this was called out in the issue body itself):**
-- Exact host-facing API shape: an attribute (e.g. `data-ctt-theme`) vs. a JS method (e.g.
-  `CourtTracker.setPalette(...)`) vs. both.
-- Where the palette-authoring tool lives in the repo (e.g. `tools/palette-editor.html`) and
-  whether it's tracked in git at all as a dev-only artifact — it should almost certainly NOT ship
-  in `dist/`, since it's not part of the embeddable widget itself.
-- Whether palette JSON files live under `data/` or `embed/`, and whether `SCHEMA_VERSION`/
-  `docs/DATA_CONTRACT.md` policy (CLAUDE.md §4) applies to them at all — a palette is presentation,
-  not the judges/courts data contract, but this was flagged as worth confirming explicitly rather
-  than assuming an exemption.
-- **Whether `embed/appointments-chart.js`/`.css` (the separate beeswarm widget, prefix `.cta-`,
-  NOT `.ctt-`) is in scope for this dark-mode effort at all.** The operator's original laundry-list
-  text and the issue body both describe court-tracker's own views exclusively (Summary panes,
-  Timeline, map drill-downs) — the beeswarm was never mentioned. Don't assume it's included; ask.
-
-**Codebase groundwork already surveyed (accurate as of this session's end — re-verify before
-trusting, since more commits may have landed by the time #71 starts):**
-- `embed/court-tracker.css`'s `.ctt-root` block already centralizes ~12 CSS custom properties
-  (`--ctt-bg`, `--ctt-panel`, `--ctt-ink`, `--ctt-muted`, `--ctt-line`, `--ctt-accent`, `--ctt-rep`,
-  `--ctt-dem`, `--ctt-other`, `--ctt-senior`, `--ctt-map`, `--ctt-circuit`), used in ~96 places via
-  `var(--ctt-*)` — good bones for a palette-swap mechanism already.
-  (`--ctt-band-rep`/`--ctt-band-dem` existed at one point but were removed as vestigial along with
-  the Change view in issue #67 — don't expect them.)
-- There are still **~29 unique hardcoded hex colors** elsewhere in `court-tracker.css` that don't
-  route through a token yet — auditing and folding these into the token set is real, necessary
-  work for item 1 above to be complete, not a rounding error to skip.
-- JS-side hardcoded color usage is minimal (essentially none beyond one incidental match found via
-  an earlier grep) — most color logic already flows through CSS custom properties or party-class
-  names (`ctt-rep`/`ctt-dem`/etc.), which is favorable for a palette-swap approach.
-- No existing dark-mode infrastructure of any kind exists yet in this repo — this is greenfield
-  within the constraints above, not a partial implementation to extend.
-
-**Suggested first step when resuming**: do NOT start implementing. Read issue #71's full body,
-then either (a) ask the operator the open questions above directly, or (b) propose concrete
-answers to each and get explicit sign-off before writing any code — this was the recommendation
-made at the end of the prior session too, given the size and number of genuinely open design
-decisions packed into one issue.
-
-**Housekeeping noticed across this whole backlog, not yet acted on**: issues #50, #60, #62 all
-have MERGED PRs (#56, #61, #63 respectively) but were never closed on GitHub — worth closing
-whenever convenient; not a "merge authority" decision, just tidiness.
+**Housekeeping still not acted on**: issues #50, #60, #62 all have MERGED PRs (#56, #61, #63) but
+were never closed on GitHub — still just tidiness, not urgent.
 
 ## Phase 0 — Scaffold & contracts  ✅ DONE (2026-07-10)
 - [x] Create repo skeleton per `CLAUDE.md` §Repo map; confirm `index.html` loads an empty shell.
@@ -441,6 +397,55 @@ Prove the whole app shell and asset schema on one circuit with hand-authored sam
 - Next: ...
 - Blockers: ...
 -->
+
+### 2026-09-11 (dx) — Fixed two appointments-timeline president-label spacing bugs; issue #71 scope fully resolved (deferred, not started)
+- Phase: 4. Operator asked to discuss/revise issue #71 first (six of seven recently-merged backlog
+  issues affected its scope), then pause #71 entirely to fix a more pressing bug in the appointments
+  beeswarm's timeline. Both handled this session.
+- **Issue #71**: resolved every open question with the operator (font/typography now in scope —
+  runtime-switchable, full property set, same mechanism as color; host API is both an attribute AND
+  a JS method; `tools/theme-editor.html` tracked in git; theme JSON at `data/themes/*.json` under
+  full `SCHEMA_VERSION`/`DATA_CONTRACT` policy; the separate beeswarm widget, `.cta-` prefix, IS in
+  scope too) and confirmed the six merged backlog issues' impact on its view inventory (one addition:
+  Summary > District Courts' new zoom/pan/Reset controls from #70; nothing to drop — no CSS custom
+  properties exclusive to the removed Change view remain, verified via grep). Posted the complete
+  write-up, plus a proposed 3-PR phased breakdown, as a comment on issue #71 rather than starting
+  implementation:
+  https://github.com/digitalgroundgame/court-tracker/issues/71#issuecomment-5637027353
+  **Status: still deferred, not started** — scope is ready, no more design questions needed before
+  PR 1 whenever it's next prioritized.
+- **Appointments-timeline bug fixes** (`embed/appointments-chart.js`'s presidency-band labels, no
+  GitHub issue filed — direct operator report): (1) the president-icon-to-name gap used a
+  per-character width estimate (`surname.length * 6.2`) that didn't match real glyph widths, making
+  the gap look inconsistent across presidents; replaced with `nameText.getComputedTextLength()` on
+  the live DOM (moved `bands`'/`pan`'s append earlier so the text element is measurable), which also
+  now drives the wrap-vs-single-line `fits` width check that used the same flawed estimate. jsdom
+  (smoke.mjs) doesn't implement `getComputedTextLength` on SVG text — added a feature-detected
+  fallback to the old estimate there only. (2) When the 4-category appointment-count summary wraps
+  onto multiple lines in a narrow band, its first line clashed with the president icon. First pass
+  buffered only that first line horizontally, past the icon; operator follow-up flagged this made
+  whichever category happened to lead (SCOTUS when present, Appellate otherwise) look "pushed right"
+  and out of line with the rest — reworked so ALL wrapped lines stay flush-left under the name, and
+  the clash is resolved by starting the wrapped block lower instead (y=32, was 28), clearing the
+  icon's ~22px bottom edge vertically. Also removed a now-redundant duplicate `pan.append(bands)`
+  left over from the DOM-attachment reordering.
+- Verified: `npm test` (smoke/jsdom) ALL PASS. `npm run build` — `dist/` rebuilt, committed in the
+  same branch. **`npm run test:browser` (real-browser visual verification) could NOT be run** — see
+  the Resume briefing's new `/tmp` gotcha above. Treat the visual fix as unverified until someone
+  looks at it rendered.
+- **Follow-up same session**: `/tmp` was blocking the harness's own output capture entirely (not
+  just browser tests) partway through — the operator manually cleared some of the `ctbc-*` dirs
+  from their own shell (outside this session's sandbox) and confirmed it was enough (100% -> 45%
+  used, 8.7GB free). Once unblocked: ran `npm run test:browser` for real this time — ALL PASS,
+  including existing coverage of this exact wrap/no-wrap label logic (the `· ` joiner hide/show
+  test, the "should NOT wrap" single-line-row test). Operator then reviewed the rendered PR and
+  asked for the wrapped count-label block to sit ~2-4px lower — bumped `WRAP_Y0` 32 → 35, pushed as
+  a follow-up commit on the same branch/PR (not a new PR). `npm test` + `npm run build` re-run
+  clean after the nudge. **Real-browser visual verification is now actually done**, superseding the
+  "unverified" note above.
+- Next: operator review of PR on `claude/appointments-timeline-buffering`. Issue #71 picks up
+  whenever next prioritized (see Resume briefing).
+- Blockers: none remaining — the `/tmp` blocker from earlier in this session is resolved.
 
 ### 2026-09-10 (dw) — Session paused at operator's request, ahead of starting issue #71
 - Phase: 4. No code work this entry — the operator asked to pause the session here (context

@@ -347,6 +347,8 @@ function drawAll() {
 
   // presidency bands + labels (full domain; panning just translates)
   const bands = svgEl("g");
+  pan.append(bands);   // attached up front so text elements built below can measure their own
+                        // real rendered width (getComputedTextLength needs to be in the live DOM)
   for (let i = 0; i < PRESIDENCIES.length; i++) {
     const [start, name, party] = PRESIDENCIES[i];
     const d0 = Math.max(days(start), A.day0);
@@ -376,19 +378,27 @@ function drawAll() {
     if (counts.other) segs.push(`· ${counts.other} Other`);
     const segsStr = segs.join(" ");
 
-    // The president's icon sits between the name and the counts, its vertical center on the
-    // text's own visual middle (not its baseline — baseline minus ~35% of the font size is
-    // the usual approximation for where cap-height text actually LOOKS centered).
-    const ICON_D = 20, ICON_GAP = 4;   // bumped from 13 (operator: "too small")
-    const surnameW = surname.length * 6.2;
-    const iconX = x0 + 6 + surnameW + ICON_GAP;
-    const iconCX = iconX + ICON_D / 2, iconCY = 16 - 4;
-    const countsX = iconX + ICON_D + ICON_GAP;
-
     const group = svgEl("g", { class: "cta-band-label-group" });
     const nameText = svgEl("text", { class: "cta-band-label", x: x0 + 6, y: 16 });
     nameText.textContent = surname;
     group.append(nameText);
+    bands.append(group);   // live before measuring, below
+
+    // The president's icon sits between the name and the counts, its vertical center on the
+    // text's own visual middle (not its baseline — baseline minus ~35% of the font size is
+    // the usual approximation for where cap-height text actually LOOKS centered). The gap off
+    // the name is measured from the name's ACTUAL rendered width, not a per-character estimate —
+    // surnames vary too much in glyph width (e.g. "Bush" vs "Clinton") for a fixed multiplier to
+    // give consistent icon spacing across presidents (operator report: spacing looked uneven).
+    const ICON_D = 20, ICON_GAP = 4;   // bumped from 13 (operator: "too small")
+    // jsdom (tests/smoke.mjs) doesn't implement getComputedTextLength on SVG text — fall back to
+    // the old per-character estimate there; real browsers always take the measured branch.
+    const nameW = typeof nameText.getComputedTextLength === "function"
+      ? nameText.getComputedTextLength()
+      : surname.length * 6.2;
+    const iconX = x0 + 6 + nameW + ICON_GAP;
+    const iconCX = iconX + ICON_D / 2, iconCY = 16 - 4;
+    const countsX = iconX + ICON_D + ICON_GAP;
 
     const photo = A.presidentPhotos?.[name];
     const src = photo?.photo_thumb ? resolve(photo.photo_thumb) : photo?.photo_url;
@@ -406,7 +416,7 @@ function drawAll() {
     }
 
     const countsText = svgEl("text", { class: "cta-band-label" });
-    const fits = (x1 - x0) > (surnameW + ICON_D + ICON_GAP * 2 + segsStr.length * 6.2 + 12);
+    const fits = (x1 - x0) > (nameW + ICON_D + ICON_GAP * 2 + segsStr.length * 6.2 + 12);
     if (fits) {
       countsText.setAttribute("x", countsX);
       countsText.setAttribute("y", 16);
@@ -414,9 +424,14 @@ function drawAll() {
     } else {
       // Narrow band: the icon still sits right after the name, but there's no room for the
       // counts on that same line — they wrap below it instead (operator spec, session ao,
-      // adapted for the icon's added width).
+      // adapted for the icon's added width). All wrapped lines stay flush-left under the name
+      // (x0+6) regardless of which category leads (SCOTUS or Appellate) — no line gets pushed
+      // right of the icon. Instead the whole block starts lower so the FIRST line's glyphs clear
+      // the icon's bottom edge (icon bottom ≈ 22px) — nudged a further 3px past that clearance
+      // point per operator feedback after seeing it rendered (was 32).
+      const WRAP_Y0 = 35;
       segs.forEach((s, si) => {
-        const ts = svgEl("tspan", si === 0 ? { x: x0 + 6, y: 28 } : { x: x0 + 6, dy: 12 });
+        const ts = svgEl("tspan", si === 0 ? { x: x0 + 6, y: WRAP_Y0 } : { x: x0 + 6, dy: 12 });
         ts.textContent = s;
         countsText.append(ts);
       });
@@ -424,9 +439,7 @@ function drawAll() {
     group.append(countsText);
     group._bandX0 = x0;
     group._bandX1 = x1;
-    bands.append(group);
   }
-  pan.append(bands);
   A._bandLabels = [...bands.querySelectorAll(".cta-band-label-group")];
 
   // ticks: years always (labeled), months when the span is short enough to read them
