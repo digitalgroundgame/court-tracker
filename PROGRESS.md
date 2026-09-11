@@ -12,7 +12,7 @@ tracker (Phase-4 tail items open; the third pane view — "Change" — was remov
 removed the same day, issue #70, archived in `archive/set-upon-map/`) and the appointments
 beeswarm (feature-complete first version, operator refinement rounds ongoing; see sessions ai→at,
 aw).
-**Last updated:** 2026-09-10 (dt)
+**Last updated:** 2026-09-10 (dv)
 
 ## Resume briefing
 <!-- Replaced wholesale at the end of each session — this is not an appended log, it's a
@@ -27,49 +27,55 @@ conversation for context.
 
 **Backlog from operator laundry list, issues #65–#71** (full verbatim text also sits in
 `prompt_09_10_2026.txt` at the repo root — untracked, kept locally only). Operator-approved
-priority order:
+priority order — SIX OF SEVEN NOW MERGED, only #71 remains:
 1. ~~**#65**~~ **MERGED** (PR #72, commit `c80b8c9`).
 2. ~~**#68**~~ **MERGED** (PR #73, commit `904e75a` — see below for the real bug caught mid-review
    and its correction; read it before touching the affil-mark code again).
 3. ~~**#69**~~ **MERGED** (PR #74, commit `5886a82`).
 4. ~~**#66**~~ **MERGED** (PR #75, commit `e978dd3`).
 5. ~~**#67**~~ **MERGED** (PR #76, commit `bc21936`).
-6. **#70** — remove the Set-upon-map district overlay, add zoom in/out to Summary > District
-   Courts instead — **done, PR not yet opened as of this writing this session — open it
-   (`gh pr create`) if it isn't already there when you resume.** See below.
-7. **#71** — dark mode palette + switch + a palette-authoring/preview tool — **next task once #70
-   is reviewed/merged** (largest and most novel — sequenced last on purpose).
+6. ~~**#70**~~ **MERGED** (PR #77, commit `11a9760` — two follow-up rounds included, see below;
+   read before touching Summary > District Courts or the ordinary pane's controls row again).
+7. **#71** — dark mode palette + switch + a palette-authoring/preview tool — **THE ONLY TASK LEFT.
+   Not yet started.** By far the largest and most novel item in this backlog — worth reading
+   issue #71's own body in full before starting, and probably worth a scoping conversation with
+   the operator given its size (a runtime palette-switching mechanism AND a separate authoring
+   tool AND a JSON export/import format AND an initial dark palette design), rather than diving
+   straight into an implementation plan.
 
-**Issue #70 is DONE, committed on branch `claude/issue-70-district-zoom` (commit `fcc72d5`), full
-test suite passing, verified with before/after screenshots — this is the SECOND real use of the
-`archive/` convention from issue #65.** Removed the map-deployed "Set upon map" overlay (its own
-draggable/resizable copy of the district cartogram, plus the fixed D/×/−/+ corner controls and the
-deploy "pull out" flyover) — archived to `archive/set-upon-map/`. **The circuit-drill-in fixed
-sub-assembly is a SEPARATE, unrelated feature and was NOT touched** — it was interleaved with the
-removed code in the original source, so the removal required a careful per-function audit rather
-than a single contiguous delete; `highlightDistrictOnMap`, `wireDistrictCartogramHover`,
-`buildDistrictCartogramSVG`, `renderDistrictSubassembly`, `updateDistrictSubassemblyVisibility`,
-`NO_DISTRICT_SUBASSEMBLY`, `NOMINAL_MAP_PX` all stayed untouched — confirmed via grep before
-removing anything, not assumed.
-
-Replaced it with zoom in/out on the Summary > District Courts INLINE cartogram: two buttons in the
-same 232px caption-row slot, `S.districtZoom` (1x-3x multiplier, persisted to localStorage —
-operator confirmed keeping that convention), a "hit the limit" button style that's a LIVE
-reflection of current zoom (not a one-off flash), and drag-to-pan clamped to the cartogram's own
-REAL measured overflow at the current zoom (never a fixed fraction like the removed overlay's own
-80%-hidden rule) — a window resize re-clamps pan but never changes the zoom level itself.
-
-**Real bug found and fixed while verifying this live in a browser, worth remembering if this
-area is touched again**: a plain `<svg>` root element has NO `offsetWidth`/`offsetHeight` (an
-`HTMLElement`-only concept) — reading them for "natural untransformed size" silently produced
-`NaN`, which the browser then silently REFUSED to apply as a `transform` value at all (not an
-error, just a no-op), leaving the cartogram permanently stuck unscaled even though the button's
-own click-feedback/localStorage/state all updated correctly — a very easy bug to miss without a
-real browser and a test that checks for an actual visible SIZE INCREASE, not just "did it crash."
-Fixed with `getBoundingClientRect()` with the transform temporarily cleared first (transforms
-affect `getBoundingClientRect()` but not `offsetWidth`/`offsetHeight` — the inverse of what's
-needed here). A jsdom-only test suite genuinely could not have caught this on its own (jsdom
-measures every box at 0 regardless of whether the underlying math is right).
+**Issue #70, reference — READ BEFORE TOUCHING SUMMARY > DISTRICT COURTS OR .ctt-pane-controls
+AGAIN.** Landed across a main PR plus two operator-requested follow-up rounds, all in PR #77:
+- Removed the map-deployed "Set upon map" overlay (draggable copy of the district cartogram, fixed
+  D/×/−/+ corner controls, deploy flyover) — archived to `archive/set-upon-map/`, the SECOND real
+  use of the archive convention. **The circuit-drill-in fixed sub-assembly is a SEPARATE feature
+  and was deliberately NOT touched** (confirmed via grep, not assumed, since it was interleaved
+  with the removed code in the source) — re-confirmed via a live sanity check per an explicit
+  operator ask mid-review: still renders at its original 130px, byte-identical CSS to `main`.
+- Replaced it with Reset/Zoom Out/Zoom In on the Summary > District Courts INLINE cartogram:
+  `S.districtZoom` (1x-3x, persisted to localStorage), a "hit the limit" button style that's a
+  LIVE reflection of current zoom, and drag-to-pan clamped to the cartogram's own REAL measured
+  overflow (never a fixed fraction). **Real bug found via live browser testing**: a plain `<svg>`
+  root has NO `offsetWidth`/`offsetHeight` (an `HTMLElement`-only concept) — reading them for
+  "natural size" silently produced `NaN`, which the browser silently refused to apply as a
+  `transform` at all, leaving the cartogram stuck unscaled despite every OTHER piece of state
+  updating correctly. Fixed with `getBoundingClientRect()` + a temporarily-cleared transform. A
+  jsdom-only suite could not have caught this (it measures every box at 0 regardless) — only
+  caught because a browser-checks.mjs assertion checked for an actual visible SIZE INCREASE.
+- **Two more real bugs, caught by the operator using the actual widget, not from a spec**: (1) the
+  caption row's zoom controls were a fixed-width `position:absolute` overlay, so narrowing the
+  pane squeezed the title into an increasingly cramped multi-line column instead of the controls
+  just dropping below — rebuilt as a genuine flex row (`.ctt-district-caption-text` +
+  `.ctt-district-zoom-controls` as siblings, `flex-wrap`); the zoom-controls group also switched
+  from a forced 232px width to natural width (three real button labels don't fit 232px the way one
+  button did — forcing it either truncated text or made the group balloon past 232px anyway via
+  automatic min-content sizing). (2) `.ctt-pane-controls` (the ordinary per-court pane's Timeline|
+  Majority + Mark switch + "View districts →" row) used plain `flex-wrap`, so "View districts"
+  (last in DOM order) always landed on the BOTTOM wrapped line as the pane narrowed — switched to
+  `flex-wrap-REVERSE`, which leaves a single unwrapped row completely unaffected but makes the
+  line "View districts" wraps onto alone float to the TOP instead.
+- Regression tests added/adapted in both `tests/smoke.mjs` and `tests/browser-checks.mjs` for all
+  of the above, including real-pixel geometry checks for both flex-wrap fixes (jsdom cannot
+  meaningfully test flex-wrap layout on its own).
 
 **Housekeeping noticed, not yet acted on**: issues #50, #60, #62 all have MERGED PRs (#56, #61,
 #63 respectively) but were never closed on GitHub — worth closing, just hadn't gotten to it yet;
@@ -435,6 +441,33 @@ Prove the whole app shell and asset schema on one circuit with hand-authored sam
 - Next: ...
 - Blockers: ...
 -->
+
+### 2026-09-10 (dv) — PR #77 (issue #70) MERGED (operator approved) after two follow-up rounds — 6 of 7 backlog issues done
+- Phase: 4. Operator approved PR #77 ("all of those new features appear to have correct behavior.
+  you can squash #77") — squash-merged as `11a9760`; issue #70 auto-closed.
+- Before approving, the operator asked for a live sanity check (confirmed the circuit-drill-in
+  sub-assembly's size is unaffected by the removal — byte-identical CSS, 130px, verified with a
+  screenshot) and requested three follow-up changes, all delivered and pushed as two more commits
+  on the same PR before this merge:
+  1. A "Reset" button (zoom back to 1x) to the left of "Zoom Out."
+  2. A real bug fix: the caption row's zoom controls were a fixed-width absolute overlay that
+     squeezed the title into a cramped multi-line column as the pane narrowed, instead of dropping
+     to their own line — rebuilt as a genuine flex row with `flex-wrap`.
+  3. A second, unrelated real bug in the ordinary court pane: "View districts →" always landed on
+     the BOTTOM wrapped line as the pane narrowed, instead of floating to the top as the more
+     important navigational control — fixed with `flex-wrap-reverse` on `.ctt-pane-controls`
+     (zero effect on the normal unwrapped desktop row).
+- Added regression tests for both wrap fixes (real pixel geometry in `browser-checks.mjs`, since
+  jsdom can't meaningfully test flex-wrap) and for the Reset button (`smoke.mjs`). Verified all
+  three fixes visually across five widths (1180 down to 660px) plus the ordinary-pane case at
+  700px. Full `npm test` + `npm run test:browser` — ALL PASS on every round.
+- **6 of the 7 backlog issues (#65-#70) are now done and merged.** Only #71 (dark mode + palette
+  tool) remains — by far the largest, most novel item in the whole backlog.
+- Next: scope and start issue #71. Given its size (a runtime palette-switching mechanism, a
+  separate palette-authoring tool, a JSON export/import format, AND an initial dark-palette
+  design), consider a scoping conversation with the operator before committing to an implementation
+  plan, rather than assuming the shape of the work.
+- Blockers: none.
 
 ### 2026-09-10 (dt) — PR #76 (issue #67) MERGED (operator approved); removed 'Set upon map', added District Courts zoom (issue #70)
 - Phase: 4. Operator approved PR #76 ("excellent, this worked well and i approve squashing. we can
