@@ -12,87 +12,87 @@ tracker (Phase-4 tail items open; the third pane view — "Change" — was remov
 removed the same day, issue #70, archived in `archive/set-upon-map/`) and the appointments
 beeswarm (feature-complete first version, operator refinement rounds ongoing; see sessions ai→at,
 aw).
-**Last updated:** 2026-09-10 (dv)
+**Last updated:** 2026-09-10 (dw)
 
 ## Resume briefing
 <!-- Replaced wholesale at the end of each session — this is not an appended log, it's a
 briefing for the next session only. Session narrative belongs in ## Session log below;
 this section should say only what's needed to pick the work back up cleanly. -->
 
-**Working rhythm for this backlog (operator ask, 2026-09-10): pause after finishing each issue's
-work (PR opened + tests passing) for review, rather than chaining straight into the next one.**
-Don't self-merge OR start the next queued issue without the operator's go-ahead on THIS one first
-— see [[operator-wants-pr-review-before-merge]] if picking this back up without the live
-conversation for context.
+**Where things stand**: 6 of 7 issues from the operator's 2026-09-10 laundry list are done and
+merged (#65, #68, #69, #66, #67, #70 — see the Session log below for each). **Only issue #71
+remains, and no work on it has started yet.** No open branch, no PR, nothing mid-flight — this
+session ended cleanly at a natural stopping point (context budget), not a blocker.
 
-**Backlog from operator laundry list, issues #65–#71** (full verbatim text also sits in
-`prompt_09_10_2026.txt` at the repo root — untracked, kept locally only). Operator-approved
-priority order — SIX OF SEVEN NOW MERGED, only #71 remains:
-1. ~~**#65**~~ **MERGED** (PR #72, commit `c80b8c9`).
-2. ~~**#68**~~ **MERGED** (PR #73, commit `904e75a` — see below for the real bug caught mid-review
-   and its correction; read it before touching the affil-mark code again).
-3. ~~**#69**~~ **MERGED** (PR #74, commit `5886a82`).
-4. ~~**#66**~~ **MERGED** (PR #75, commit `e978dd3`).
-5. ~~**#67**~~ **MERGED** (PR #76, commit `bc21936`).
-6. ~~**#70**~~ **MERGED** (PR #77, commit `11a9760` — two follow-up rounds included, see below;
-   read before touching Summary > District Courts or the ordinary pane's controls row again).
-7. **#71** — dark mode palette + switch + a palette-authoring/preview tool — **THE ONLY TASK LEFT.
-   Not yet started.** By far the largest and most novel item in this backlog — worth reading
-   issue #71's own body in full before starting, and probably worth a scoping conversation with
-   the operator given its size (a runtime palette-switching mechanism AND a separate authoring
-   tool AND a JSON export/import format AND an initial dark palette design), rather than diving
-   straight into an implementation plan.
+**Working rhythm established this whole backlog (operator ask, 2026-09-10, still in force): pause
+after finishing each issue's work (PR opened + tests passing) for review — don't self-merge, and
+don't start the next item without the operator's explicit go-ahead first.** See
+[[operator-wants-pr-review-before-merge]]. This has applied to every issue so far and should
+continue for #71.
 
-**Issue #70, reference — READ BEFORE TOUCHING SUMMARY > DISTRICT COURTS OR .ctt-pane-controls
-AGAIN.** Landed across a main PR plus two operator-requested follow-up rounds, all in PR #77:
-- Removed the map-deployed "Set upon map" overlay (draggable copy of the district cartogram, fixed
-  D/×/−/+ corner controls, deploy flyover) — archived to `archive/set-upon-map/`, the SECOND real
-  use of the archive convention. **The circuit-drill-in fixed sub-assembly is a SEPARATE feature
-  and was deliberately NOT touched** (confirmed via grep, not assumed, since it was interleaved
-  with the removed code in the source) — re-confirmed via a live sanity check per an explicit
-  operator ask mid-review: still renders at its original 130px, byte-identical CSS to `main`.
-- Replaced it with Reset/Zoom Out/Zoom In on the Summary > District Courts INLINE cartogram:
-  `S.districtZoom` (1x-3x, persisted to localStorage), a "hit the limit" button style that's a
-  LIVE reflection of current zoom, and drag-to-pan clamped to the cartogram's own REAL measured
-  overflow (never a fixed fraction). **Real bug found via live browser testing**: a plain `<svg>`
-  root has NO `offsetWidth`/`offsetHeight` (an `HTMLElement`-only concept) — reading them for
-  "natural size" silently produced `NaN`, which the browser silently refused to apply as a
-  `transform` at all, leaving the cartogram stuck unscaled despite every OTHER piece of state
-  updating correctly. Fixed with `getBoundingClientRect()` + a temporarily-cleared transform. A
-  jsdom-only suite could not have caught this (it measures every box at 0 regardless) — only
-  caught because a browser-checks.mjs assertion checked for an actual visible SIZE INCREASE.
-- **Two more real bugs, caught by the operator using the actual widget, not from a spec**: (1) the
-  caption row's zoom controls were a fixed-width `position:absolute` overlay, so narrowing the
-  pane squeezed the title into an increasingly cramped multi-line column instead of the controls
-  just dropping below — rebuilt as a genuine flex row (`.ctt-district-caption-text` +
-  `.ctt-district-zoom-controls` as siblings, `flex-wrap`); the zoom-controls group also switched
-  from a forced 232px width to natural width (three real button labels don't fit 232px the way one
-  button did — forcing it either truncated text or made the group balloon past 232px anyway via
-  automatic min-content sizing). (2) `.ctt-pane-controls` (the ordinary per-court pane's Timeline|
-  Majority + Mark switch + "View districts →" row) used plain `flex-wrap`, so "View districts"
-  (last in DOM order) always landed on the BOTTOM wrapped line as the pane narrowed — switched to
-  `flex-wrap-REVERSE`, which leaves a single unwrapped row completely unaffected but makes the
-  line "View districts" wraps onto alone float to the TOP instead.
-- Regression tests added/adapted in both `tests/smoke.mjs` and `tests/browser-checks.mjs` for all
-  of the above, including real-pixel geometry checks for both flex-wrap fixes (jsdom cannot
-  meaningfully test flex-wrap layout on its own).
+**Issue #71, full scope (from its own GitHub issue body — read that directly, this is a summary):**
+dark mode for the court-tracker widget, meaning ALL of the following, not just a color swap:
+1. A **runtime palette-switching mechanism** in `embed/court-tracker.js`/`.css` that a host page
+   can control (an attribute and/or a small public JS API — exact shape not yet decided, see open
+   questions below) — this needs to meet the project's actual release/embeddability standards
+   (works from `file://`, no build step, documented in the README's embedding guide), not just
+   work in the local demo.
+2. A visible dark-mode switch on the **local demo page** (`index.html`) that exercises that same
+   public mechanism — a real usage example, not a separate demo-only implementation.
+3. A **separate internal authoring/preview tool** (not shipped to end users) showing one instance
+   of every visually distinct "view" the widget has — one district pane, one appellate pane,
+   Summary > Supreme Court, Summary > District Courts, the Timeline view (its own "view" per the
+   operator), Majority view, national map view, a circuit-local drilled-in view, at least one
+   inset — with a live color-editing control next to every colored/textual element, and a "sync
+   with other instances of this property" option wherever a color is shared across multiple shown
+   views.
+4. An **export** action producing a palette JSON file in whatever format the runtime mechanism
+   (item 1) actually consumes, plus **load/edit/switch-between-multiple-palettes** in that same
+   tool.
+5. An initial **dark palette** the operator will iterate on — not required to be final/perfect.
 
-**Housekeeping noticed, not yet acted on**: issues #50, #60, #62 all have MERGED PRs (#56, #61,
-#63 respectively) but were never closed on GitHub — worth closing, just hadn't gotten to it yet;
-not itself a "merge authority" decision, just tidiness.
+**Open questions to resolve BEFORE writing code — flag these to the operator rather than guessing
+silently (this was called out in the issue body itself):**
+- Exact host-facing API shape: an attribute (e.g. `data-ctt-theme`) vs. a JS method (e.g.
+  `CourtTracker.setPalette(...)`) vs. both.
+- Where the palette-authoring tool lives in the repo (e.g. `tools/palette-editor.html`) and
+  whether it's tracked in git at all as a dev-only artifact — it should almost certainly NOT ship
+  in `dist/`, since it's not part of the embeddable widget itself.
+- Whether palette JSON files live under `data/` or `embed/`, and whether `SCHEMA_VERSION`/
+  `docs/DATA_CONTRACT.md` policy (CLAUDE.md §4) applies to them at all — a palette is presentation,
+  not the judges/courts data contract, but this was flagged as worth confirming explicitly rather
+  than assuming an exemption.
+- **Whether `embed/appointments-chart.js`/`.css` (the separate beeswarm widget, prefix `.cta-`,
+  NOT `.ctt-`) is in scope for this dark-mode effort at all.** The operator's original laundry-list
+  text and the issue body both describe court-tracker's own views exclusively (Summary panes,
+  Timeline, map drill-downs) — the beeswarm was never mentioned. Don't assume it's included; ask.
 
-**Standing gotcha, worth remembering every time a new branch is cut mid-backlog**: a branch cut
-from local `main` BEFORE a concurrently-open PR merges will miss that PR's changes even after it
-merges on GitHub — local `main` doesn't move on its own. Cutting each new branch only AFTER the
-previous PR has actually merged (as this session did throughout) avoids it entirely — keep doing
-that rather than branching ahead of an open PR "to save time."
+**Codebase groundwork already surveyed (accurate as of this session's end — re-verify before
+trusting, since more commits may have landed by the time #71 starts):**
+- `embed/court-tracker.css`'s `.ctt-root` block already centralizes ~12 CSS custom properties
+  (`--ctt-bg`, `--ctt-panel`, `--ctt-ink`, `--ctt-muted`, `--ctt-line`, `--ctt-accent`, `--ctt-rep`,
+  `--ctt-dem`, `--ctt-other`, `--ctt-senior`, `--ctt-map`, `--ctt-circuit`), used in ~96 places via
+  `var(--ctt-*)` — good bones for a palette-swap mechanism already.
+  (`--ctt-band-rep`/`--ctt-band-dem` existed at one point but were removed as vestigial along with
+  the Change view in issue #67 — don't expect them.)
+- There are still **~29 unique hardcoded hex colors** elsewhere in `court-tracker.css` that don't
+  route through a token yet — auditing and folding these into the token set is real, necessary
+  work for item 1 above to be complete, not a rounding error to skip.
+- JS-side hardcoded color usage is minimal (essentially none beyond one incidental match found via
+  an earlier grep) — most color logic already flows through CSS custom properties or party-class
+  names (`ctt-rep`/`ctt-dem`/etc.), which is favorable for a palette-swap approach.
+- No existing dark-mode infrastructure of any kind exists yet in this repo — this is greenfield
+  within the constraints above, not a partial implementation to extend.
 
-**Reference, only if the Majority-view arc/collision-avoidance code is touched again** (none of
-#65-#71 currently touches it, so this is NOT condensed further here — see prior revisions of this
-file, e.g. `git log -p -- PROGRESS.md` around commits `a0d189c`/`84b37ec`/`b797ea7`, for the full
-`layoutArc`/`bandR`/`Rmax`-vs-`Wmax`/`PANE_EDGE_TOLERANCE_PX` writeup that used to live in this
-section — it's been trimmed from this briefing since it isn't the active task, not because it
-stopped being true).
+**Suggested first step when resuming**: do NOT start implementing. Read issue #71's full body,
+then either (a) ask the operator the open questions above directly, or (b) propose concrete
+answers to each and get explicit sign-off before writing any code — this was the recommendation
+made at the end of the prior session too, given the size and number of genuinely open design
+decisions packed into one issue.
+
+**Housekeeping noticed across this whole backlog, not yet acted on**: issues #50, #60, #62 all
+have MERGED PRs (#56, #61, #63 respectively) but were never closed on GitHub — worth closing
+whenever convenient; not a "merge authority" decision, just tidiness.
 
 ## Phase 0 — Scaffold & contracts  ✅ DONE (2026-07-10)
 - [x] Create repo skeleton per `CLAUDE.md` §Repo map; confirm `index.html` loads an empty shell.
@@ -441,6 +441,21 @@ Prove the whole app shell and asset schema on one circuit with hand-authored sam
 - Next: ...
 - Blockers: ...
 -->
+
+### 2026-09-10 (dw) — Session paused at operator's request, ahead of starting issue #71
+- Phase: 4. No code work this entry — the operator asked to pause the session here (context
+  budget) and have the Resume briefing (above) prepared specifically for the next session to pick
+  up issue #71 cleanly, rather than continuing into it now.
+- Rewrote the Resume briefing wholesale: full issue #71 scope summary, the open design questions
+  that need resolving before writing any code (host-facing API shape, where the palette-authoring
+  tool and palette JSON files live, whether the separate beeswarm widget is in scope), and a
+  concrete summary of the existing CSS custom-property groundwork (~12 tokens, ~96 usages, ~29
+  remaining hardcoded hex colors still needing an audit) so the next session doesn't have to
+  re-derive it from scratch.
+- No branch, no PR, nothing mid-flight — a clean stopping point, not a blocker.
+- Next: read issue #71 in full, then resolve its open questions with the operator (ask, don't
+  assume) before starting any implementation.
+- Blockers: none — this is a deliberate pause, not a stall.
 
 ### 2026-09-10 (dv) — PR #77 (issue #70) MERGED (operator approved) after two follow-up rounds — 6 of 7 backlog issues done
 - Phase: 4. Operator approved PR #77 ("all of those new features appear to have correct behavior.
