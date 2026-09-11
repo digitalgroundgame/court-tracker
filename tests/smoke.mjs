@@ -128,6 +128,8 @@ const allItems = root.querySelectorAll(".ctt-selector .ctt-selector-item");
 assert(allItems.length === 14, `selector lists Summary + 13 circuits (got ${allItems.length})`);
 assert(allItems[0].getAttribute("data-court-id") === "summary", "Summary is the first selector entry");
 const circuitItems = [...allItems].filter((i) => i.getAttribute("data-court-id") !== "summary");
+assert(root.querySelector(".ctt-pane-stow").classList.contains("ctt-hidden-hard"),
+  "edge stow tab starts hidden — nothing selected yet, so '▼ Show' would have nothing to reveal");
 assert(root.querySelector(".ctt-svg-layer svg"), "national SVG injected");
 const g = root.querySelector(".ctt-svg-layer svg g");
 assert(/scale\(1,-1\) translate\(0, -?\d/.test(g.getAttribute("transform")) && !g.getAttribute("transform").includes("--"),
@@ -954,7 +956,11 @@ assert(!root.querySelector(".ctt-pane").classList.contains("ctt-is-open"),
 click(root.querySelector(".ctt-pane-stow")); await sleep(20);
 assert(root.querySelector(".ctt-pane").classList.contains("ctt-is-open"),
   "the edge tab still brings the pane back up");
+assert(!root.querySelector(".ctt-pane-stow").classList.contains("ctt-hidden-hard"),
+  "the edge tab is visible while a court is selected, even with the pane open");
 click(natBlock("ca2")); await sleep(20);   // deselect -> clean state
+assert(root.querySelector(".ctt-pane-stow").classList.contains("ctt-hidden-hard"),
+  "deselecting entirely hides the edge tab (nothing left for '▼ Show' to reveal — longstanding bug)");
 
 console.log("Summary pane (operator ask, 2026-09-03 — replaces the old lone SCOTUS entry)");
 // Reset the affiliation-mark state (an earlier test already made a real choice via ca8's

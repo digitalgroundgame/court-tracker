@@ -619,8 +619,12 @@ function buildShell(root) {
 
   const pane = el("div", "ctt-pane", { role: "region", "aria-label": "Court detail" });
   const paneBody = el("div", "ctt-pane-body");
-  const stow = el("button", "ctt-pane-stow", { type: "button", "aria-label": "Hide panel", title: "Hide" });
+  const stow = el("button", "ctt-pane-stow ctt-hidden-hard", { type: "button", "aria-label": "Hide panel", title: "Hide" });
   stow.textContent = "▲";
+  // Hidden by default (nothing selected yet) — togglePane() below is what un-hides it once a
+  // court is selected, and re-hides it on deselect (issue: the tab stayed visible showing "▼"
+  // with nothing for it to reveal, since deselecting clears S.selectedCourt entirely rather
+  // than just stowing an active selection's pane).
   // Toggle: hide if open; re-show if a court is selected (fixes stow not re-showing).
   stow.addEventListener("click", () => {
     const open = pane.classList.contains("ctt-is-open");
@@ -705,6 +709,10 @@ function togglePane(open) {
   pane.classList.toggle("ctt-is-open", open);
   stow.textContent = open ? "▲" : "▼";
   stow.title = open ? "Hide" : "Show";
+  // Only meaningful (and only shown) while a court is actually selected — with nothing selected,
+  // "▼ Show" would have nothing to reveal (called with S.selectedCourt already updated by every
+  // caller: selectCourt/selectSummary/deselect/drillOut all set it before calling this).
+  stow.classList.toggle("ctt-hidden-hard", !S.selectedCourt);
   // The pane "slides down over the map, covering it fully" (CLAUDE.md §5) — the circuit-drill-in
   // fixed sub-assembly must actually go AWAY while that's true, not just get visually covered.
   updateDistrictSubassemblyVisibility();
