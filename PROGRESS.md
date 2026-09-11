@@ -8,9 +8,11 @@
 
 **CURRENT PHASE:** Phase 4 — Polish, mobile, resilience — now spanning TWO widgets: the
 tracker (Phase-4 tail items open; the third pane view — "Change" — was removed 2026-09-10, issue
-#67, archived in `archive/change-view/`) and the appointments beeswarm (feature-complete first
-version, operator refinement rounds ongoing; see sessions ai→at, aw).
-**Last updated:** 2026-09-10 (ds)
+#67, archived in `archive/change-view/`; the map-deployed "Set upon map" district overlay was
+removed the same day, issue #70, archived in `archive/set-upon-map/`) and the appointments
+beeswarm (feature-complete first version, operator refinement rounds ongoing; see sessions ai→at,
+aw).
+**Last updated:** 2026-09-10 (dt)
 
 ## Resume briefing
 <!-- Replaced wholesale at the end of each session — this is not an appended log, it's a
@@ -31,31 +33,43 @@ priority order:
    and its correction; read it before touching the affil-mark code again).
 3. ~~**#69**~~ **MERGED** (PR #74, commit `5886a82`).
 4. ~~**#66**~~ **MERGED** (PR #75, commit `e978dd3`).
-5. **#67** — remove the Change view — **done, PR not yet opened as of this writing this session —
-   open it (`gh pr create`) if it isn't already there when you resume.** See below.
+5. ~~**#67**~~ **MERGED** (PR #76, commit `bc21936`).
 6. **#70** — remove the Set-upon-map district overlay, add zoom in/out to Summary > District
-   Courts instead (archive the removed part per the same convention #67 just used) — **next task**.
-7. **#71** — dark mode palette + switch + a palette-authoring/preview tool (largest and most
-   novel — sequenced last so it isn't built twice against soon-to-be-deleted UI from #70).
+   Courts instead — **done, PR not yet opened as of this writing this session — open it
+   (`gh pr create`) if it isn't already there when you resume.** See below.
+7. **#71** — dark mode palette + switch + a palette-authoring/preview tool — **next task once #70
+   is reviewed/merged** (largest and most novel — sequenced last on purpose).
 
-**Issue #67 is DONE, committed on branch `claude/issue-67-remove-change-view` (commit `aa04f9f`),
-full test suite passing, verified with a real-browser screenshot — this is the FIRST real use of
-the `archive/` convention from issue #65, worth reading before #70's removal (which will be the
-second).** Archived to `archive/change-view/` (`NOTES.md` + excerpts of the removed JS/CSS/smoke
-test). Removed the whole streamgraph block from `embed/court-tracker.js` (~410 lines:
-`ensureChangeData`/`buildStreamModel`/`presIndexForDay`/`valueAt`/`streamColor`/`hexToRgb`/
-`mixHex`/`renderStreamView`/`buildStreamSVG`), the `changeBtn`/`streamStage` wiring in `renderPane`,
-the `paneMode`/`streamColorScheme`/`appointmentsAll`/`presidentPhotos` state fields, the now-unused
-`PRESIDENCIES` import and `DAY_MS`/`dayNum`/`isoOfDayNum` helpers (confirmed exclusive to this
-feature via a full-file grep before removing — don't assume, re-grep if touching this area again),
-and the `.ctt-stream-*` CSS block plus its two now-vestigial custom properties
-(`--ctt-band-rep`/`--ctt-band-dem`). **Confirmed NOT removed** (still used by
-`embed/appointments-chart.js`, a separate widget): `data/appointments.json`,
-`data/president_photos.json`, `embed/presidencies.js`/`PRESIDENCIES` itself — only this file's own
-consumption of them. `tests/smoke.mjs`'s Change-view block was replaced with a check confirming the
-removal itself (no control, no leftover DOM, exactly 2 pane-view modes) rather than silently
-dropping coverage. `npm run build` confirmed byte-for-byte reproducible against the committed
-`dist/` (no drift) after the commit, per CI's own check.
+**Issue #70 is DONE, committed on branch `claude/issue-70-district-zoom` (commit `fcc72d5`), full
+test suite passing, verified with before/after screenshots — this is the SECOND real use of the
+`archive/` convention from issue #65.** Removed the map-deployed "Set upon map" overlay (its own
+draggable/resizable copy of the district cartogram, plus the fixed D/×/−/+ corner controls and the
+deploy "pull out" flyover) — archived to `archive/set-upon-map/`. **The circuit-drill-in fixed
+sub-assembly is a SEPARATE, unrelated feature and was NOT touched** — it was interleaved with the
+removed code in the original source, so the removal required a careful per-function audit rather
+than a single contiguous delete; `highlightDistrictOnMap`, `wireDistrictCartogramHover`,
+`buildDistrictCartogramSVG`, `renderDistrictSubassembly`, `updateDistrictSubassemblyVisibility`,
+`NO_DISTRICT_SUBASSEMBLY`, `NOMINAL_MAP_PX` all stayed untouched — confirmed via grep before
+removing anything, not assumed.
+
+Replaced it with zoom in/out on the Summary > District Courts INLINE cartogram: two buttons in the
+same 232px caption-row slot, `S.districtZoom` (1x-3x multiplier, persisted to localStorage —
+operator confirmed keeping that convention), a "hit the limit" button style that's a LIVE
+reflection of current zoom (not a one-off flash), and drag-to-pan clamped to the cartogram's own
+REAL measured overflow at the current zoom (never a fixed fraction like the removed overlay's own
+80%-hidden rule) — a window resize re-clamps pan but never changes the zoom level itself.
+
+**Real bug found and fixed while verifying this live in a browser, worth remembering if this
+area is touched again**: a plain `<svg>` root element has NO `offsetWidth`/`offsetHeight` (an
+`HTMLElement`-only concept) — reading them for "natural untransformed size" silently produced
+`NaN`, which the browser then silently REFUSED to apply as a `transform` value at all (not an
+error, just a no-op), leaving the cartogram permanently stuck unscaled even though the button's
+own click-feedback/localStorage/state all updated correctly — a very easy bug to miss without a
+real browser and a test that checks for an actual visible SIZE INCREASE, not just "did it crash."
+Fixed with `getBoundingClientRect()` with the transform temporarily cleared first (transforms
+affect `getBoundingClientRect()` but not `offsetWidth`/`offsetHeight` — the inverse of what's
+needed here). A jsdom-only test suite genuinely could not have caught this on its own (jsdom
+measures every box at 0 regardless of whether the underlying math is right).
 
 **Housekeeping noticed, not yet acted on**: issues #50, #60, #62 all have MERGED PRs (#56, #61,
 #63 respectively) but were never closed on GitHub — worth closing, just hadn't gotten to it yet;
@@ -421,6 +435,45 @@ Prove the whole app shell and asset schema on one circuit with hand-authored sam
 - Next: ...
 - Blockers: ...
 -->
+
+### 2026-09-10 (dt) — PR #76 (issue #67) MERGED (operator approved); removed 'Set upon map', added District Courts zoom (issue #70)
+- Phase: 4. Operator approved PR #76 ("excellent, this worked well and i approve squashing. we can
+  move onto #70") — squash-merged as `bc21936`; issue #67 auto-closed.
+- Also received a mid-task clarification from the operator while starting #70: confirmed the
+  circuit-drill-in district sub-assembly must be KEPT, and the removal scope is only the
+  national-map-deployed "Set upon map" overlay — matches what the plan already was, no course
+  correction needed, but worth noting the operator proactively flagged it given how interleaved
+  the two features were in the source.
+- Removed the "Set upon map" deployed-cartogram feature (draggable/resizable overlay, fixed
+  D/×/−/+ corner controls, deploy "pull out" flyover) — archived to `archive/set-upon-map/`, the
+  SECOND real use of the archive convention. Required a careful per-function audit rather than a
+  contiguous delete, since the circuit-drill-in sub-assembly (a separate, unrelated, KEPT feature)
+  was interleaved with it in the original source; confirmed via grep before touching anything that
+  `highlightDistrictOnMap`/`wireDistrictCartogramHover`/`buildDistrictCartogramSVG`/
+  `renderDistrictSubassembly`/`updateDistrictSubassemblyVisibility`/`NO_DISTRICT_SUBASSEMBLY`/
+  `NOMINAL_MAP_PX` were all still needed and left untouched.
+- Added zoom in/out to the Summary > District Courts inline cartogram in the vacated caption-row
+  slot: `S.districtZoom` (1x-3x, persisted to localStorage per operator confirmation), a
+  "hit-the-limit" button style that's a live reflection of current zoom, and drag-to-pan clamped
+  to the cartogram's own real measured overflow (not a fixed fraction) — a resize re-clamps pan
+  but never touches the zoom level.
+- Asked the operator one clarifying question mid-task (zoom persistence across reloads, matching
+  the removed feature's own convention) rather than guessing — confirmed yes.
+- Found and fixed a real bug via live browser testing: `<svg>` root elements have no
+  `offsetWidth`/`offsetHeight`, so the zoom transform's "natural size" math silently produced NaN,
+  which the browser silently refused to apply — the cartogram was stuck unscaled despite every
+  other piece of state (button styles, localStorage) updating correctly. Fixed with
+  `getBoundingClientRect()` + a temporarily-cleared transform. Caught only because a
+  browser-checks.mjs assertion specifically checked for a real SIZE INCREASE, not just absence of
+  a crash — jsdom alone could not have caught this (it measures every box at 0 regardless).
+- Verified: `npm test` + `npm run test:browser` — ALL PASS (including adapted regression coverage
+  for a hover/grow bug originally caught via the now-removed overlay, re-homed onto the
+  sub-assembly in both test files since both call sites share the same code path). `npm run build`
+  confirmed byte-for-byte reproducible against the committed `dist/`. Verified visually with
+  before/after screenshots (1x and ~1.7x zoom).
+- Next: open the PR for #70 (not yet opened as of this entry), then move to issue #71 (dark mode +
+  palette tool — the largest remaining item) once #70 is reviewed.
+- Blockers: none.
 
 ### 2026-09-10 (ds) — PR #75 (issue #66) MERGED (operator approved); removed the Change view (issue #67)
 - Phase: 4. Operator approved PR #75 ("this works perfectly too, you can merge it and we'll move

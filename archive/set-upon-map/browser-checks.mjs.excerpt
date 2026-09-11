@@ -1,0 +1,117 @@
+
+  console.log("District 'Set upon map' pull-out animation: real colors, not solid black (jsdom can't test this — .ctt-district-flyover lives OUTSIDE .ctt-root, so its var(--ctt-rep) etc. only resolve with real computed-style inheritance)");
+  await ev(`document.querySelector('.ctt-selector-item[data-court-id="summary"]').click()`); await sleep(400);
+  await ev(`[...document.querySelectorAll('.ctt-mode-opt')].find(b=>b.textContent==='District Courts').click()`); await sleep(500);
+  await ev(`document.querySelector('.ctt-district-deploy-btn').click()`);
+  await sleep(120);   // mid-flight — the flyover should exist and already be animating
+  const flyMid = JSON.parse(await ev(`(() => {
+    const fly = document.querySelector('.ctt-district-flyover');
+    if (!fly) return JSON.stringify({ exists: false });
+    const sq = fly.querySelector('.ctt-district-sq.ctt-sq-rep, .ctt-district-sq.ctt-sq-dem');
+    return JSON.stringify({ exists: true, fill: sq && getComputedStyle(sq).fill, paneOpen: document.querySelector('.ctt-pane').classList.contains('ctt-is-open') });
+  })()`));
+  assert(flyMid.exists, "the flyover clone exists mid-animation");
+  assert(!flyMid.paneOpen, "the Summary pane has already closed while the flyover is still animating ('the summary pane flips up')");
+  assert(flyMid.fill && flyMid.fill !== "rgb(0, 0, 0)",
+    `flyover squares render their REAL red/blue/etc color, not solid black from a missing CSS var (got ${flyMid.fill})`);
+  await sleep(700);   // let the animation finish
+  const settled = JSON.parse(await ev(`(() => {
+    const fly = document.querySelector('.ctt-district-flyover');
+    const ov = document.querySelector('.ctt-district-overlay');
+    return JSON.stringify({ flyGone: !fly, overlayVisible: ov && getComputedStyle(ov).display !== 'none' });
+  })()`));
+  assert(settled.flyGone, "the flyover clone is removed once the animation settles");
+  assert(settled.overlayVisible, "the real persistent overlay is visible in its place");
+
+// ---- (kept 211-247 unchanged: unrelated to Set-upon-map) ----
+
+  console.log("Summary > District controls row: deploy button right-aligned + width-matched to the docked panel (operator ask, 2026-09-07)");
+  // Already on Summary > District from the name-height check just above — re-clicking the
+  // already-selected "summary" item here would TOGGLE IT CLOSED instead of doing nothing.
+  const alignGeom = JSON.parse(await ev(`(() => {
+    const btn = document.querySelector('.ctt-district-deploy-btn'), detail = document.querySelector('.ctt-district-detail');
+    const b = btn.getBoundingClientRect(), d = detail.getBoundingClientRect();
+    return JSON.stringify({ widthDiff: Math.abs(b.width - d.width), rightDiff: Math.abs(b.right - d.right) });
+  })()`));
+  assert(alignGeom.widthDiff < 1, `deploy button width matches the docked panel (diff ${alignGeom.widthDiff})`);
+  assert(alignGeom.rightDiff < 1, `deploy button right edge aligns with the docked panel (diff ${alignGeom.rightDiff})`);
+
+  console.log("fixed corner controls sit top-right; drill-in sub-assembly sits bottom-left (operator ask, 2026-09-07)");
+  await ev(`document.querySelector('.ctt-pane-close').click()`); await sleep(400);   // close Summary — the corner controls are hidden while any pane is open
+  await ev(`document.querySelector('.ctt-district-corner-controls .ctt-district-overlay-btn').click()`); await sleep(700);
+  const cornerGeom = JSON.parse(await ev(`(() => {
+    const box = document.querySelector('.ctt-district-corner-controls'), vp = document.querySelector('.ctt-map-viewport');
+    const r = box.getBoundingClientRect(), v = vp.getBoundingClientRect();
+    return JSON.stringify({ top: r.top - v.top, right: v.right - r.right });
+  })()`));
+  assert(cornerGeom.top < 30 && cornerGeom.right < 30, `corner controls anchored near the top-right (${JSON.stringify(cornerGeom)})`);
+
+// ---- (kept 269-277, the sub-assembly bottom-left position check, but renamed the console.log
+// and dropped its dependency on the corner-controls deploy click above) ----
+
+  console.log("REGRESSION (operator report, 2026-09-07): hovering one district in the deployed assembly must not grow every district");
+  const growthDids = JSON.parse(await ev(`(() => {
+    const sq = document.querySelector('.ctt-district-overlay .ctt-district-sq[data-district-id="cacd"]');
+    const r = sq.getBoundingClientRect();
+    sq.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: r.x + 1, clientY: r.y + 1 }));
+    return null;
+  })()`));
+  await sleep(300);
+  const grownDids = JSON.parse(await ev(`JSON.stringify([...new Set([...document.querySelectorAll('.ctt-district-overlay .ctt-district-sq.ctt-district-sq-grown')].map(s=>s.getAttribute('data-district-id')))])`));
+  assert(JSON.stringify(grownDids) === JSON.stringify(["cacd"]), `only cacd's cells are grown, not the whole assembly (got ${grownDids})`);
+
+// ---- (this regression's INTENT was adapted, not dropped -- see the live file's own
+// sub-assembly-hover regression check for the reproduced version, since the sub-assembly's
+// own wireDistrictCartogramHover call site has the SAME 'no isPinned passed' shape that
+// originally caused this bug) ----
+
+  console.log("assembly edge-clipping is now symmetric on all 4 edges, each capped near 80% hidden (operator ask, 2026-09-08)");
+  await ev(`document.querySelector('.ctt-pane-close').click()`); await sleep(400);   // close Summary — may already be deployed from earlier in this run
+  const alreadyDeployed = await ev(`getComputedStyle(document.querySelector('.ctt-district-overlay')).display !== 'none'`);
+  if (!alreadyDeployed) { await ev(`document.querySelector('.ctt-district-corner-controls .ctt-district-overlay-btn').click()`); await sleep(700); }
+  const dragBy = async (dx, dy) => {
+    await ev(`(() => {
+      const ov = document.querySelector('.ctt-district-overlay');
+      const r = ov.getBoundingClientRect();
+      ov.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: r.x + 10, clientY: r.y + 10 }));
+      window.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: r.x + 10 + (${dx}), clientY: r.y + 10 + (${dy}) }));
+      window.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
+    })()`);
+    await sleep(100);
+  };
+  const overlayGeom = async () => JSON.parse(await ev(`(() => {
+    const ov = document.querySelector('.ctt-district-overlay'), vp = document.querySelector('.ctt-map-viewport');
+    const r = ov.getBoundingClientRect(), v = vp.getBoundingClientRect();
+    return JSON.stringify({ w: r.width, h: r.height, left: v.left - r.left, right: r.right - v.right, top: v.top - r.top, bottom: r.bottom - v.bottom });
+  })()`));
+  await dragBy(-2000, 0);
+  let og = await overlayGeom();
+  assert(og.left > 0 && og.left <= og.w * 0.81, `left-edge clip capped near 80% of width (${og.left} / ${og.w})`);
+  await dragBy(4000, 0);
+  og = await overlayGeom();
+  assert(og.right > 0 && og.right <= og.w * 0.81, `right-edge clip capped near 80% of width (${og.right} / ${og.w})`);
+  await dragBy(0, -2000);
+  og = await overlayGeom();
+  assert(og.top > 0 && og.top <= og.h * 0.81, `top-edge clip capped near 80% of height (${og.top} / ${og.h})`);
+  await dragBy(0, 4000);
+  og = await overlayGeom();
+  assert(og.bottom > 0 && og.bottom <= og.h * 0.81, `bottom-edge clip capped near 80% of height (${og.bottom} / ${og.h})`);
+
+  console.log("deploy-button arrows flip direction with the label (operator ask, 2026-09-10)");
+  await ev(`document.querySelector('.ctt-selector-item[data-court-id="summary"]').click()`); await sleep(400);
+  await ev(`[...document.querySelectorAll('.ctt-mode-opt')].find(b=>b.textContent==='District Courts').click()`); await sleep(600);
+  const btnLabels = JSON.parse(await ev(`(() => {
+    const btn = document.querySelector('.ctt-district-deploy-btn');
+    const before = btn.textContent;
+    btn.click();
+    return JSON.stringify({ before, after: btn.textContent });
+  })()`));
+  await sleep(900);
+  console.log("   btnLabels:", JSON.stringify(btnLabels));
+  const arrowOf = (s) => s.trim()[0];
+  assert(btnLabels.before !== btnLabels.after, "label text actually changed");
+  assert(arrowOf(btnLabels.before) !== arrowOf(btnLabels.after),
+    `arrow direction flips along with the label (before "${btnLabels.before}" after "${btnLabels.after}")`);
+  assert((btnLabels.before.includes("Set upon map") && arrowOf(btnLabels.before) === "▼") ||
+    (btnLabels.before.includes("Remove from map") && arrowOf(btnLabels.before) === "▲"),
+    `"Set upon map" points down, "Remove from map" points up (got "${btnLabels.before}")`);
