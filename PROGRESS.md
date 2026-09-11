@@ -11,26 +11,24 @@ tracker (Phase-4 tail items open; the third pane view — "Change" — was remov
 #67, archived in `archive/change-view/`; the map-deployed "Set upon map" district overlay was
 removed the same day, issue #70, archived in `archive/set-upon-map/`) and the appointments
 beeswarm (feature-complete first version, operator refinement rounds ongoing; see sessions ai→at,
-aw, dx, dy, dz).
-**Last updated:** 2026-09-11 (dz)
+aw, dx, dy, dz, ea).
+**Last updated:** 2026-09-11 (ea)
 
 ## Resume briefing
 <!-- Replaced wholesale at the end of each session — this is not an appended log, it's a
 briefing for the next session only. Session narrative belongs in ## Session log below;
 this section should say only what's needed to pick the work back up cleanly. -->
 
-**Where things stand**: a non-backlog, operator-reported bug — the edge stow tab ("▼ Show") stayed
-visible but inert after fully deselecting a court (nothing left to reveal) — was fixed this session
-on branch `claude/stow-arrow-hidden-when-inert`, PR open awaiting operator review (see Session log
-below). **Issue #71 (dark mode + typography theming) remains deferred and not started**, but its
-scope is fully resolved: see the comment posted on issue #71 (2026-09-11) rather than re-reading
-old open questions here — six backlog issues' (#65-#70) impact on #71's view inventory, the font
-property scope expansion (runtime-switchable, same mechanism as color), the beeswarm widget
-confirmed IN SCOPE, every originally-open question answered, and a proposed 3-PR phased breakdown
-(1. token audit, no visual change; 2. runtime mechanism + initial dark theme + demo switch + docs;
-3. `tools/theme-editor.html` authoring tool). **No further design questions should be needed
-before starting PR 1 of #71 whenever it's next prioritized — this is the natural next task once
-the current small PR is reviewed.**
+**Where things stand**: PR #82 (edge stow tab hidden when nothing is selected, a non-backlog
+operator-reported bug) is MERGED (squashed as `75a82f9`) — no open branch, nothing mid-flight.
+**Issue #71 (dark mode + typography theming) remains deferred and not started**, but its scope is
+fully resolved: see the comment posted on issue #71 (2026-09-11) rather than re-reading old open
+questions here — six backlog issues' (#65-#70) impact on #71's view inventory, the font property
+scope expansion (runtime-switchable, same mechanism as color), the beeswarm widget confirmed IN
+SCOPE, every originally-open question answered, and a proposed 3-PR phased breakdown (1. token
+audit, no visual change; 2. runtime mechanism + initial dark theme + demo switch + docs; 3.
+`tools/theme-editor.html` authoring tool). **No further design questions should be needed before
+starting PR 1 of #71 whenever it's next prioritized — this is the natural next task.**
 
 **Working rhythm (still in force, operator ask 2026-09-10): pause after finishing each unit of
 work for review — don't self-merge, don't start the next thing without explicit go-ahead.** See
@@ -394,6 +392,12 @@ Prove the whole app shell and asset schema on one circuit with hand-authored sam
 - Next: ...
 - Blockers: ...
 -->
+
+### 2026-09-11 (ea) — PR #82 MERGED (operator approved, "looks like this fix worked perfectly, you can squash it")
+- Phase: 4. Squash-merged as `75a82f9`. Ledger-only entry, no new code — same pattern as (dv)/(dy).
+- Next: issue #71 (dark mode + typography theming) — scope fully resolved, ready for PR 1
+  (token audit) whenever prioritized. No other open work right now.
+- Blockers: none.
 
 ### 2026-09-11 (dz) — Fixed: edge stow tab ("▼ Show") stayed visible-but-inert after fully deselecting a court
 - Phase: 4. Operator-reported bug, no GitHub issue filed (worked directly on branch
