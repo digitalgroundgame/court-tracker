@@ -11,24 +11,34 @@ tracker (Phase-4 tail items open; the third pane view — "Change" — was remov
 #67, archived in `archive/change-view/`; the map-deployed "Set upon map" district overlay was
 removed the same day, issue #70, archived in `archive/set-upon-map/`) and the appointments
 beeswarm (feature-complete first version, operator refinement rounds ongoing; see sessions ai→at,
-aw, dx, dy, dz, ea).
-**Last updated:** 2026-09-11 (ea)
+aw, dx, dy, dz, ea, eb).
+**Last updated:** 2026-09-25 (eb)
 
 ## Resume briefing
 <!-- Replaced wholesale at the end of each session — this is not an appended log, it's a
 briefing for the next session only. Session narrative belongs in ## Session log below;
 this section should say only what's needed to pick the work back up cleanly. -->
 
-**Where things stand**: PR #82 (edge stow tab hidden when nothing is selected, a non-backlog
-operator-reported bug) is MERGED (squashed as `75a82f9`) — no open branch, nothing mid-flight.
-**Issue #71 (dark mode + typography theming) remains deferred and not started**, but its scope is
-fully resolved: see the comment posted on issue #71 (2026-09-11) rather than re-reading old open
-questions here — six backlog issues' (#65-#70) impact on #71's view inventory, the font property
-scope expansion (runtime-switchable, same mechanism as color), the beeswarm widget confirmed IN
-SCOPE, every originally-open question answered, and a proposed 3-PR phased breakdown (1. token
-audit, no visual change; 2. runtime mechanism + initial dark theme + demo switch + docs; 3.
+**Where things stand**: PR #82 is MERGED (squashed as `75a82f9`) — no open branch, nothing
+mid-flight on the widget work itself. **This session (eb) was docs/protocol-only**: it resolved
+an apparent discrepancy the operator flagged between `CLAUDE.md`'s bundled-ledger-entry rule and
+recent practice showing separate "ledger-only" PRs (#59, #64, #78, #81, #83). Conclusion: bundling
+was never reverted (`#77`/`#80`/`#82` all carry `PROGRESS.md` in the same diff as their code) —
+the ledger-only PRs are an unavoidable corollary (a bundled entry can't cite its own eventual
+squash SHA), and `CLAUDE.md` §7 now has a new bullet documenting that pattern explicitly so it
+isn't mistaken for a rule change again. **This PR touches `CLAUDE.md` itself — the operator
+verbally agreed to the fix before this branch was cut, but per the hard-stop rule it still needs
+their go-ahead on the actual PR before merging.**
+
+**Issue #71 (dark mode + typography theming) remains deferred and not started, and is the next
+substantive (non-docs) task** — untouched by this session. Its scope is fully resolved: see the
+comment posted on issue #71 (2026-09-11) rather than re-reading old open questions here — six
+backlog issues' (#65-#70) impact on #71's view inventory, the font property scope expansion
+(runtime-switchable, same mechanism as color), the beeswarm widget confirmed IN SCOPE, every
+originally-open question answered, and a proposed 3-PR phased breakdown (1. token audit, no visual
+change; 2. runtime mechanism + initial dark theme + demo switch + docs; 3.
 `tools/theme-editor.html` authoring tool). **No further design questions should be needed before
-starting PR 1 of #71 whenever it's next prioritized — this is the natural next task.**
+starting PR 1 of #71 whenever it's next prioritized.**
 
 **Working rhythm (still in force, operator ask 2026-09-10): pause after finishing each unit of
 work for review — don't self-merge, don't start the next thing without explicit go-ahead.** See
@@ -392,6 +402,27 @@ Prove the whole app shell and asset schema on one circuit with hand-authored sam
 - Next: ...
 - Blockers: ...
 -->
+
+### 2026-09-25 (eb) — CLAUDE.md: document the post-merge ledger-correction PR as an expected corollary of the bundling rule
+- Phase: 4 (docs/protocol only — no widget code touched). Prompted by the operator flagging what
+  looked like a discrepancy between `CLAUDE.md`'s bundled-ledger-entry rule (`69b7b65`, 2026-09-07)
+  and recent practice showing separate "ledger-only" PRs (#59, #64, #78, #81, #83).
+- Investigated via `git log -- CLAUDE.md` and `gh pr view --json files` on the recent code PRs:
+  bundling was never actually reverted — #77/#80/#82 all carry `PROGRESS.md` in the same diff as
+  their code, confirming the documented rule is still followed. The ledger-only PRs are a distinct,
+  structurally unavoidable corollary: an entry written *before* squash-merge can't cite that
+  commit's own resulting SHA, so once merge authority (case-by-case, sometimes deferred to the
+  operator in a later session) actually merges the PR, a tiny follow-up backfills "MERGED (squashed
+  as `<SHA>`)" and logs it. `16f6cc3`'s own message ("same pattern as (dv)/(dy)") shows this was
+  already a recognized, repeating practice — just never written into `CLAUDE.md`.
+- Added a new `CLAUDE.md` §7 bullet documenting this explicitly, between the "Open a PR" bullet and
+  "Merge authority is case-by-case," so a future session doesn't misread the ledger-only PRs as a
+  reversal and doesn't need to re-derive this from git archaeology.
+- Next: issue #71 (dark mode + typography theming) — unaffected by this session, scope already
+  fully resolved per the 2026-09-11 issue comment.
+- Blockers: none, but this PR touches `CLAUDE.md` itself — the operator verbally agreed to the fix
+  before this branch was cut, but per the hard-stop rule still needs their explicit go-ahead on the
+  PR itself before it merges.
 
 ### 2026-09-11 (ea) — PR #82 MERGED (operator approved, "looks like this fix worked perfectly, you can squash it")
 - Phase: 4. Squash-merged as `75a82f9`. Ledger-only entry, no new code — same pattern as (dv)/(dy).
