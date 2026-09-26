@@ -11,8 +11,8 @@ tracker (Phase-4 tail items open; the third pane view — "Change" — was remov
 #67, archived in `archive/change-view/`; the map-deployed "Set upon map" district overlay was
 removed the same day, issue #70, archived in `archive/set-upon-map/`) and the appointments
 beeswarm (feature-complete first version, operator refinement rounds ongoing; see sessions ai→at,
-aw, dx, dy, dz, ea, eb, ec).
-**Last updated:** 2026-09-25 (ec)
+aw, dx, dy, dz, ea, eb, ec, ed).
+**Last updated:** 2026-09-25 (ed)
 
 ## Resume briefing
 <!-- Replaced wholesale at the end of each session — this is not an appended log, it's a
@@ -20,21 +20,21 @@ briefing for the next session only. Session narrative belongs in ## Session log 
 this section should say only what's needed to pick the work back up cleanly. -->
 
 **Where things stand**: PR #82 is MERGED (squashed as `75a82f9`) — no open branch, nothing
-mid-flight on the widget work itself. **Sessions (eb) and (ec) were both docs/protocol-only, no
+mid-flight on the widget work itself. **Sessions (eb)/(ec)/(ed) were all docs/protocol-only, no
 widget code touched.** (eb) resolved an apparent discrepancy between `CLAUDE.md`'s
 bundled-ledger-entry rule and recent "ledger-only" PRs (#59, #64, #78, #81, #83) — conclusion:
 bundling was never reverted, the ledger-only PRs are an unavoidable corollary (a bundled entry
 can't cite its own eventual squash SHA), and `CLAUDE.md` §7 now documents that pattern explicitly.
-That PR (#84) is MERGED (squashed as `7f461c0`), with the operator's explicit go-ahead per the
-hard-stop rule. (ec), this session: added `docs/export/` — three portable, project-agnostic
-procedure-spec templates (git squash-merge workflow, resumable progress-ledger, and a paste-ready
-setup kickoff prompt) written for use in *other* repos, not court-tracker-specific. Not part of
-the #65-71 backlog, no GitHub issue filed — direct operator request. **PR open, awaiting the
-operator's review before merge** (docs-only addition, no code/data touched, but per the standing
-working rhythm this still pauses for explicit go-ahead rather than self-merging).
+That PR (#84) is MERGED (squashed as `7f461c0`). (ec) added `docs/export/` — three portable,
+project-agnostic procedure-spec templates (git squash-merge workflow, resumable progress-ledger,
+paste-ready setup kickoff prompt) written for use in *other* repos, not court-tracker-specific; not
+part of the #65-71 backlog, no GitHub issue, direct operator request. **That PR (#85) is MERGED
+(squashed as `efd50f3`)**, per the operator's explicit "go ahead and merge it." (ed), this
+session: ledger-only follow-up recording #85's merge — the exact self-mergeable pattern (eb) itself
+documented, applied to its own output one session later. No open branches, nothing mid-flight.
 
 **Issue #71 (dark mode + typography theming) remains deferred and not started, and is the next
-substantive (non-docs) task** — untouched by this session. Its scope is fully resolved: see the
+substantive (non-docs) task** — untouched by (eb)/(ec)/(ed). Its scope is fully resolved: see the
 comment posted on issue #71 (2026-09-11) rather than re-reading old open questions here — six
 backlog issues' (#65-#70) impact on #71's view inventory, the font property scope expansion
 (runtime-switchable, same mechanism as color), the beeswarm widget confirmed IN SCOPE, every
@@ -405,6 +405,13 @@ Prove the whole app shell and asset schema on one circuit with hand-authored sam
 - Next: ...
 - Blockers: ...
 -->
+
+### 2026-09-25 (ed) — PR #85 MERGED (operator: "go ahead and merge it")
+- Phase: 4. Squash-merged as `efd50f3`. Ledger-only entry, no new code — same self-mergeable
+  pattern (eb) documented in `CLAUDE.md` §7, now applied to its own follow-on PR one session later.
+- Next: issue #71 (dark mode + typography theming) — scope fully resolved, ready for PR 1 (token
+  audit) whenever prioritized. No other open work right now.
+- Blockers: none.
 
 ### 2026-09-25 (ec) — Add docs/export/: portable git-workflow + progress-ledger spec templates
 - Phase: 4 (docs-only, no widget code touched, no GitHub issue — direct operator request following
