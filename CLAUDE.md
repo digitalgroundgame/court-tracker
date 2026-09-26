@@ -234,6 +234,17 @@ public-API policy, and `docs/DATA_SOURCES.md` for full collection methodology + 
      `PROGRESS.md` entry's heading exactly** — with `--squash` (below), that title becomes the
      commit message that actually lands on `main` (GitHub appends `(#N)`), so the PR title, the
      landed commit, and the `PROGRESS.md` heading all stay in sync and are browsable interchangeably.
+   - **A small "ledger-only" follow-up PR after merge is expected, not a reversal of the bundling
+     rule above** (documented 2026-09-25, once the pattern had already recurred five times — PRs
+     #59, #64, #78, #81, #83 — without ever being written down here). The bundled entry is written
+     *before* the squash-merge happens, so it cannot state that commit's own resulting SHA, and it
+     may say "PR open, awaiting review" if merge authority (below) defers to the operator — possibly
+     in a later session than the one that opened the code PR. Once that PR actually merges, open a
+     tiny follow-up PR that does only two things: flips the Resume Briefing from "awaiting review" to
+     "MERGED (squashed as `<SHA>`)", and adds a one-line Session Log entry recording the merge. This
+     follow-up is docs-only, routine, and self-mergeable under the case-by-case rule below. It is not
+     license to split a ledger entry from its code as a matter of course — it exists only to backfill
+     the merge fact/SHA that couldn't be known until after the fact.
    - **Merge authority is case-by-case** (operator decision, 2026-09-06): merge routine/low-risk PRs
      yourself once clean (no CLAUDE.md boundary violations, tests pass). Leave anything touching
      data correctness, scope, or the UX contract — and any PR from a prior/different session you
