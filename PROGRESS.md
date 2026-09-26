@@ -11,8 +11,8 @@ tracker (Phase-4 tail items open; the third pane view — "Change" — was remov
 #67, archived in `archive/change-view/`; the map-deployed "Set upon map" district overlay was
 removed the same day, issue #70, archived in `archive/set-upon-map/`) and the appointments
 beeswarm (feature-complete first version, operator refinement rounds ongoing; see sessions ai→at,
-aw, dx, dy, dz, ea, eb).
-**Last updated:** 2026-09-25 (eb)
+aw, dx, dy, dz, ea, eb, ec).
+**Last updated:** 2026-09-25 (ec)
 
 ## Resume briefing
 <!-- Replaced wholesale at the end of each session — this is not an appended log, it's a
@@ -20,15 +20,18 @@ briefing for the next session only. Session narrative belongs in ## Session log 
 this section should say only what's needed to pick the work back up cleanly. -->
 
 **Where things stand**: PR #82 is MERGED (squashed as `75a82f9`) — no open branch, nothing
-mid-flight on the widget work itself. **This session (eb) was docs/protocol-only**: it resolved
-an apparent discrepancy the operator flagged between `CLAUDE.md`'s bundled-ledger-entry rule and
-recent practice showing separate "ledger-only" PRs (#59, #64, #78, #81, #83). Conclusion: bundling
-was never reverted (`#77`/`#80`/`#82` all carry `PROGRESS.md` in the same diff as their code) —
-the ledger-only PRs are an unavoidable corollary (a bundled entry can't cite its own eventual
-squash SHA), and `CLAUDE.md` §7 now has a new bullet documenting that pattern explicitly so it
-isn't mistaken for a rule change again. **This PR touches `CLAUDE.md` itself — the operator
-verbally agreed to the fix before this branch was cut, but per the hard-stop rule it still needs
-their go-ahead on the actual PR before merging.**
+mid-flight on the widget work itself. **Sessions (eb) and (ec) were both docs/protocol-only, no
+widget code touched.** (eb) resolved an apparent discrepancy between `CLAUDE.md`'s
+bundled-ledger-entry rule and recent "ledger-only" PRs (#59, #64, #78, #81, #83) — conclusion:
+bundling was never reverted, the ledger-only PRs are an unavoidable corollary (a bundled entry
+can't cite its own eventual squash SHA), and `CLAUDE.md` §7 now documents that pattern explicitly.
+That PR (#84) is MERGED (squashed as `7f461c0`), with the operator's explicit go-ahead per the
+hard-stop rule. (ec), this session: added `docs/export/` — three portable, project-agnostic
+procedure-spec templates (git squash-merge workflow, resumable progress-ledger, and a paste-ready
+setup kickoff prompt) written for use in *other* repos, not court-tracker-specific. Not part of
+the #65-71 backlog, no GitHub issue filed — direct operator request. **PR open, awaiting the
+operator's review before merge** (docs-only addition, no code/data touched, but per the standing
+working rhythm this still pauses for explicit go-ahead rather than self-merging).
 
 **Issue #71 (dark mode + typography theming) remains deferred and not started, and is the next
 substantive (non-docs) task** — untouched by this session. Its scope is fully resolved: see the
@@ -402,6 +405,25 @@ Prove the whole app shell and asset schema on one circuit with hand-authored sam
 - Next: ...
 - Blockers: ...
 -->
+
+### 2026-09-25 (ec) — Add docs/export/: portable git-workflow + progress-ledger spec templates
+- Phase: 4 (docs-only, no widget code touched, no GitHub issue — direct operator request following
+  up on session (eb)).
+- Did: after (eb) resolved the CLAUDE.md/practice discrepancy, the operator asked for that
+  discussion to become a portable, reusable procedure spec — stripped of court-tracker specifics —
+  for setting up the same branch/PR/squash-merge workflow and resumable ledger in *other* repos.
+  Wrote three files under `docs/export/`: `GIT_SQUASH_MERGE_SETUP.md`, `PROGRESS_LOG_SETUP.md`, and
+  `SETUP_INIT_PROMPT.md` (a paste-ready kickoff message), plus a short `README.md` explaining these
+  are project-agnostic and not read by court-tracker's own tooling at runtime. Iterated per operator
+  feedback to add: a discovery-first process (explicit + implicit history mining) before proposing
+  any convention, per-decision reconciliation tables instead of all-or-nothing choices, a hard gate
+  requiring the human's explicit understanding/approval of a concrete plan before any file write or
+  state-changing command, and the generalized post-merge-ledger-correction corollary from (eb) as a
+  documented pattern in the templates themselves.
+- Next: issue #71 (dark mode + typography theming) is still the next substantive widget task,
+  unaffected by (eb)/(ec).
+- Blockers: none. Docs-only, no rebuild/test suite needed; PR left open for operator review per the
+  standing working rhythm rather than self-merged.
 
 ### 2026-09-25 (eb) — CLAUDE.md: document the post-merge ledger-correction PR as an expected corollary of the bundling rule
 - Phase: 4 (docs/protocol only — no widget code touched). Prompted by the operator flagging what
