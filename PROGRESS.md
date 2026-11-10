@@ -12,7 +12,7 @@ tracker (Phase-4 tail items open; the third pane view — "Change" — was remov
 removed the same day, issue #70, archived in `archive/set-upon-map/`) and the appointments
 beeswarm (feature-complete first version, operator refinement rounds ongoing; see sessions ai→at,
 aw, dx, dy, dz, ea, eb, ec, ed).
-**Last updated:** 2026-11-09 (ee)
+**Last updated:** 2026-11-09 (ef)
 
 ## Resume briefing
 <!-- Replaced wholesale at the end of each session — this is not an appended log, it's a
@@ -24,8 +24,9 @@ this section should say only what's needed to pick the work back up cleanly. -->
 (Census `cb_2024_us_county_500k` + NPS Yellowstone, re-fetched this session — `data/census/` and
 `data/nps/` are gitignored one-time inputs, so a fresh clone needs them downloaded again; see
 `docs/GEOMETRY_STEPS.md` §0/§1). The regenerated `national.svg` + 12 `circuits/*.svg` are
-byte-identical to what the unmodified `main` script produces. PR #87 — see the session log for its
-merge state. No open branch beyond that, nothing mid-flight.
+byte-identical to what the unmodified `main` script produces. **PR #87 is MERGED (squashed as
+`7777fc4`)**, per the operator's explicit "squash and merge"; (ef) was the docs-only ledger
+follow-up recording that. No open branches, nothing mid-flight.
 
 **One pre-existing discrepancy surfaced, not caused by (ee) and not fixed**: the committed
 `assets/geo/circuits/ca9.svg` differs from what the current script produces from the current
@@ -401,6 +402,13 @@ Prove the whole app shell and asset schema on one circuit with hand-authored sam
 - Next: ...
 - Blockers: ...
 -->
+
+### 2026-11-09 (ef) — PR #87 MERGED (operator: "squash and merge")
+- Phase: 4. Squash-merged as `7777fc4` after both CI checks passed (jsdom smoke + dist build,
+  real-browser checks). Ledger-only entry, no new code — the post-merge correction pattern
+  documented in `CLAUDE.md` §7.
+- Next: issue #71 PR 1 (token audit); optionally look into the committed `ca9.svg` drift first.
+- Blockers: none.
 
 ### 2026-11-09 (ee) — qgis_export.py: add a GeoPackage (districts + circuits layers) alongside the SVGs
 - Phase: 4 (geometry tooling; no widget code, no `embed/` or `dist/` change, no published-JSON
