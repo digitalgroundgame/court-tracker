@@ -361,6 +361,27 @@ out/assets/geo/circuits/*.svg   ->  assets/geo/circuits/
 Twelve circuit files: `ca1`–`ca11` and `cadc`. **No `cafc.svg`** — the Federal Circuit has no
 geography and is selector-only downstream.
 
+### Also written: `out/court_boundaries.gpkg` (not shipped)
+
+Every run also writes a GeoPackage for desktop-GIS use. **It is not part of the widget** — it sits
+beside `out/assets/`, not inside it, so nothing in it is copied to `assets/geo/`. Two layers, both
+MultiPolygon in `EPSG:4269` (`GPKG_CRS` in the CONFIG block):
+
+| layer | features | attributes |
+|---|---|---|
+| `districts` | 94 — every district court (the feeder courts aren't districts and have no geometry) | `court_id`, `court_name`, `short_name`, `circuit_id` |
+| `circuits` | the 12 geographic circuits (no `cafc`) | `court_id`, `court_name`, `short_name` |
+
+It holds the **same simplified geometry the SVGs are drawn from** (one simplify, insets in their own
+CRS), but at **true geographic positions**: no inset placement, no D.C. callout, and no `hid`/`nmid`
+part trimming. Circuits are dissolved from *all* their districts, so `ca9` includes AK/HI/GU/NMI,
+`ca1` includes PR and `ca3` includes the VI — unlike the mainland-only circuit shapes in the SVGs.
+Reprojecting does not densify, so edges between simplified vertices are straight in lon/lat rather
+than Albers-curved; at the simplification interval this should be below visual threshold (not yet
+checked against real data). Guam/N. Mariana Islands sit east of 180°, so the `ca9` extent spans
+nearly the whole lon/lat range; any Aleutian parts west of 180° would land at positive longitudes
+too.
+
 Update `PROGRESS.md`: geometry is no longer placeholder. No app code should need to change —
 that's the point of the contract.
 
