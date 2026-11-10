@@ -23,10 +23,14 @@ project/
       cb_2024_us_county_500k.shp    <- download, step 1a
     nps/
       nps_boundary.shp              <- download, step 1b
+    out/                            <- the script creates this (data/out/, gitignored)
   scripts/
     qgis_export.py
-  out/                              <- the script creates this
 ```
+
+`data/census/` and `data/nps/` are **gitignored one-time inputs** (issue #8) — a fresh clone
+does not have them, and the script fails at its first `cannot open …` until you download them.
+Nothing the widget serves at runtime reads either.
 
 Everything tunable lives in the CONFIG block at the top of `qgis_export.py`. You should not
 need to touch anything below it.
@@ -105,15 +109,21 @@ GRASS is **not** required. If you want to run the comparison in §7, enable the 
 
 ## 3. Point the script at your files
 
+**Normally nothing to do.** Every path in the CONFIG block is derived from the repo root (from the
+script's own location, `$COURT_TRACKER_ROOT`, or the working directory — see the script header), so
+with the files laid out as in §0 the defaults already point at them:
+
 ```python
-COUNTY_SHAPEFILE = "/…/data/census/cb_2024_us_county_500k.shp"
-CROSSWALK_CSV    = "/…/data/county_to_district.csv"
-COURTS_CSV       = "/…/data/courts.csv"
-OUT_DIR          = "/…/out/assets/geo"
-YNP_BOUNDARY     = "/…/data/nps/nps_boundary.shp"
+COUNTY_SHAPEFILE = DATA / "census" / "cb_2024_us_county_500k.shp"
+CROSSWALK_CSV    = DATA / "county_to_district.csv"
+COURTS_CSV       = DATA / "courts.csv"
+OUT_DIR          = DATA / "out" / "assets" / "geo"      # national.svg + circuits/
+YNP_BOUNDARY     = DATA / "nps" / "nps_boundary.shp"
+GPKG_PATH        = DATA / "out" / "court_boundaries.gpkg"
 ```
 
-Leave everything else at its default for the first run. The point of run #1 is to read the
+Edit them only if your inputs live somewhere else. Leave everything else at its default for the
+first run. The point of run #1 is to read the
 validation output, not to get a pretty map.
 
 ---
@@ -123,8 +133,16 @@ validation output, not to get a pretty map.
 QGIS → *Plugins → Python Console*:
 
 ```python
-exec(open('/…/scripts/qgis_export.py').read())
+p = '/…/court-tracker/scripts/qgis_export.py'
+exec(compile(open(p).read(), p, 'exec'), {**globals(), '__file__': p})
 ```
+
+(Passing `__file__` is how the script finds the repo. A bare `exec(open(p).read())` has none, so
+export `COURT_TRACKER_ROOT=/…/court-tracker` first if you use that form.)
+
+Headless also works — no QGIS GUI needed: initialise `QgsApplication`, add
+`/usr/share/qgis/python/plugins` to `sys.path`, call `Processing.initialize()`, then `exec` the
+script as above (run with `QT_QPA_PLATFORM=offscreen`). Runtime is well under a minute.
 
 No need to load layers first; the script opens them itself and writes nothing back to your
 project.
@@ -354,12 +372,37 @@ Then spot-check `circuits/ca9.svg` — the heaviest file, four insets and the Ye
 ## 9. Ship it
 
 ```
-out/assets/geo/national.svg     ->  assets/geo/national.svg
-out/assets/geo/circuits/*.svg   ->  assets/geo/circuits/
+data/out/assets/geo/national.svg     ->  assets/geo/national.svg
+data/out/assets/geo/circuits/*.svg   ->  assets/geo/circuits/
 ```
 
 Twelve circuit files: `ca1`–`ca11` and `cadc`. **No `cafc.svg`** — the Federal Circuit has no
 geography and is selector-only downstream.
+
+### Also written: `data/out/court_boundaries.gpkg` (not shipped)
+
+Every run also writes a GeoPackage for desktop-GIS use. **It is not part of the widget** — it sits
+beside `data/out/assets/`, not inside it, so nothing in it is copied to `assets/geo/`. Two layers, both
+MultiPolygon in `EPSG:4269` (`GPKG_CRS` in the CONFIG block):
+
+| layer | features | attributes |
+|---|---|---|
+| `districts` | 94 — every district court (the feeder courts aren't districts and have no geometry) | `court_id`, `court_name`, `short_name`, `circuit_id` |
+| `circuits` | the 12 geographic circuits (no `cafc`) | `court_id`, `court_name`, `short_name` |
+
+It holds the **same simplified geometry the SVGs are drawn from** (one simplify, insets in their own
+CRS), but at **true geographic positions**: no inset placement, no D.C. callout, and no `hid`/`nmid`
+part trimming. Circuits are dissolved from *all* their districts, so `ca9` includes AK/HI/GU/NMI,
+`ca1` includes PR and `ca3` includes the VI — unlike the mainland-only circuit shapes in the SVGs.
+Reprojecting does not densify, so edges between simplified vertices are straight in lon/lat rather
+than Albers-curved; at the simplification interval this should be below visual threshold. The
+`ca9` extent spans nearly the whole lon/lat range: Guam/N. Mariana Islands and 14 of Alaska's 549
+parts (the western Aleutians) sit east of 180°, i.e. at positive longitudes. No single polygon
+straddles the antimeridian (widest part: 38°, mainland Alaska), so nothing is wrapped — but a
+tool that assumes a < 180° extent will misbehave on `ca9`/`akd`.
+
+Verified on a real run (2026-11-09, Census `cb_2024_us_county_500k` + NPS Yellowstone): 94
+districts and 12 circuits, all valid; each circuit's area equals the sum of its districts'.
 
 Update `PROGRESS.md`: geometry is no longer placeholder. No app code should need to change —
 that's the point of the contract.

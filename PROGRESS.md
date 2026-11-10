@@ -12,51 +12,47 @@ tracker (Phase-4 tail items open; the third pane view — "Change" — was remov
 removed the same day, issue #70, archived in `archive/set-upon-map/`) and the appointments
 beeswarm (feature-complete first version, operator refinement rounds ongoing; see sessions ai→at,
 aw, dx, dy, dz, ea, eb, ec, ed).
-**Last updated:** 2026-09-25 (ed)
+**Last updated:** 2026-11-09 (ee)
 
 ## Resume briefing
 <!-- Replaced wholesale at the end of each session — this is not an appended log, it's a
 briefing for the next session only. Session narrative belongs in ## Session log below;
 this section should say only what's needed to pick the work back up cleanly. -->
 
-**Where things stand**: PR #82 is MERGED (squashed as `75a82f9`) — no open branch, nothing
-mid-flight on the widget work itself. **Sessions (eb)/(ec)/(ed) were all docs/protocol-only, no
-widget code touched.** (eb) resolved an apparent discrepancy between `CLAUDE.md`'s
-bundled-ledger-entry rule and recent "ledger-only" PRs (#59, #64, #78, #81, #83) — conclusion:
-bundling was never reverted, the ledger-only PRs are an unavoidable corollary (a bundled entry
-can't cite its own eventual squash SHA), and `CLAUDE.md` §7 now documents that pattern explicitly.
-That PR (#84) is MERGED (squashed as `7f461c0`). (ec) added `docs/export/` — three portable,
-project-agnostic procedure-spec templates (git squash-merge workflow, resumable progress-ledger,
-paste-ready setup kickoff prompt) written for use in *other* repos, not court-tracker-specific; not
-part of the #65-71 backlog, no GitHub issue, direct operator request. **That PR (#85) is MERGED
-(squashed as `efd50f3`)**, per the operator's explicit "go ahead and merge it." (ed), this
-session: ledger-only follow-up recording #85's merge — the exact self-mergeable pattern (eb) itself
-documented, applied to its own output one session later. No open branches, nothing mid-flight.
+**Where things stand**: session (ee) added a GeoPackage output (`data/out/court_boundaries.gpkg`,
+`districts` + `circuits` layers) to `scripts/qgis_export.py`. **Verified end-to-end on real data**
+(Census `cb_2024_us_county_500k` + NPS Yellowstone, re-fetched this session — `data/census/` and
+`data/nps/` are gitignored one-time inputs, so a fresh clone needs them downloaded again; see
+`docs/GEOMETRY_STEPS.md` §0/§1). The regenerated `national.svg` + 12 `circuits/*.svg` are
+byte-identical to what the unmodified `main` script produces. PR #87 — see the session log for its
+merge state. No open branch beyond that, nothing mid-flight.
+
+**One pre-existing discrepancy surfaced, not caused by (ee) and not fixed**: the committed
+`assets/geo/circuits/ca9.svg` differs from what the current script produces from the current
+inputs (same byte size, 189,271; different content — the unmodified `main` script reproduces the
+difference, so it is older drift between the committed file and the script/inputs, e.g. an inset
+layout tweak). Every other SVG matches. Not investigated; worth a look before the next geometry drop
+since "re-run the script" would silently change `ca9`.
 
 **Issue #71 (dark mode + typography theming) remains deferred and not started, and is the next
-substantive (non-docs) task** — untouched by (eb)/(ec)/(ed). Its scope is fully resolved: see the
-comment posted on issue #71 (2026-09-11) rather than re-reading old open questions here — six
-backlog issues' (#65-#70) impact on #71's view inventory, the font property scope expansion
-(runtime-switchable, same mechanism as color), the beeswarm widget confirmed IN SCOPE, every
-originally-open question answered, and a proposed 3-PR phased breakdown (1. token audit, no visual
-change; 2. runtime mechanism + initial dark theme + demo switch + docs; 3.
-`tools/theme-editor.html` authoring tool). **No further design questions should be needed before
-starting PR 1 of #71 whenever it's next prioritized.**
+substantive widget task.** Its scope is fully resolved: see the comment posted on issue #71
+(2026-09-11) rather than re-reading old open questions — six backlog issues' (#65-#70) impact on
+#71's view inventory, the font property scope expansion (runtime-switchable), the beeswarm widget
+confirmed IN SCOPE, and a proposed 3-PR phased breakdown (1. token audit, no visual change; 2.
+runtime mechanism + initial dark theme + demo switch + docs; 3. `tools/theme-editor.html`). No
+further design questions should be needed before starting PR 1.
 
 **Working rhythm (still in force, operator ask 2026-09-10): pause after finishing each unit of
 work for review — don't self-merge, don't start the next thing without explicit go-ahead.** See
 [[operator-wants-pr-review-before-merge]].
 
-**`/tmp` environment gotcha (recurring, not yet fixed at the root — see prior sessions' notes)**:
-`tests/browser-checks.mjs:11` (`MARK = \`/tmp/ctbc-${process.pid}\``) creates a fresh Chrome
-profile dir on every `npm run test:browser` run and never cleans it up — hardcoded to `/tmp`,
-doesn't honor `TMPDIR`/`os.tmpdir()`. Has twice filled `/tmp` to 100% across recent sessions,
-including blocking the harness's own output capture entirely. **Was healthy this session** (4%
-used at last check) — the operator's manual cleanup at the end of the previous session held. Still
-worth fixing the test runner itself before it recurs.
-
-**Housekeeping still not acted on**: issues #50, #60, #62 all have MERGED PRs (#56, #61, #63) but
-were never closed on GitHub — still just tidiness, not urgent.
+**Gotchas**: (0) For headless QGIS runs use `/usr/bin/python3.14` (PyQGIS; `python3` is miniforge 3.12
+with none) under `QT_QPA_PLATFORM=offscreen`, add `/usr/share/qgis/python/plugins` to `sys.path`,
+call `Processing.initialize()`, and **call `app.exitQgis()` at the end** — without it the process
+aborts with `std::bad_alloc` (exit 134) at interpreter shutdown, *after* all output is written. (1) `tests/browser-checks.mjs:11` (`MARK = \`/tmp/ctbc-${process.pid}\``) creates a
+Chrome profile dir per `npm run test:browser` run and never cleans it up, hardcoded to `/tmp` (ignores
+`TMPDIR`); has twice filled `/tmp` to 100% in earlier sessions — still worth fixing. (2) Issues #50,
+#60, #62 have MERGED PRs (#56, #61, #63) but were never closed on GitHub — tidiness only.
 
 ## Phase 0 — Scaffold & contracts  ✅ DONE (2026-07-10)
 - [x] Create repo skeleton per `CLAUDE.md` §Repo map; confirm `index.html` loads an empty shell.
@@ -405,6 +401,38 @@ Prove the whole app shell and asset schema on one circuit with hand-authored sam
 - Next: ...
 - Blockers: ...
 -->
+
+### 2026-11-09 (ee) — qgis_export.py: add a GeoPackage (districts + circuits layers) alongside the SVGs
+- Phase: 4 (geometry tooling; no widget code, no `embed/` or `dist/` change, no published-JSON
+  schema change — `SCHEMA_VERSION` untouched). Direct operator request, no GitHub issue.
+- Did: `scripts/qgis_export.py` now also writes `data/out/court_boundaries.gpkg` (new step 7b, after
+  every SVG is written) with a `districts` layer (94 features: `court_id`, `court_name`, `short_name`,
+  `circuit_id`) and a `circuits` layer (12 geographic circuits: `court_id`, `court_name`,
+  `short_name`), both MultiPolygon in EPSG:4269 (`GPKG_CRS`, tunable). It uses the **same simplified
+  geometry the SVGs come from** at **true positions** (no inset placement / D.C. callout / hid-nmid
+  part trimming), and circuits are dissolved from *all* their districts so `ca9`/`ca1`/`ca3` include
+  their territorial insets (the SVG circuit outlines are mainland-only). Deliberately written beside,
+  not inside, `out/assets/` so it never ships with the widget. New helpers: `load_court_meta`,
+  `reproject_all`, `write_gpkg`, `export_gpkg`; `dissolve_circuits` gained a `quiet=False` arg (log
+  suppression only). VALIDATION now reads the gpkg back (feature counts, id match, validity).
+  `docs/GEOMETRY_STEPS.md` §9 documents the file.
+- Verification (real data, headless QGIS 4.2.2): downloaded the inputs per `docs/GEOMETRY_STEPS.md`
+  §1 (Census CB county 500k 2024; NPS NGDA boundary, `UNIT_CODE='YELL'` feature pulled from the
+  Hub's FeatureServer/2 and written as `nps_boundary.shp`). Pipeline passes every gate: crosswalk
+  3230, 0 unmatched, vertex parity OK, districts 94/94, circuits 12/12, wyd 254,113 km² OK. The new
+  gpkg reads back with 94 districts / 12 circuits, ids match, all valid, EPSG:4269; each circuit's
+  area == the sum of its districts'; no polygon straddles the antimeridian (widest part 38°; 14 of
+  akd's 549 parts are Aleutians at positive longitudes). **SVGs: the 13 files from this branch are
+  byte-identical to the unmodified `main` script's output** (both run against the same inputs);
+  gpkg contents hash-identical across 3 runs. Pre-existing: committed `assets/geo/circuits/ca9.svg`
+  differs from both (same size, different content) — see the Resume briefing.
+- Docs: `docs/GEOMETRY_STEPS.md` was stale in four places, fixed here — §0 and §9 showed `out/` at
+  the project root (script writes `data/out/`), §3 told you to hand-edit absolute paths the script
+  now derives from the repo root, §4's bare `exec(open().read())` has no `__file__`; also a script
+  comment claimed the Census file ships in the repo (untracked since #8). The input requirements
+  themselves (Census CB 2022+, NPS Yellowstone, mapshaper) were accurate.
+- Next: issue #71 PR 1 (token audit). Optionally look into the `ca9.svg` drift first.
+- Blockers: none.
 
 ### 2026-09-25 (ed) — PR #85 MERGED (operator: "go ahead and merge it")
 - Phase: 4. Squash-merged as `efd50f3`. Ledger-only entry, no new code — same self-mergeable

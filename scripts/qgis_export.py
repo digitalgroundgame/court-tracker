@@ -17,6 +17,8 @@ Pipeline (canonical order — do not reorder):
     5. dissolve #2: simplified districts -> circuit outlines
     6. export national.svg (5070 + baked insets + D.C. callout)
     7. export circuits/<id>.svg (circuit-local Albers; SAME vertex set, reprojected)
+    7b. export court_boundaries.gpkg (GIS-facing copy: `districts` + `circuits` layers at
+        true geographic positions — see GPKG_* config; does not touch the SVG outputs)
     8. validate: vertex parity, coverage, geometry health, contract conformance
 
 THE MORPH INVARIANT: steps 3-4 happen exactly once, in one CRS. Every mainland shape
@@ -33,6 +35,7 @@ from pathlib import Path
 from qgis.core import (
     QgsApplication, QgsVectorLayer, QgsProject, QgsFeature, QgsGeometry, QgsField,
     QgsCoordinateReferenceSystem, QgsCoordinateTransform, QgsPointXY,
+    QgsVectorFileWriter,
 )
 from qgis.PyQt.QtCore import QVariant
 from qgis.PyQt.QtGui import QTransform
@@ -48,9 +51,9 @@ import processing
 #      script is exec()'d without a __file__, see the module docstring)
 #   2. this file's own location, when there is one
 #   3. a walk up from the current working directory, looking for the repo markers
-# The Census county file ships in the repo under data/census/. The NPS boundary is a
-# separate download and is NOT tracked — drop it at data/nps/nps_boundary.shp (or point
-# YNP_BOUNDARY elsewhere); see docs/GEOMETRY_CONTRACT.md.
+# Neither input shapefile is tracked in git (issue #8): download the Census county file to
+# data/census/ and the NPS boundary to data/nps/nps_boundary.shp (or point COUNTY_SHAPEFILE /
+# YNP_BOUNDARY elsewhere); see docs/GEOMETRY_STEPS.md §1.
 
 def _find_repo_root() -> Path:
     def is_root(p: Path) -> bool:
@@ -101,6 +104,22 @@ COUNTY_SHAPEFILE = str(DATA / "census" / "cb_2024_us_county_500k.shp")   # 2022+
 CROSSWALK_CSV  = str(DATA / "county_to_district.csv")
 COURTS_CSV     = str(DATA / "courts.csv")
 OUT_DIR        = str(DATA / "out" / "assets" / "geo")                # national.svg + circuits/
+
+# --- GeoPackage output (GIS-facing; the widget never reads it) -------------------
+# Deliberately NOT under OUT_DIR: everything in assets/geo ships with the widget, and this
+# file is for QGIS/desktop-GIS use only. Rewritten from scratch on every run.
+#
+# What goes in it: the SAME simplified geometry the SVGs are drawn from (the one-and-only
+# simplify; insets simplified in their own CRS), but at TRUE positions -- no inset
+# placement, no D.C. callout, no hid/nmid part trimming -- reprojected to one common CRS.
+# Circuits are dissolved from ALL their districts, so ca9 includes AK/HI/GU/NMI, ca1
+# includes PR and ca3 includes the VI (the SVG circuit outlines are mainland-only).
+# Geographic NAD83 is the default because the layers span Alaska to Guam, which no single
+# projected CRS handles without wild distortion; QGIS reprojects on the fly.
+GPKG_PATH           = str(DATA / "out" / "court_boundaries.gpkg")
+GPKG_CRS            = "EPSG:4269"
+GPKG_DISTRICT_LAYER = "districts"
+GPKG_CIRCUIT_LAYER  = "circuits"
 
 # --- Yellowstone (28 U.S.C. 92, 106, 131) ------------------------------------
 # The ONLY sub-county carve-out we honour. Sections 92 and 106 exclude Yellowstone
@@ -855,7 +874,7 @@ def count_vertices(geom):
 # 5. dissolve #2 — simplified districts -> circuit outlines
 # =============================================================================
 
-def dissolve_circuits(districts, parent):
+def dissolve_circuits(districts, parent, quiet=False):
     """Union the ALREADY-SIMPLIFIED districts, so circuit borders share vertices
     with the district borders that produced them."""
     by_circuit = defaultdict(list)
@@ -866,7 +885,8 @@ def dissolve_circuits(districts, parent):
     out = OrderedDict()
     for circ, geoms in by_circuit.items():
         out[circ] = QgsGeometry.unaryUnion(geoms).makeValid()
-    log(f"dissolve #2: {len(out)} circuit outlines")
+    if not quiet:
+        log(f"dissolve #2: {len(out)} circuit outlines")
     return out
 
 
@@ -1143,6 +1163,100 @@ def bbox_union(geoms):
 
 
 # =============================================================================
+# 7b. GeoPackage — districts + circuits layers at true positions
+# =============================================================================
+
+def load_court_meta():
+    """court_id -> {court_name, short_name} for every row of courts.csv."""
+    meta = {}
+    with open(COURTS_CSV, newline="", encoding="utf-8-sig") as f:
+        for r in csv.DictReader(f):
+            meta[r["court_id"].strip()] = {
+                "court_name": r["court_name"].strip(),
+                "short_name": r["short_name"].strip(),
+            }
+    return meta
+
+
+def reproject_all(districts_5070, insets, crs_conus, crs_out):
+    """Every district, at its true position, in crs_out. Works on COPIES -- the SVG
+    pipeline's geometry is never touched. Mainland districts come from EPSG:5070; each
+    inset comes from the CRS it was simplified in (INSET_CRS)."""
+    out = OrderedDict()
+    sources = [(c, g, crs_conus) for c, g in districts_5070.items()]
+    sources += [(c, g, resolve_crs(INSET_CRS[c])) for c, g in insets.items()]
+    for court, geom, src in sources:
+        g = QgsGeometry(geom)
+        if g.transform(transform(src, crs_out)) != 0:
+            raise RuntimeError(f"gpkg: could not reproject {court} to {crs_out.authid()}")
+        g = g.makeValid()
+        g.convertToMultiType()
+        out[court] = g
+    return out
+
+
+def write_gpkg(path, layers):
+    """layers: [(layer_name, QgsVectorLayer), ...]. Overwrites `path`."""
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    if os.path.exists(path):
+        os.remove(path)
+    ctx = QgsProject.instance().transformContext()
+    action = QgsVectorFileWriter.ActionOnExistingFile
+    for i, (name, lyr) in enumerate(layers):
+        opts = QgsVectorFileWriter.SaveVectorOptions()
+        opts.driverName = "GPKG"
+        opts.layerName = name
+        opts.fileEncoding = "UTF-8"
+        opts.actionOnExistingFile = (action.CreateOrOverwriteFile if i == 0
+                                     else action.CreateOrOverwriteLayer)
+        res = QgsVectorFileWriter.writeAsVectorFormatV3(lyr, path, ctx, opts)
+        if res[0] != QgsVectorFileWriter.WriterError.NoError:
+            raise RuntimeError(f"gpkg: writing layer '{name}' failed: {res[1]}")
+
+
+def export_gpkg(districts_5070, insets, parent, crs_conus):
+    """Write GPKG_PATH with a `districts` and a `circuits` layer. Returns the
+    {court_id: geometry} dicts (in GPKG_CRS) so validation can inspect what was written."""
+    crs_out = QgsCoordinateReferenceSystem(GPKG_CRS)
+    if not crs_out.isValid():
+        raise RuntimeError(f"invalid GPKG_CRS {GPKG_CRS}")
+    meta = load_court_meta()
+
+    districts = reproject_all(districts_5070, insets, crs_conus, crs_out)
+    circuits = OrderedDict(
+        (c, g) for c, g in dissolve_circuits(districts, parent, quiet=True).items())
+    for g in circuits.values():
+        g.convertToMultiType()
+
+    def name_of(cid, key):
+        return meta.get(cid, {}).get(key, "")
+
+    d_feats = []
+    for court in sorted(districts):
+        f = QgsFeature()
+        f.setGeometry(districts[court])
+        f.setAttributes([court, name_of(court, "court_name"), name_of(court, "short_name"),
+                         parent.get(court, "")])
+        d_feats.append(f)
+    c_feats = []
+    for circ in sorted(circuits):
+        f = QgsFeature()
+        f.setGeometry(circuits[circ])
+        f.setAttributes([circ, name_of(circ, "court_name"), name_of(circ, "short_name")])
+        c_feats.append(f)
+
+    d_lyr = mem_layer(GPKG_DISTRICT_LAYER, crs_out,
+                      field_defs(["court_id", "court_name", "short_name", "circuit_id"]),
+                      d_feats)
+    c_lyr = mem_layer(GPKG_CIRCUIT_LAYER, crs_out,
+                      field_defs(["court_id", "court_name", "short_name"]), c_feats)
+    write_gpkg(GPKG_PATH, [(GPKG_DISTRICT_LAYER, d_lyr), (GPKG_CIRCUIT_LAYER, c_lyr)])
+    log(f"gpkg: {GPKG_PATH}  [{crs_out.authid()}]  "
+        f"{len(d_feats)} districts, {len(c_feats)} circuits")
+    return districts, circuits
+
+
+# =============================================================================
 # main
 # =============================================================================
 
@@ -1285,10 +1399,35 @@ def main():
         circuit_files[circ] = ({p[0]: p[4] for p in s.paths if not p[3]}, size)
 
     # -------------------------------------------------------------------------
+    # 7b. court_boundaries.gpkg -- runs AFTER every SVG is written and only reads
+    # districts_5070 / insets (copies), so the SVG outputs cannot be affected.
+    # -------------------------------------------------------------------------
+    gpkg_districts, gpkg_circuits = export_gpkg(districts_5070, insets, parent, crs_conus)
+
+    # -------------------------------------------------------------------------
     # 8. validation
     # -------------------------------------------------------------------------
     log("=" * 68)
     log("VALIDATION")
+
+    # gpkg -- read the file back rather than trusting the in-memory copy
+    for lname, expect in ((GPKG_DISTRICT_LAYER, gpkg_districts),
+                          (GPKG_CIRCUIT_LAYER, gpkg_circuits)):
+        back = QgsVectorLayer(f"{GPKG_PATH}|layername={lname}", lname, "ogr")
+        if not back.isValid():
+            log(f"  gpkg: layer '{lname}' CANNOT BE READ BACK — BUG")
+            continue
+        ids = {str(f["court_id"]) for f in back.getFeatures()}
+        bad = [str(f["court_id"]) for f in back.getFeatures()
+               if f.geometry().isEmpty() or not f.geometry().isGeosValid()]
+        log(f"  gpkg: {lname:<9} {back.featureCount():>3} features, "
+            f"{'ids match' if ids == set(expect) else 'ID MISMATCH vs expected'}"
+            + (f", EMPTY/INVALID: {bad}" if bad else ", all valid"))
+    expect_c = set(GEOGRAPHIC_CIRCUITS)
+    log(f"  gpkg: circuits {len(gpkg_circuits)}/{len(expect_c)}"
+        + (f"  MISSING {sorted(expect_c - set(gpkg_circuits))}"
+           if expect_c - set(gpkg_circuits) else ""))
+    log(f"  gpkg: districts {len(gpkg_districts)}/{len(set(parent) - NO_GEOMETRY)}")
 
     # vertex parity — the one that breaks morphing
     mismatches = []
