@@ -51,9 +51,9 @@ import processing
 #      script is exec()'d without a __file__, see the module docstring)
 #   2. this file's own location, when there is one
 #   3. a walk up from the current working directory, looking for the repo markers
-# The Census county file ships in the repo under data/census/. The NPS boundary is a
-# separate download and is NOT tracked — drop it at data/nps/nps_boundary.shp (or point
-# YNP_BOUNDARY elsewhere); see docs/GEOMETRY_CONTRACT.md.
+# Neither input shapefile is tracked in git (issue #8): download the Census county file to
+# data/census/ and the NPS boundary to data/nps/nps_boundary.shp (or point COUNTY_SHAPEFILE /
+# YNP_BOUNDARY elsewhere); see docs/GEOMETRY_STEPS.md §1.
 
 def _find_repo_root() -> Path:
     def is_root(p: Path) -> bool:

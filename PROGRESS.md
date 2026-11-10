@@ -19,15 +19,20 @@ aw, dx, dy, dz, ea, eb, ec, ed).
 briefing for the next session only. Session narrative belongs in ## Session log below;
 this section should say only what's needed to pick the work back up cleanly. -->
 
-**Where things stand**: session (ee) added a GeoPackage output to `scripts/qgis_export.py` (branch
-`claude/qgis-export-gpkg`, PR open awaiting operator review — see the session log). **It is
-code-complete but NOT yet run end-to-end**: `data/census/` and `data/nps/` are gitignored
-one-time inputs and were absent in the session's checkout, so the full pipeline could not run. The
-new functions were tested headless (QGIS 4.2.2 via `/usr/bin/python3.14`) on synthetic shapes only.
-**The operator needs to re-run `qgis_export.py` in QGIS once**, confirm the `gpkg:` lines in the
-VALIDATION block look right, and diff the regenerated `national.svg` / `circuits/*.svg` against
-the previous run (expected: byte-identical — the new step runs after every SVG is written and only
-reads copies). Until that happens the "SVGs unchanged" claim is by construction, not by diff.
+**Where things stand**: session (ee) added a GeoPackage output (`data/out/court_boundaries.gpkg`,
+`districts` + `circuits` layers) to `scripts/qgis_export.py`. **Verified end-to-end on real data**
+(Census `cb_2024_us_county_500k` + NPS Yellowstone, re-fetched this session — `data/census/` and
+`data/nps/` are gitignored one-time inputs, so a fresh clone needs them downloaded again; see
+`docs/GEOMETRY_STEPS.md` §0/§1). The regenerated `national.svg` + 12 `circuits/*.svg` are
+byte-identical to what the unmodified `main` script produces. PR #87 — see the session log for its
+merge state. No open branch beyond that, nothing mid-flight.
+
+**One pre-existing discrepancy surfaced, not caused by (ee) and not fixed**: the committed
+`assets/geo/circuits/ca9.svg` differs from what the current script produces from the current
+inputs (same byte size, 189,271; different content — the unmodified `main` script reproduces the
+difference, so it is older drift between the committed file and the script/inputs, e.g. an inset
+layout tweak). Every other SVG matches. Not investigated; worth a look before the next geometry drop
+since "re-run the script" would silently change `ca9`.
 
 **Issue #71 (dark mode + typography theming) remains deferred and not started, and is the next
 substantive widget task.** Its scope is fully resolved: see the comment posted on issue #71
@@ -41,12 +46,13 @@ further design questions should be needed before starting PR 1.
 work for review — don't self-merge, don't start the next thing without explicit go-ahead.** See
 [[operator-wants-pr-review-before-merge]].
 
-**Gotchas**: (1) `tests/browser-checks.mjs:11` (`MARK = \`/tmp/ctbc-${process.pid}\``) creates a
+**Gotchas**: (0) For headless QGIS runs use `/usr/bin/python3.14` (PyQGIS; `python3` is miniforge 3.12
+with none) under `QT_QPA_PLATFORM=offscreen`, add `/usr/share/qgis/python/plugins` to `sys.path`,
+call `Processing.initialize()`, and **call `app.exitQgis()` at the end** — without it the process
+aborts with `std::bad_alloc` (exit 134) at interpreter shutdown, *after* all output is written. (1) `tests/browser-checks.mjs:11` (`MARK = \`/tmp/ctbc-${process.pid}\``) creates a
 Chrome profile dir per `npm run test:browser` run and never cleans it up, hardcoded to `/tmp` (ignores
 `TMPDIR`); has twice filled `/tmp` to 100% in earlier sessions — still worth fixing. (2) Issues #50,
-#60, #62 have MERGED PRs (#56, #61, #63) but were never closed on GitHub — tidiness only. (3)
-`python3` on this machine is miniforge 3.12 with no PyQGIS; QGIS's Python is `/usr/bin/python3.14`
-(needs `QT_QPA_PLATFORM=offscreen` headless).
+#60, #62 have MERGED PRs (#56, #61, #63) but were never closed on GitHub — tidiness only.
 
 ## Phase 0 — Scaffold & contracts  ✅ DONE (2026-07-10)
 - [x] Create repo skeleton per `CLAUDE.md` §Repo map; confirm `index.html` loads an empty shell.
@@ -410,14 +416,22 @@ Prove the whole app shell and asset schema on one circuit with hand-authored sam
   `reproject_all`, `write_gpkg`, `export_gpkg`; `dissolve_circuits` gained a `quiet=False` arg (log
   suppression only). VALIDATION now reads the gpkg back (feature counts, id match, validity).
   `docs/GEOMETRY_STEPS.md` §9 documents the file.
-- Verification: new functions run headless in QGIS 4.2.2 on synthetic shapes (CONUS boxes in 5070 +
-  akd/hid/prd/gud/vid in their own CRSs): both layers written and read back, correct CRS and
-  attributes, MultiPolygon, all valid, positions correct (AK ≈ −150/63, Guam ≈ 144.8/13.4), circuit
-  membership right (ca1 = mad+nhd merged + prd), and `districts_5070`/`insets` confirmed unmutated
-  (WKT compared before/after). **Not verified**: the full pipeline against real Census/NPS data
-  (inputs absent here), so "SVG output unchanged" rests on construction, not a diff — the only edits
-  to existing logic are the `quiet` flag and an added import; the new step is after all SVG writes.
-- Next: operator re-runs the script in QGIS and diffs the SVGs; then issue #71 PR 1.
+- Verification (real data, headless QGIS 4.2.2): downloaded the inputs per `docs/GEOMETRY_STEPS.md`
+  §1 (Census CB county 500k 2024; NPS NGDA boundary, `UNIT_CODE='YELL'` feature pulled from the
+  Hub's FeatureServer/2 and written as `nps_boundary.shp`). Pipeline passes every gate: crosswalk
+  3230, 0 unmatched, vertex parity OK, districts 94/94, circuits 12/12, wyd 254,113 km² OK. The new
+  gpkg reads back with 94 districts / 12 circuits, ids match, all valid, EPSG:4269; each circuit's
+  area == the sum of its districts'; no polygon straddles the antimeridian (widest part 38°; 14 of
+  akd's 549 parts are Aleutians at positive longitudes). **SVGs: the 13 files from this branch are
+  byte-identical to the unmodified `main` script's output** (both run against the same inputs);
+  gpkg contents hash-identical across 3 runs. Pre-existing: committed `assets/geo/circuits/ca9.svg`
+  differs from both (same size, different content) — see the Resume briefing.
+- Docs: `docs/GEOMETRY_STEPS.md` was stale in four places, fixed here — §0 and §9 showed `out/` at
+  the project root (script writes `data/out/`), §3 told you to hand-edit absolute paths the script
+  now derives from the repo root, §4's bare `exec(open().read())` has no `__file__`; also a script
+  comment claimed the Census file ships in the repo (untracked since #8). The input requirements
+  themselves (Census CB 2022+, NPS Yellowstone, mapshaper) were accurate.
+- Next: issue #71 PR 1 (token audit). Optionally look into the `ca9.svg` drift first.
 - Blockers: none.
 
 ### 2026-09-25 (ed) — PR #85 MERGED (operator: "go ahead and merge it")
